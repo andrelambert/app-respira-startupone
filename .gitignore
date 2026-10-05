@@ -1,0 +1,23 @@
+# Segredos e dados locais — NUNCA commitar (docs/contexto-produto.md §12.2)
+.env
+.env.*
+!.env.example
+*.db
+*.db-shm
+*.db-wal
+wallet/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+.ruff_cache/
+
+# Node
+node_modules/
+dist/
+*.tsbuildinfo
+
+# Sistema
+.DS_Store
