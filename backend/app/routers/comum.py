@@ -9,6 +9,7 @@ from app.domain.planner import Simulacao, arredondar
 from app.domain.xray import DividaXray, juros_do_mes, taxa_anual
 from app.models import Consentimento, Divida, Instituicao, StatusColeta, TaxaOrigem, Usuario, agora
 from app.repositories import consentimentos as repo_c
+from app.repositories import financeiro as repo_f
 from app.schemas import ConsentimentoOut, DividaOut, ProjecaoOut, RecursoColetaOut
 from app.services import auth
 from app.services.conexao import status_efetivo
@@ -49,6 +50,10 @@ def logo(inst: Instituicao | None) -> str | None:
 def divida_out(s: Session, d: Divida) -> DividaOut:
     inst = repo_c.obter_instituicao(s, d.instituicao_id)
     assert d.id is not None
+    conta = repo_f.conta_por_externo(s, d.usuario_id, d.conta_id_externo) if d.conta_id_externo else None
+    juros = juros_do_mes(
+        DividaXray(d.id, d.descricao, d.modalidade, d.saldo_devedor, d.taxa_juros_mes, d.parcela_minima)
+    )
     return DividaOut(
         id=d.id,
         descricao=d.descricao,
@@ -60,9 +65,7 @@ def divida_out(s: Session, d: Divida) -> DividaOut:
         taxa_mes=d.taxa_juros_mes,
         taxa_anual=taxa_anual(d.taxa_juros_mes),
         taxa_estimada=d.taxa_origem == TaxaOrigem.ESTIMADA,
-        juros_mes=juros_do_mes(
-            DividaXray(d.id, d.descricao, d.modalidade, d.saldo_devedor, d.taxa_juros_mes, d.parcela_minima)
-        ),
+        juros_mes=juros,
         parcela_minima=d.parcela_minima,
         parcela_estimada=d.parcela_estimada,
         parcelas_restantes=d.parcelas_restantes,
@@ -70,6 +73,14 @@ def divida_out(s: Session, d: Divida) -> DividaOut:
         em_atraso_dias=d.em_atraso_dias,
         quitada_em=d.quitada_em,
         atualizado_em=d.atualizado_em,
+        instituicao_logo=logo(inst),
+        conta_id=conta.id if conta else None,
+        cresce_no_minimo=d.saldo_devedor > 0 and juros > d.parcela_minima,
+        valor_contratado=d.valor_contratado,
+        parcelas_total=d.parcelas_total,
+        parcelas_pagas=d.parcelas_pagas,
+        contrato_inicio=d.contrato_inicio,
+        contrato_fim=d.contrato_fim,
     )
 
 

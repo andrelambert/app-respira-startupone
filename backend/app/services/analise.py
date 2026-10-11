@@ -44,9 +44,10 @@ from app.repositories import planos as repo_p
 from app.services.coleta import detectar_e_registrar, snapshot
 from app.services.contexto import hoje_do_usuario
 
-# Quanto menos entrou no plano num "mês difícil" da demonstração. Precisa
-# passar de 20% da capacidade para cruzar a regra de DESVIO_PLANO (< 80%, §8.3).
-DEMO_FALTA_MES_DIFICIL = Decimal("240.00")
+# Fração do plano que deixa de entrar num "mês difícil" da demonstração. Precisa
+# passar de 20% para cruzar a regra de DESVIO_PLANO (< 80%, §8.3) — proporcional
+# para valer com qualquer capacidade.
+DEMO_FRACAO_FALTA_MES_DIFICIL = Decimal("0.25")
 MESES_REPOSICAO = 3
 
 
@@ -346,7 +347,8 @@ def avancar_mes_demo(s: Session, u: Usuario, mes_dificil: bool) -> Acompanhament
     mes = hoje.replace(day=1)
     abertas = repo_f.dividas(s, u.id)
     anteriores = snapshot(s, u.id)
-    pago_no_mes = max(plano.capacidade_mensal - (DEMO_FALTA_MES_DIFICIL if mes_dificil else 0), Decimal(0))
+    falta = arredondar(plano.capacidade_mensal * DEMO_FRACAO_FALTA_MES_DIFICIL) if mes_dificil else Decimal(0)
+    pago_no_mes = max(plano.capacidade_mensal - falta, Decimal(0))
 
     um_mes = planner.simular(_entradas(abertas), pago_no_mes, Metodo(plano.metodo), hoje)
     pagamentos = {int(i.divida_id): i.valor_mensal for i in um_mes.itens}

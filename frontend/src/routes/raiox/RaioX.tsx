@@ -5,7 +5,6 @@ import { Link, Navigate } from 'react-router';
 import {
   AtualizadoEm,
   AvisosConsentimento,
-  DebtCard,
   DebtComposition,
   PayoffDate,
   corPorCusto,
@@ -26,6 +25,7 @@ import {
 import { chaves, chavesFinanceiras, useConsentimentos, useUsuario } from '@/hooks/queries';
 import { api, type Consentimento, type Divida, type RaioX as TRaioX } from '@/lib/api';
 import {
+  alertaDividaCresce,
   alertaMinimo,
   alertaMinimoProximo,
   coleta as copyColeta,
@@ -36,9 +36,11 @@ import {
   pfm,
   raiox as copy,
 } from '@/lib/copy';
-import { percentual } from '@/lib/money';
+import { percentual, sub } from '@/lib/money';
 
 const LIMITE_ESPERA_MS = 3 * 60 * 1000;
+// Quantas linhas cabem antes da data de quitação sem rolar num celular de 360 px (§9).
+const LINHAS_NA_DOBRA = 5;
 
 /** Etapa 4 — Diagnóstico (§9). O momento de verdade. */
 export default function RaioX() {
@@ -117,9 +119,16 @@ function Diagnostico({ r, consentimentos }: { r: TRaioX; consentimentos: Consent
       {/* 2. Lista por custo efetivo (compacta: a data precisa caber sem rolar em 360 px) */}
       <section aria-label={copy.listaTitulo}>
         <ul className="divide-y divide-line rounded-2xl border border-line bg-white">
-          {r.dividas.map((d, i) => (
+          {r.dividas.slice(0, LINHAS_NA_DOBRA).map((d, i) => (
             <LinhaDivida key={d.id} d={d} cor={corPorCusto(i)} />
           ))}
+          {r.dividas.length > LINHAS_NA_DOBRA && (
+            <li>
+              <Link to="/dividas" className="flex min-h-toque items-center px-3 text-sm font-semibold text-blue">
+                {copy.verTodas(r.dividas.length - LINHAS_NA_DOBRA)}
+              </Link>
+            </li>
+          )}
         </ul>
       </section>
 
@@ -150,7 +159,25 @@ function Diagnostico({ r, consentimentos }: { r: TRaioX; consentimentos: Consent
         })}
       </p>
 
-      {/* 5. O alerta do mínimo — o insight mais valioso, nunca implícito */}
+      {/* 5. O alerta do mínimo — o insight mais valioso, nunca implícito. Se o total
+          não cresce, a dívida que cresce sozinha (o rotativo) ganha o alerta. */}
+      {!r.divida_cresce &&
+        r.dividas
+          .filter((d) => d.cresce_no_minimo)
+          .map((d) => (
+            <Card key={d.id} tom="fato" as="div" className="flex flex-col gap-1">
+              <p className="flex items-start gap-2 font-semibold text-rose-ink">
+                <span className="mt-1">{Icone.alerta}</span>
+                {alertaDividaCresce(d.descricao, sub(d.juros_mes, d.parcela_minima))}
+              </p>
+              <p className="text-sm text-ink">
+                {alertaMinimoProximo}{' '}
+                <Link to="/licoes/so-o-minimo" className="font-semibold text-blue underline">
+                  Entenda
+                </Link>
+              </p>
+            </Card>
+          ))}
       {r.divida_cresce && (
         <Card tom="fato" as="div" className="flex flex-col gap-1">
           <p className="flex items-start gap-2 font-semibold text-rose-ink">
@@ -180,11 +207,10 @@ function Diagnostico({ r, consentimentos }: { r: TRaioX; consentimentos: Consent
           {copy.comprometimento(r.compromisso_minimo_mes, r.capacidade.entradas, r.comprometimento_renda_pct)}
         </p>
       )}
-      <ul className="flex flex-col gap-3">
-        {r.dividas.map((d, i) => (
-          <DebtCard key={d.id} d={d} cor={corPorCusto(i)} />
-        ))}
-      </ul>
+      {/* O detalhe de cada dívida (contrato, parcelas, extrato) mora na aba Dívidas. */}
+      <LinkBotao to="/dividas" variante="secundario" largo>
+        {copy.detalhes}
+      </LinkBotao>
       <Link to="/dividas/nova" className="min-h-toque text-center text-sm font-semibold text-blue underline">
         {conectar.manual}
       </Link>

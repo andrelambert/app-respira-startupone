@@ -117,6 +117,12 @@ def upsert_divida(
     d.parcelas_restantes = m.parcelas_restantes
     d.dia_vencimento = m.dia_vencimento
     d.em_atraso_dias = m.em_atraso_dias
+    d.conta_id_externo = m.conta_id_externo
+    d.valor_contratado = m.valor_contratado
+    d.parcelas_total = m.parcelas_total
+    d.parcelas_pagas = m.parcelas_pagas
+    d.contrato_inicio = m.contrato_inicio
+    d.contrato_fim = m.contrato_fim
     if m.saldo_devedor > 0:
         d.quitada_em = None
     d.atualizado_em = agora()
@@ -171,6 +177,12 @@ def salvar_divida(session: Session, d: Divida) -> Divida:
 def apagar_divida(session: Session, d: Divida) -> None:
     session.delete(d)
     session.commit()
+
+
+def conta_por_externo(session: Session, usuario_id: int, id_externo: str) -> Conta | None:
+    return session.exec(
+        select(Conta).where(Conta.usuario_id == usuario_id, Conta.id_externo == id_externo)
+    ).first()
 
 
 def contas(session: Session, usuario_id: int) -> list[Conta]:

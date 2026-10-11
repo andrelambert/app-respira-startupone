@@ -224,6 +224,16 @@ class DividaOut(BaseModel):
     em_atraso_dias: int
     quitada_em: date | None
     atualizado_em: datetime
+    instituicao_logo: str | None
+    conta_id: int | None  # conta/cartão de origem no PFM, quando veio do Open Finance
+    # Juros do mês acima da parcela mínima: pagando só o mínimo, esta dívida cresce.
+    cresce_no_minimo: bool
+    # Contrato (empréstimo/financiamento, quando a instituição informa)
+    valor_contratado: Dinheiro | None
+    parcelas_total: int | None
+    parcelas_pagas: int | None
+    contrato_inicio: date | None
+    contrato_fim: date | None
 
 
 # --- Raio-X (F2) ------------------------------------------------------------------------

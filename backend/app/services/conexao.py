@@ -77,7 +77,9 @@ async def concluir(
     if not u.demo and inst.catalogo_em is None:
         # Banco fora do catálogo local: busca agora (nome e logo chegam em segundos).
         instituicoes.agendar(forcar=True)
-    if codigo.startswith("fixture_"):
+    if u.demo and inst.catalogo_em is None:
+        # Demo sem catálogo da Belvo (quem clona o repo não tem as chaves):
+        # nome da fixture, nunca o código cru. Com catálogo, vale o da Belvo.
         from app.providers.fixture import INSTITUICOES
 
         inst.nome = INSTITUICOES.get(codigo, inst.nome)

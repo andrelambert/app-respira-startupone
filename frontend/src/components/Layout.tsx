@@ -73,6 +73,7 @@ export function LayoutApp() {
     { to: '/inicio', rotulo: nav.inicio },
     { to: '/contas', rotulo: nav.contas },
     { to: '/raiox', rotulo: nav.raiox },
+    { to: '/dividas', rotulo: nav.dividas },
     { to: '/plano', rotulo: nav.plano },
     { to: '/configuracoes', rotulo: nav.configuracoes },
   ];
@@ -91,7 +92,7 @@ export function LayoutApp() {
         </Suspense>
       </main>
       <nav aria-label="Principal" className="fixed inset-x-0 bottom-0 z-10 border-t border-line bg-white">
-        {/* Largura pelo conteúdo: "Configurações" não cabe numa coluna de 1/5 em 360 px. */}
+        {/* Largura pelo conteúdo: "Configurações" não cabe numa coluna de 1/6 em 360 px. */}
         <ul className="mx-auto flex max-w-lg justify-around px-1">
           {itens.map((i) => (
             <li key={i.to}>
@@ -99,7 +100,7 @@ export function LayoutApp() {
                 to={i.to}
                 className={({ isActive }) =>
                   cx(
-                    'flex min-h-14 items-center justify-center whitespace-nowrap px-1.5 text-[13px] font-semibold sm:text-sm',
+                    'flex min-h-14 items-center justify-center whitespace-nowrap px-1 text-[13px] font-semibold sm:px-1.5 sm:text-sm',
                     isActive ? 'text-blue' : 'text-slate',
                   )
                 }

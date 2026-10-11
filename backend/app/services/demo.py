@@ -16,6 +16,7 @@ from sqlmodel import Session
 from app.config import get_settings
 from app.db import engine
 from app.models import RECURSOS_ESSENCIAIS, Divida, Origem, TaxaOrigem, TipoInstituicao, Usuario
+from app.providers.fixture import BANCOS_DA_JULIANA
 from app.repositories import consentimentos as repo_c
 from app.repositories import financeiro as repo_f
 from app.repositories import usuarios as repo_u
@@ -24,7 +25,7 @@ from app.services.contexto import fixture, hoje_do_usuario
 
 log = logging.getLogger("respira.demo")
 
-BANCOS_DEMO = ("fixture_banco_a_br_retail", "fixture_banco_b_br_retail")
+BANCOS_DEMO = BANCOS_DA_JULIANA
 
 
 async def garantir_juliana() -> None:
@@ -58,8 +59,18 @@ async def garantir_juliana() -> None:
             repo_u.salvar(s, u)
         assert u.id is not None
         consentimentos = repo_c.listar(s, u.id)
+        bancos = {
+            inst.codigo_externo
+            for c in consentimentos
+            if c.status == "ATIVO" and (inst := repo_c.obter_instituicao(s, c.instituicao_id))
+        }
         if not consentimentos:
             await semear(s, u)
+        elif bancos != set(BANCOS_DEMO):
+            # A fixture mudou de bancos (ou um foi revogado): reprocessar os
+            # consentimentos antigos zeraria as contas. Recomeça a demo do zero.
+            log.info("demo_bancos_mudaram -> reiniciando")
+            await reiniciar(s, u)
         elif not u.meses_simulados:
             # Reprocessa os dados fictícios: upsert idempotente, mantém o plano,
             # e faz mudanças no mapeamento chegarem à demo já existente.

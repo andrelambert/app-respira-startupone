@@ -1,4 +1,4 @@
-import { differenceInCalendarDays, format, parseISO } from 'date-fns';
+import { addMonths, differenceInCalendarDays, format, parseISO, startOfMonth } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
 /** "2028-04-01" → "abril de 2028" */
@@ -29,6 +29,11 @@ export function carimbo(iso: string): string {
 export function dataHoraLocal(iso: string): string {
   const [, dia, hh, mm] = /^(\d{4}-\d{2}-\d{2})T(\d{2}):(\d{2})/.exec(iso) ?? [];
   return dia ? `${dataCompleta(dia)}, ${hh}:${mm}` : dataCompleta(iso.slice(0, 10));
+}
+
+/** "2026-10-11", 3 → "2027-01-01": primeiro dia do mês, ``n`` meses à frente. */
+export function inicioDoMesMais(iso: string, n: number): string {
+  return format(addMonths(startOfMonth(parseISO(iso)), n), 'yyyy-MM-dd');
 }
 
 /** Só o nome do mês: "setembro" */

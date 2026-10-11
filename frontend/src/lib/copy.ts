@@ -29,6 +29,7 @@ export const marca = {
 
 export const nav = {
   inicio: 'Início',
+  dividas: 'Dívidas',
   contas: 'Contas',
   raiox: 'Raio-X',
   plano: 'Plano',
@@ -250,6 +251,8 @@ export const raiox = {
   voceDeve: 'Você deve',
   emCompromissos: (n: number) => `em ${n} ${plural(n, 'compromisso', 'compromissos')}`,
   listaTitulo: 'Do mais caro para o mais barato',
+  verTodas: (resto: number) => `+ ${resto} ${resto === 1 ? 'compromisso' : 'compromissos'} · ver todas as dívidas`,
+  detalhes: 'Ver cada dívida, por banco',
   saiEm: 'Seguindo o plano, você sai das dívidas em',
   projecao: 'Projeção com',
   porMes: (valor: Centavos) => `${r$(valor)} por mês`,
@@ -295,6 +298,10 @@ export function alertaMinimo(crescimento: Centavos): string {
   return `Pagando só o mínimo, sua dívida não diminui — ela cresce ${r$(crescimento)} por mês.`;
 }
 export const alertaMinimoProximo = 'O plano abaixo mostra quanto por mês faz a dívida começar a cair.';
+/** O total não cresce, mas uma dívida sim (o rotativo, quase sempre): o insight não pode sumir. */
+export function alertaDividaCresce(descricao: string, crescimento: Centavos): string {
+  return `${descricao}: pagando só o mínimo, ela não diminui — cresce ${r$(crescimento)} por mês.`;
+}
 
 // --- dívida (DebtCard) --------------------------------------------------------------------------
 
@@ -312,6 +319,31 @@ export const divida = {
   jurosMes: (c: Centavos) => `${r$(c)} de juros por mês`,
   manual: 'incluída por você',
   quitada: 'quitada',
+  cresce: (c: Centavos) => `pagando só o mínimo, cresce ${r$(c)} por mês`,
+};
+
+// --- dívidas (lista por banco) --------------------------------------------------------------------
+
+export const dividas = {
+  titulo: 'Suas dívidas',
+  resumo: (qtd: number, credores: number, parcelas: Centavos) =>
+    `${qtd} ${plural(qtd, 'compromisso', 'compromissos')} em ${credores} ${plural(credores, 'credor', 'credores')} · ${r$(parcelas)} de parcelas por mês`,
+  livreEm: (mesAno: string) => `Seguindo o seu plano, você fica livre em ${mesAno}.`,
+  semPlano: 'Você ainda não escolheu um plano para pagar tudo isso.',
+  verPlano: 'Ver o plano',
+  montarPlano: 'Montar meu plano',
+  parcelasPagas: (pagas: number, total: number) => `${pagas} de ${total} parcelas pagas`,
+  contratado: (c: Centavos) => `contratado: ${r$(c)}`,
+  terminaEm: (mesAno: string) => `contrato até ${mesAno}`,
+  ordem: (n: number) => `${n}ª na ordem de pagamento`,
+  esteMes: (c: Centavos) => `este mês: ${r$(c)}`,
+  quitadaEm: (mesAno: string) => `quitada em ${mesAno}`,
+  verExtrato: 'Ver extrato',
+  progresso: 'Parcelas do contrato já pagas',
+  vazio: {
+    titulo: 'Nenhuma dívida por aqui',
+    texto: 'Conecte um banco ou inclua uma dívida que não aparece no Open Finance.',
+  },
 };
 
 // --- plano (F3) ------------------------------------------------------------------------------------

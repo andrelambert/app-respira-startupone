@@ -122,6 +122,13 @@ class DividaMapeada:
     parcelas_restantes: int | None
     dia_vencimento: int | None
     em_atraso_dias: int
+    # Contrato (empréstimo/financiamento): o que a Belvo entrega em loan_data.
+    conta_id_externo: str | None = None
+    valor_contratado: Decimal | None = None
+    parcelas_total: int | None = None
+    parcelas_pagas: int | None = None
+    contrato_inicio: date | None = None
+    contrato_fim: date | None = None
 
 
 @dataclass
@@ -184,6 +191,13 @@ def _datahora_utc(valor: Any) -> datetime | None:
     except ValueError:
         return None
     return dt.replace(tzinfo=timezone.utc) if dt.tzinfo is None else dt.astimezone(timezone.utc)
+
+
+def _inteiro(valor: Any) -> int | None:
+    try:
+        return int(valor) if valor is not None and valor != "" else None
+    except (TypeError, ValueError):
+        return None
 
 
 def _upper(*partes: Any) -> str:
@@ -297,12 +311,22 @@ def normalizar_taxa(valor_bruto: Any, periodicidade: str | None) -> Decimal | No
       ambíguo (4.362 pode ser 436% a.a. em fração ou 4,36% a.a. em percentual)
       e é recusado. Crédito de varejo no Brasil não tem taxa anual abaixo de 8%
       nem acima de 800%. Anual vira mensal equivalente: ``(1 + a)^(1/12) − 1``.
+    * ``CET`` (``loan_data.total_effective_cost``): fração **anual**, sempre.
+      A documentação da Belvo o descreve como valor em reais, mas os dados
+      reais (amostra de 99 contratos, out/2026) trazem taxas — 0,21 num
+      consignado, 2,33 num crédito pessoal, 0,13 num habitacional —, como o
+      Open Finance Brasil define o CET. Por isso aqui não há a ambiguidade de
+      1 a 8: até 8 (800% a.a.) é fração.
     * Sanity check final: mensal fora de 0,1%–20% → ``None``.
     """
     v = _dec(valor_bruto)
     if v is None or v <= 0:
         return None
-    if (periodicidade or "").upper() in {"YEARLY", "ANNUAL", "AA"}:
+    if (periodicidade or "").upper() == "CET":
+        if v > ANUAL_PERCENTUAL_A_PARTIR_DE:
+            return None
+        v = ((1 + v).ln() / 12).exp() - 1
+    elif (periodicidade or "").upper() in {"YEARLY", "ANNUAL", "AA"}:
         if v >= ANUAL_PERCENTUAL_A_PARTIR_DE:
             v = v / 100
         elif v > 1:
@@ -332,7 +356,12 @@ def _taxa_do_emprestimo(loan: Json) -> tuple[Any, str | None]:
 
 
 def _resolver_taxa(
-    bruto: Any, periodicidade: str | None, modalidade: str, instituicao: str, categoria: str
+    bruto: Any,
+    periodicidade: str | None,
+    modalidade: str,
+    instituicao: str,
+    categoria: str,
+    cet: Any = None,
 ) -> tuple[Decimal, str]:
     # Log de diagnóstico da §7.7: instituição, modalidade e valor bruto — nada
     # que identifique a pessoa.
@@ -341,6 +370,12 @@ def _resolver_taxa(
         instituicao, categoria, modalidade, bruto, periodicidade,
     )
     taxa = normalizar_taxa(bruto, periodicidade)
+    if taxa is None and cet is not None:
+        # Sem taxa utilizável em interest_rates[]: o CET é da própria
+        # instituição (inclui tarifas e IOF, então fica um pouco acima da taxa
+        # de juros pura) — melhor que a referência por modalidade.
+        taxa = normalizar_taxa(cet, "CET")
+        log.info("taxa_pelo_cet instituicao=%s modalidade=%s cet=%r", instituicao, modalidade, cet)
     if taxa is None:
         if bruto is not None:
             log.warning(
@@ -454,9 +489,15 @@ def mapear_contas(
         if cid:
             faturas_por_conta.setdefault(cid, []).append(f)
 
-    # §7.7: CHECKING negativo só vira cheque especial se não vier uma
-    # ADVANCE_DEPOSIT_ACCOUNT separada — senão a mesma dívida conta duas vezes.
-    tem_adiantamento = any(c.get("category") == "ADVANCE_DEPOSIT_ACCOUNT" for c in contas)
+    # §7.7: CHECKING negativo só vira cheque especial se o cheque especial não
+    # vier como conta própria — senão a mesma dívida conta duas vezes. Nos dados
+    # reais ele vem como ADVANCE_DEPOSIT_ACCOUNT ou como LOAN_ACCOUNT com
+    # subtype CHEQUE_ESPECIAL (o mais comum na amostra de out/2026).
+    tem_adiantamento = any(
+        c.get("category") == "ADVANCE_DEPOSIT_ACCOUNT"
+        or (c.get("category") == "LOAN_ACCOUNT" and modalidade_de_emprestimo(c) == "CHEQUE_ESPECIAL")
+        for c in contas
+    )
 
     r = ResultadoContas()
     for c in contas:
@@ -505,6 +546,7 @@ def mapear_contas(
                         parcelas_restantes=None,
                         dia_vencimento=None,
                         em_atraso_dias=0,
+                        conta_id_externo=c["id"],
                     )
                 )
             continue
@@ -576,6 +618,7 @@ def mapear_contas(
                     parcelas_restantes=None,
                     dia_vencimento=venc.day if venc else None,
                     em_atraso_dias=_dias_atraso_fatura(fatura, hoje) if fatura else 0,
+                    conta_id_externo=c["id"],
                 )
             )
             continue
@@ -589,7 +632,9 @@ def mapear_contas(
             if saldo <= 0:
                 continue
             bruto, periodicidade = _taxa_do_emprestimo(loan)
-            taxa, origem = _resolver_taxa(bruto, periodicidade, modalidade, inst, categoria)
+            taxa, origem = _resolver_taxa(
+                bruto, periodicidade, modalidade, inst, categoria, cet=loan.get("total_effective_cost")
+            )
             restantes = loan.get("number_of_installments_outstanding")
             if restantes is None and loan.get("number_of_installments_total") is not None:
                 restantes = int(loan["number_of_installments_total"]) - int(
@@ -635,6 +680,12 @@ def mapear_contas(
                     parcelas_restantes=int(restantes) if restantes is not None else None,
                     dia_vencimento=dia,
                     em_atraso_dias=_dias_atraso_emprestimo(loan, hoje),
+                    conta_id_externo=c["id"],
+                    valor_contratado=arredondar(v) if (v := _dec(loan.get("contract_amount"))) else None,
+                    parcelas_total=_inteiro(loan.get("number_of_installments_total")),
+                    parcelas_pagas=_inteiro(loan.get("number_of_installments_paid")),
+                    contrato_inicio=_data(loan.get("contract_start_date")),
+                    contrato_fim=_data(loan.get("contract_end_date")),
                 )
             )
             continue

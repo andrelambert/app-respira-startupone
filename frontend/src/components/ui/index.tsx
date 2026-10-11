@@ -307,7 +307,8 @@ export function EstadoErro({
   );
 }
 
-export function BarraProgresso({ pct, rotulo }: { pct: number; rotulo: string }) {
+/** ``sobreBranco``: trilha cinza, para a barra não sumir num cartão branco. */
+export function BarraProgresso({ pct, rotulo, sobreBranco = false }: { pct: number; rotulo: string; sobreBranco?: boolean }) {
   const v = Math.max(0, Math.min(100, pct));
   return (
     <div
@@ -316,7 +317,7 @@ export function BarraProgresso({ pct, rotulo }: { pct: number; rotulo: string })
       aria-valuemin={0}
       aria-valuemax={100}
       aria-valuenow={Math.round(v)}
-      className="h-3 w-full overflow-hidden rounded-full bg-white"
+      className={cx('h-3 w-full overflow-hidden rounded-full', sobreBranco ? 'bg-line' : 'bg-white')}
     >
       <div className="h-full rounded-full bg-green transition-[width]" style={{ width: `${v}%` }} />
     </div>

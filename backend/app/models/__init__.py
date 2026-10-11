@@ -287,6 +287,14 @@ class Divida(SQLModel, table=True):
     origem: Origem
     taxa_origem: TaxaOrigem = TaxaOrigem.INFORMADA
     quitada_em: date | None = None
+    # Conta de origem na Belvo (account.id) e dados do contrato — só o que a
+    # instituição entrega em loan_data; cartão e manual ficam sem.
+    conta_id_externo: str | None = Field(default=None, max_length=64)
+    valor_contratado: Decimal | None = _dinheiro(default=None, nullable=True)
+    parcelas_total: int | None = None
+    parcelas_pagas: int | None = None
+    contrato_inicio: date | None = None
+    contrato_fim: date | None = None
     atualizado_em: datetime = Field(default_factory=agora)
 
 

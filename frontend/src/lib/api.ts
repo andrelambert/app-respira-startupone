@@ -79,6 +79,17 @@ export const dividaSchema = z.object({
   em_atraso_dias: z.number().int(),
   quitada_em: data.nullable(),
   atualizado_em: dataHora,
+  instituicao_logo: z.string().url().nullable(),
+  /** Conta/cartão de origem no PFM (só dívidas do Open Finance). */
+  conta_id: z.number().int().nullable(),
+  /** Juros do mês acima da parcela mínima: pagando só o mínimo, cresce. */
+  cresce_no_minimo: z.boolean(),
+  // Contrato — empréstimo e financiamento, quando o banco informa
+  valor_contratado: dinheiro.nullable(),
+  parcelas_total: z.number().int().nullable(),
+  parcelas_pagas: z.number().int().nullable(),
+  contrato_inicio: data.nullable(),
+  contrato_fim: data.nullable(),
 });
 export type Divida = z.infer<typeof dividaSchema>;
 

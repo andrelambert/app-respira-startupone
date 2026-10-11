@@ -51,9 +51,9 @@ de crédito, e o rotativo cobra mais de 400% ao ano (BCB). O problema não é fa
 primeiro* e *quando isso acaba*.
 
 A persona do projeto é a **Juliana Ramos** (fictícia, ancorada em dados públicos): 34 anos,
-R$ 3.100 líquidos, cinco dívidas espalhadas em bancos e carnês. Os números dela escondem a
-armadilha que o Respira existe para mostrar: **os juros do mês (R$ 733) são maiores que a soma
-dos mínimos (R$ 723)** — pagando só o mínimo de tudo, a dívida dela cresce todo mês.
+R$ 3.100 líquidos, dívidas espalhadas em três bancos e um carnê de loja. Na Fase 5, os números dela
+mostraram a armadilha que o Respira existe para tornar visível: **os juros do mês (R$ 733) eram
+maiores que a soma dos mínimos (R$ 723)** — pagando só o mínimo de tudo, a dívida crescia todo mês.
 
 O contexto completo (pesquisa, persona, princípios, regras de negócio) está em
 [`docs/contexto-produto.md`](docs/contexto-produto.md).
@@ -69,7 +69,8 @@ um **modo demonstração** com a Juliana, que não precisa de nenhuma credencial
 | Funcionalidade | O que faz | Situação |
 |---|---|---|
 | **F1 — Conexão de contas** | Autorização via widget da Belvo (Open Finance Brasil), aberto em nova aba; coleta de contas, cartões, faturas, empréstimos e transações; acompanhamento da coleta em tempo real; revogação em um toque. Dívidas fora do Open Finance (carnê, crediário) entram por cadastro manual assistido. | ✅ Implementado |
-| **F2 — Raio-X da dívida** | Total consolidado, lista ordenada por custo efetivo (taxa ao ano), data de quitação projetada na mesma tela e o alerta explícito *"pagando só o mínimo, sua dívida cresce R$ 10 por mês"*. | ✅ Implementado |
+| **F2 — Raio-X da dívida** | Total consolidado, lista ordenada por custo efetivo (taxa ao ano), data de quitação projetada na mesma tela e o alerta explícito de que, pagando só o mínimo, a dívida cresce — no total ou numa dívida específica (*"rotativo do cartão: cresce R$ 104 por mês"*). | ✅ Implementado |
+| **Dívidas** | Cada dívida por credor: saldo, taxa ao ano, parcela, dados do contrato (parcelas pagas, valor contratado, fim do contrato), atraso, selos de estimativa e o papel dela no plano (ordem, quanto pagar este mês, quando é quitada). | ✅ Implementado |
 | **F3 — Plano de quitação** | Três estratégias lado a lado (Avalanche, Bola de neve, Equilibrado), com a diferença traduzida em reais e meses, e um *slider* de capacidade mensal que move a data em tempo real. | ✅ Implementado |
 | **F4 — Acompanhamento e alertas** | Detecção determinística de eventos (entrada no rotativo, atraso iminente, atraso confirmado, cheque especial, pico de gasto, desvio do plano, dívida quitada), previsto × realizado mês a mês e marcos celebrados. Só há alerta quando existe uma ação concreta e um valor em reais em jogo. | ✅ Implementado (alertas dentro do app; sem push/e-mail) |
 | **F5 — Microlições e copiloto** | 9 microlições estáticas, casadas por regra com o evento detectado. O copiloto de IA aparece **desabilitado, com rótulo "em breve"** — nenhuma resposta de IA é simulada. | 🟡 Estrutura pronta; IA não implementada |
@@ -77,7 +78,12 @@ um **modo demonstração** com a Juliana, que não precisa de nenhuma credencial
 
 **Modo demonstração (Juliana).** Simula a jornada inteira com dados fictícios no **mesmo formato
 de resposta da Belvo** (o mapeamento Belvo → domínio é exercitado de verdade): conexão por um
-widget simulado, coleta, Raio-X, plano e acompanhamento. A tela inicial dela tem controles para
+widget simulado, coleta, Raio-X, plano e acompanhamento. A Juliana tem **três bancos conectados**
+— Nubank (conta, cartão no rotativo e empréstimo pessoal), Itaú (conta no cheque especial, cartão
+parcelado e financiamento de moto) e Caixa (poupança, consignado e um crédito pessoal com parcela
+atrasada) — mais um carnê de loja cadastrado à mão, 12 meses de transações na conta e nos cartões
+e histórico de faturas. Os contratos de empréstimo e financiamento seguem o formato de dados reais
+da Belvo (inclusive os campos que no Brasil vêm vazios). A tela inicial dela tem controles para
 **avançar um mês** (inclusive um "mês difícil", para ver o plano se recalcular sem linguagem de
 falha) e **reiniciar a demonstração**.
 
@@ -151,7 +157,7 @@ Juliana — os dados dela vêm do código, não do banco.
 ### Testes
 
 ```bash
-cd backend && uv run pytest     # 78 testes
+cd backend && uv run pytest     # 82 testes
 cd frontend && npm test         # 30 testes
 ```
 
@@ -161,18 +167,23 @@ cd frontend && npm test         # 30 testes
 
 Com o backend e o frontend no ar, entrando como Juliana:
 
-1. **Raio-X** — "Você deve **R$ 8.260** em **5 compromissos**", a lista ordenada pela taxa ao ano
+1. **Raio-X** — "Você deve **R$ 20.183** em **8 compromissos**", a lista ordenada pela taxa ao ano
    (o rotativo aparece com **436% a.a.**), a data de quitação logo abaixo e o alerta de que,
-   pagando só o mínimo, a dívida **cresce R$ 10 por mês**.
-2. **Plano** — as três estratégias lado a lado. Com R$ 900/mês: Avalanche quita em **18 meses**
-   (R$ 7.924 de juros), Equilibrado em **19** (R$ 8.240), Bola de neve em **21** (R$ 10.492).
-   Arraste o *slider* e veja a data se mover. Ative um plano.
-3. **Início** — o que pagar este mês, alertas pendentes e o painel de demonstração: avance um mês
-   (ou um "mês difícil") e veja o previsto × realizado e a data recalculada.
-4. **Contas** — saldos, faturas do cartão (com pagamentos e mínimo) e extrato com detalhes de cada
-   transação.
-5. **Configurações** — o que o app lê e o que não lê, revogação por banco e exclusão de conta
-   (esta última desabilitada na conta demo).
+   pagando só o mínimo, o **rotativo do cartão cresce R$ 104 por mês**.
+2. **Dívidas** — as 8 dívidas por banco, com o contrato de cada uma (ex.: moto com 18 de 48
+   parcelas pagas), atrasos e selos de "taxa estimada" / "parcela estimada".
+3. **Plano** — as três estratégias lado a lado. Com a capacidade calculada do histórico
+   (R$ 1.755/mês): Avalanche quita em **16 meses** (R$ 7.727 de juros), Equilibrado em **17**
+   (R$ 7.941, com a primeira dívida quitada já no 1º mês), Bola de neve em **17** (R$ 9.258).
+   Arraste o *slider* e veja a data se mover. Ative um plano — a aba Dívidas passa a mostrar a
+   ordem de pagamento e quanto vai para cada uma neste mês.
+4. **Início** — o que pagar este mês, alertas pendentes e o painel de demonstração: avance um mês
+   (ou um "mês difícil", com 25% a menos no plano) e veja o previsto × realizado e a data
+   recalculada.
+5. **Contas** — saldos dos três bancos, faturas dos cartões (com pagamentos e mínimo) e extratos
+   com o detalhe de cada transação (no cartão: estabelecimento, final do cartão e fatura).
+6. **Configurações** — o que o app lê e o que não lê, revogação por banco e
+   exclusão de conta (esta última desabilitada na conta demo).
 
 ---
 
@@ -287,8 +298,8 @@ O protótipo lida com dados financeiros reais, então foi tratado como produçã
 
 | Suíte | Quantidade | O que cobre |
 |---|---:|---|
-| `backend/tests/test_planner.py` | 20 | Os números da Fase 5, empates, uma dívida só, capacidade insuficiente, ausência de dívidas |
-| `backend/tests/test_mapping.py` | 40 | Belvo → domínio: modalidades, normalização da taxa de juros, faturas, transações, fuso horário |
+| `backend/tests/test_planner.py` | 20 | Os números da Fase 5 (R$ 8.260 em 5 dívidas: 18 / 19 / 21 meses, ao centavo), empates, uma dívida só, capacidade insuficiente, ausência de dívidas |
+| `backend/tests/test_mapping.py` | 44 | Belvo → domínio: modalidades, normalização da taxa de juros (inclusive pelo CET), cheque especial sem contagem dupla, contratos, faturas, transações, fuso horário |
 | `backend/tests/test_api.py` | 10 | Jornada da Juliana pela API, autenticação, isolamento entre usuários, webhooks |
 | `backend/tests/test_belvo.py` e `test_instituicoes.py` | 8 | Cliente da Belvo (payload do token, paginação, erros) e catálogo de bancos |
 | Frontend (Vitest) | 30 | Dinheiro em centavos, validação de CPF/e-mail, textos, datas, cadastro |
@@ -315,12 +326,16 @@ O protótipo lida com dados financeiros reais, então foi tratado como produçã
   de cobrança**. O cadastro manual assistido cobre parte disso; o total exibido é sempre "das
   instituições conectadas".
 - **Taxas de juros nem sempre vêm.** No Brasil, a Belvo devolve vazia a taxa do cartão e, nos
-  empréstimos, a parcela e o vencimento. O sistema estima a partir de taxas de referência por
-  modalidade e **mostra o selo "estimada"** na interface. Essas referências ainda precisam ser
-  conferidas contra a publicação mais recente do Banco Central.
-- **Validação com dados reais ainda limitada** a uma instituição conectada, sem empréstimo ou
-  financiamento ativo — o mapeamento desses produtos foi feito a partir da documentação da Belvo
-  e precisa ser confirmado com um contrato real.
+  empréstimos, a parcela e o vencimento. Nos empréstimos, a taxa sai de `interest_rates[]` ou,
+  na falta, do CET informado pelo banco (que inclui tarifas e IOF, então fica um pouco acima da
+  taxa pura); a parcela é calculada pela tabela Price. No cartão e quando nada disso vem, o
+  sistema usa taxas de referência por modalidade. Toda estimativa **aparece com selo** na
+  interface. As referências ainda precisam ser conferidas contra a publicação mais recente do
+  Banco Central.
+- **Validação com dados reais ainda limitada.** O formato dos contratos de empréstimo e
+  financiamento foi conferido numa amostra anonimizada de dados reais da Belvo, mas a conexão
+  ponta a ponta foi testada com uma instituição só, sem empréstimo ativo — falta confirmar uma
+  taxa calculada contra um contrato real.
 - **Alertas só dentro do app** — não há notificação push nem e-mail.
 - **Copiloto de IA não implementado** (aparece desabilitado, como "em breve").
 - **CPF guardado em texto puro no banco local** (necessário para o consentimento na Belvo).

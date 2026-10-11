@@ -67,33 +67,42 @@ def test_jornada_juliana(api):
     assert r.json()["demo"] is True and r.json()["apelido"] == "Juliana"
     assert "httponly" in r.headers["set-cookie"].lower()
     cs = _aguardar_coleta(api)
-    assert sorted(c["instituicao"] for c in cs) == ["Banco A", "Banco B"]
+    assert sorted(c["instituicao"] for c in cs) == ["Caixa", "Itaú", "Nubank"]
 
-    # --- F2 Raio-X: os números do §2 -----------------------------------------
+    # --- F2 Raio-X: 3 bancos + o carnê (as 5 dívidas da §2 + moto, consignado e
+    # crédito pessoal da Caixa) -------------------------------------------------------
     rx = api.get("/raiox").json()
-    assert (rx["qtd_dividas"], rx["divida_total"]) == (5, "8260.00")
-    assert rx["juros_mes_estimado"] == "733.20" and rx["compromisso_minimo_mes"] == "723.00"
-    assert rx["divida_cresce"] and rx["crescimento_mensal"] == "10.20"
+    assert (rx["qtd_dividas"], rx["divida_total"]) == (8, "20183.13")
+    assert rx["juros_mes_estimado"] == "1019.47" and rx["compromisso_minimo_mes"] == "1449.14"
+    # Com as parcelas reais (tabela Price) o total não cresce — mas o rotativo sim:
+    assert not rx["divida_cresce"]
+    rotativo = next(d for d in rx["dividas"] if d["modalidade"] == "CARTAO_ROTATIVO")
+    assert rotativo["cresce_no_minimo"] and rotativo["juros_mes"] == "312.42"
+    assert [d["cresce_no_minimo"] for d in rx["dividas"]].count(True) == 1
     assert rx["maior_fonte_juros_valor"] == "312.42"
     assert [d["modalidade"] for d in rx["dividas"]] == [
-        "CARTAO_ROTATIVO", "CARTAO_PARCELADO", "CHEQUE_ESPECIAL", "CREDITO_PESSOAL", "CREDIARIO",
+        "CARTAO_ROTATIVO", "CREDITO_PESSOAL", "CARTAO_PARCELADO", "CHEQUE_ESPECIAL",
+        "CREDITO_PESSOAL", "CREDIARIO", "FIN_VEICULO", "CONSIGNADO",
     ]
-    assert rx["capacidade"]["valor"] == "900.00"
-    assert (rx["projecao"]["metodo"], rx["projecao"]["meses"]) == ("AVALANCHE", 18)
+    moto = next(d for d in rx["dividas"] if d["modalidade"] == "FIN_VEICULO")
+    assert (moto["parcelas_pagas"], moto["parcelas_total"], moto["valor_contratado"]) == (18, 48, "9800.00")
+    assert moto["conta_id"] and moto["instituicao"] == "Itaú"
+    assert rx["capacidade"]["valor"] == "1755.00"
+    assert (rx["projecao"]["metodo"], rx["projecao"]["meses"]) == ("AVALANCHE", 16)
 
-    # --- F3: a tabela da §14.1 ---------------------------------------------------
+    # --- F3: as três estratégias ------------------------------------------------------
+    # (a tabela da §14.1, com as 5 dívidas da Fase 5, é validada em test_planner.py)
     sim = api.get("/plano/simulacoes").json()
     por = {e["metodo"]: e for e in sim["estrategias"]}
-    assert (por["AVALANCHE"]["meses"], por["AVALANCHE"]["juros_totais"], por["AVALANCHE"]["primeira_quitacao_mes"]) == (18, "7923.69", 10)
-    assert (por["EQUILIBRADO"]["meses"], por["EQUILIBRADO"]["juros_totais"], por["EQUILIBRADO"]["primeira_quitacao_mes"]) == (19, "8239.99", 2)
-    assert (por["SNOWBALL"]["meses"], por["SNOWBALL"]["juros_totais"], por["SNOWBALL"]["primeira_quitacao_mes"]) == (21, "10491.56", 2)
-    assert sim["capacidade_minima"] == "771.00"
-    assert por["EQUILIBRADO"]["so_minimo"]["meses"] == 19  # mesmo horizonte da estratégia
+    assert (por["AVALANCHE"]["meses"], por["AVALANCHE"]["juros_totais"], por["AVALANCHE"]["primeira_quitacao_mes"]) == (16, "7726.58", 8)
+    assert (por["EQUILIBRADO"]["meses"], por["EQUILIBRADO"]["juros_totais"], por["EQUILIBRADO"]["primeira_quitacao_mes"]) == (17, "7940.64", 1)
+    assert (por["SNOWBALL"]["meses"], por["SNOWBALL"]["juros_totais"], por["SNOWBALL"]["primeira_quitacao_mes"]) == (17, "9257.67", 1)
+    assert sim["capacidade_minima"] == "1395.00"
 
     # --- ativar + eventos ----------------------------------------------------------
-    assert api.post("/plano", json={"metodo": "AVALANCHE", "capacidade": "723.00"}, headers=H).status_code == 422
-    plano = api.post("/plano", json={"metodo": "AVALANCHE", "capacidade": "900.00"}, headers=H).json()
-    assert sum(D(p["valor"]) for p in plano["este_mes"]) == D("900.00")
+    assert api.post("/plano", json={"metodo": "AVALANCHE", "capacidade": "1000.00"}, headers=H).status_code == 422
+    plano = api.post("/plano", json={"metodo": "AVALANCHE", "capacidade": "1755.00"}, headers=H).json()
+    assert sum(D(p["valor"]) for p in plano["este_mes"]) == D("1755.00")
     tipos = {e["tipo"] for e in api.get("/eventos").json()}
     assert {"ENTRADA_ROTATIVO", "ATRASO_CONFIRMADO", "CHEQUE_ESPECIAL", "PICO_CATEGORIA"} <= tipos
 
@@ -104,13 +113,13 @@ def test_jornada_juliana(api):
     ruim = api.post("/demo/avancar-mes", json={"mes_dificil": True}, headers=H).json()
     assert ruim["projecao_atual"]["data_quitacao"] > data_original
     desvio = next(e for e in api.get("/eventos").json() if e["tipo"] == "DESVIO_PLANO")
-    assert desvio["contexto"]["falta"] == "240.00"
+    assert desvio["contexto"]["falta"] == "438.75"  # 25% do plano de R$ 1.755
 
     # --- reiniciar a demo volta tudo ao começo -------------------------------------
     assert api.post("/demo/reiniciar", headers=H).status_code == 204
     assert api.get("/plano/ativo").status_code == 404
     assert api.get("/usuarios/me").json()["meses_simulados"] == 0
-    assert api.get("/raiox").json()["divida_total"] == "8260.00"
+    assert api.get("/raiox").json()["divida_total"] == "20183.13"
     assert api.delete("/usuarios/me", headers=H).status_code == 403  # demo não se exclui
 
 
@@ -169,42 +178,51 @@ def test_webhook_exige_autenticacao_e_e_idempotente(api):
 def test_revogacao_apaga_dados_locais(api):
     api.cookies.clear()
     api.post("/auth/entrar", json=DEMO, headers=H)
-    banco_b = next(c for c in api.get("/consentimentos").json() if c["instituicao"] == "Banco B")
-    assert api.delete(f"/consentimentos/{banco_b['id']}", headers=H).status_code == 204
-    assert "CARTAO_PARCELADO" not in {d["modalidade"] for d in api.get("/dividas").json()}
+    itau = next(c for c in api.get("/consentimentos").json() if c["instituicao"] == "Itaú")
+    assert api.delete(f"/consentimentos/{itau['id']}", headers=H).status_code == 204
+    assert {"CARTAO_PARCELADO", "FIN_VEICULO"}.isdisjoint({d["modalidade"] for d in api.get("/dividas").json()})
 
 
 def test_pfm_contas_faturas_e_extrato(api):
     api.cookies.clear()
     api.post("/auth/entrar", json=DEMO, headers=H)
+    # Outros testes revogam bancos da demo: começa do estado inicial.
+    assert api.post("/demo/reiniciar", headers=H).status_code == 204
     _aguardar_coleta(api)
     v = api.get("/pfm/visao-geral").json()
     bancos = {b["instituicao"]: b for b in v["bancos"]}
-    assert set(bancos) >= {"Banco A"}
-    a = bancos["Banco A"]
+    assert set(bancos) == {"Nubank", "Itaú", "Caixa"}
+    itau, nubank = bancos["Itaú"], bancos["Nubank"]
     # conta corrente sempre primeiro, depois cartão e crédito
-    assert [c["tipo"] for c in a["contas"]] == ["CORRENTE", "CARTAO_CREDITO", "ADIANTAMENTO", "EMPRESTIMO"]
-    corrente0 = a["contas"][0]
-    assert (corrente0["agencia"], corrente0["numero_conta"], corrente0["tipo_externo"]) == ("0001", "104582-7", "CONTA_DEPOSITO_A_VISTA")
-    cartao0 = next(c for c in a["contas"] if c["tipo"] == "CARTAO_CREDITO")
+    assert [c["tipo"] for c in itau["contas"]] == ["CORRENTE", "CARTAO_CREDITO", "EMPRESTIMO", "FINANCIAMENTO"]
+    assert [c["tipo"] for c in bancos["Caixa"]["contas"]] == ["POUPANCA", "EMPRESTIMO", "EMPRESTIMO"]
+    corrente0 = itau["contas"][0]
+    assert (corrente0["agencia"], corrente0["numero_conta"], corrente0["tipo_externo"]) == ("0742", "28561-4", "CONTA_DEPOSITO_A_VISTA")
+    assert (corrente0["saldo"], corrente0["usado_cheque_especial"]) == ("0.00", "500.00")  # no cheque especial
+    cartao0 = next(c for c in itau["contas"] if c["tipo"] == "CARTAO_CREDITO")
     assert cartao0["numero_conta"] is None and cartao0["agencia"] is None  # cartão: nunca o número (PCI)
-    assert v["saldo_em_contas"] == "180.00"
+    assert v["saldo_em_contas"] == "98.60"  # Nubank 63,40 + Itaú 0 + poupança Caixa 35,20
 
-    cartao = next(c for c in a["contas"] if c["tipo"] == "CARTAO_CREDITO")
+    cartao = next(c for c in nubank["contas"] if c["tipo"] == "CARTAO_CREDITO")
     assert cartao["fatura_atual"]["total"] == "2080.00"
     assert cartao["fatura_atual"]["situacao"] == "EM_ABERTO"
     assert (cartao["limite_credito"], cartao["disponivel"]) == ("2500.00", "420.00")
     det = api.get(f"/contas/{cartao['id']}").json()
-    assert [f["situacao"] for f in det["faturas"]] == ["EM_ABERTO", "PARCIAL"]  # mais recente primeiro
-    atual, anterior = det["faturas"]
+    assert [f["situacao"] for f in det["faturas"]] == ["EM_ABERTO", "PARCIAL", "PARCIAL", "PARCIAL"]  # mais recente primeiro
+    atual, anterior = det["faturas"][:2]
     assert re.fullmatch(r"[A-Z][a-z]{2}-\d{4}", atual["nome"])  # bill_name no formato da Belvo
     assert atual["pagamentos"] == [] and atual["minimo"] == "208.00"
     assert [p["valor"] for p in anterior["pagamentos"]] == ["208.00"] and anterior["pagamentos"][0]["data"]
+    # Extrato do cartão: estabelecimento, final do cartão e a fatura de cada compra
+    compras = api.get(f"/contas/{cartao['id']}/transacoes", params={"direcao": "SAIDA", "por_pagina": 100}).json()
+    assert compras["total"] > 50
+    assert {t["final_cartao"] for t in compras["itens"]} == {"5163"}
+    assert any(t["estabelecimento"] for t in compras["itens"]) and any(t["fatura"] for t in compras["itens"])
 
-    corrente = next(c for c in a["contas"] if c["tipo"] == "CORRENTE")
+    corrente = corrente0
     url = f"/contas/{corrente['id']}/transacoes"
     p1 = api.get(url, params={"por_pagina": 20}).json()
-    assert p1["total"] > 200 and p1["paginas"] == -(-p1["total"] // 20) and len(p1["itens"]) == 20
+    assert p1["total"] > 100 and p1["paginas"] == -(-p1["total"] // 20) and len(p1["itens"]) == 20
     datas = [t["data"] for t in p1["itens"]]
     assert datas == sorted(datas, reverse=True)  # mais recentes primeiro
     p2 = api.get(url, params={"por_pagina": 20, "pagina": 2}).json()
@@ -214,10 +232,12 @@ def test_pfm_contas_faturas_e_extrato(api):
     assert entradas["total"] > 0 and all(t["direcao"] == "ENTRADA" and not t["valor"].startswith("-") for t in entradas["itens"])
     assert entradas["total_saidas"] == "0.00"
     mercado = api.get(url, params={"busca": "supermercado", "por_pagina": 5}).json()["itens"][0]
-    assert (mercado["subcategoria"], mercado["estabelecimento"]) == ("Groceries", "Mercado Bom Preço")
+    # conta corrente: sem estabelecimento nem final de cartão (só vêm no cartão)
+    assert (mercado["subcategoria"], mercado["estabelecimento"], mercado["final_cartao"]) == ("Groceries", None, None)
     assert mercado["tipo_operacao"] == "CARTAO" and mercado["transacionado_em"].endswith("-03:00")
     # PIX das 01:30 UTC aparece às 22:30 do dia anterior, em horário de Brasília
-    pix = api.get(url, params={"busca": "companheiro", "por_pagina": 100}).json()["itens"]
+    conta_nubank = nubank["contas"][0]
+    pix = api.get(f"/contas/{conta_nubank['id']}/transacoes", params={"busca": "companheiro", "por_pagina": 100}).json()["itens"]
     noite = [t for t in pix if t["transacionado_em"][11:16] == "22:30"]
     assert noite and all(t["transacionado_em"][:10] == t["data"] for t in noite)
     trinta = api.get(url, params={"dias": 30, "por_pagina": 100}).json()

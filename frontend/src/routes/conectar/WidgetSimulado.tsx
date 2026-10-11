@@ -11,9 +11,10 @@ import { api, ApiError } from '@/lib/api';
  * demonstração rodar sem credenciais e sem dado bancário real.
  */
 const BANCOS = [
-  { codigo: 'fixture_banco_a_br_retail', nome: 'Banco A', nota: 'conta, cartão, empréstimo e cheque especial' },
-  { codigo: 'fixture_banco_b_br_retail', nome: 'Banco B', nota: 'cartão com fatura parcelada' },
-  { codigo: 'fixture_banco_c_br_retail', nome: 'Banco C', nota: 'simula banco fora do ar' },
+  { codigo: 'ofnubank_br_retail', nome: 'Nubank', nota: 'conta, cartão no rotativo e empréstimo pessoal' },
+  { codigo: 'ofitau_br_retail', nome: 'Itaú', nota: 'conta no cheque especial, cartão parcelado e moto financiada' },
+  { codigo: 'ofcaixa_br_retail', nome: 'Caixa', nota: 'poupança, consignado e crédito pessoal em atraso' },
+  { codigo: 'fixture_banco_fora_br_retail', nome: 'Banco Fora do Ar', nota: 'simula banco fora do ar' },
 ];
 
 export default function WidgetSimulado() {

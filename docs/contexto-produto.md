@@ -17,6 +17,12 @@
 >   `FixtureProvider`; toda conta registrada usa a Belvo real (`backend/app/services/contexto.py`).
 > - Há login real (e-mail + senha, cookie HttpOnly e sessão no banco), não usuário único — §16.1.
 > - Sem túnel público, a coleta é por **polling** (`BELVO_WEBHOOKS_ENABLED=false`) — §16.3.
+> - A demo da Juliana tem **três bancos** (Nubank, Itaú, Caixa) e oito dívidas: as cinco da §2,
+>   com os mesmos saldos e taxas, mais moto financiada, consignado e um crédito pessoal em
+>   atraso. Os números da §14.1 seguem validados em `test_planner.py`, com as dívidas do domínio.
+> - Dados reais da Belvo (out/2026): cheque especial chega como `LOAN_ACCOUNT` com
+>   `subtype: CHEQUE_ESPECIAL`, e `total_effective_cost` (CET) é taxa **anual em fração**, não
+>   valor em reais como diz a documentação — ver `mapping.normalizar_taxa`.
 >
 > A integração com a Belvo (Open Finance Brasil) está detalhada na
 > [seção 7](#7-integração-belvo-open-finance-brasil--ofda). **Confira sempre o schema atual na

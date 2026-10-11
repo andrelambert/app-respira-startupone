@@ -17,7 +17,7 @@ from app.providers.mapping import (
 )
 
 HOJE = date(2026, 10, 3)
-A, B = "fixture_banco_a_br_retail", "fixture_banco_b_br_retail"
+NU, IT, CX = fixture.NUBANK, fixture.ITAU, fixture.CAIXA
 
 
 # --- normalizar_taxa ---------------------------------------------------------
@@ -32,6 +32,9 @@ A, B = "fixture_banco_a_br_retail", "fixture_banco_b_br_retail"
         ("436.2", "YEARLY", D("0.150210")),  # percentual anual → mensal composto
         ("0.268242", "YEARLY", D("0.020000")),  # fração anual: 26,82% a.a. ≈ 2% a.m.
         ("26.8242", "YEARLY", D("0.020000")),  # percentual anual
+        # CET (total_effective_cost): fração anual mesmo acima de 1 — dados reais, out/2026
+        ("0.2720", "CET", D("0.020252")),  # financiamento de veículo, 27,2% a.a.
+        ("2.20", "CET", D("0.101782")),  # crédito pessoal caro, 220% a.a.
     ],
 )
 def test_normalizar_taxa(bruto, periodo, esperado):
@@ -42,6 +45,10 @@ def test_normalizar_taxa(bruto, periodo, esperado):
 def test_taxa_fora_do_intervalo_ou_invalida_vira_none(bruto):
     # 0,05% a.m. e 25%/35%/95% a.m. estão fora do sanity check de 0,1%–20% a.m.
     assert normalizar_taxa(bruto, "MONTHLY") is None
+
+
+def test_cet_absurdo_e_recusado():
+    assert normalizar_taxa("9", "CET") is None  # 900% a.a. não é crédito de varejo
 
 
 @pytest.mark.parametrize("bruto", ["4.362", "1.5", "7.99"])
@@ -55,56 +62,89 @@ def test_taxa_anual_ambigua_e_recusada(bruto):
 
 def _dividas(codigo):
     r = mapear_contas(fixture.contas("L", codigo, HOJE), fixture.faturas("L", codigo, HOJE), HOJE, codigo)
-    return {d.modalidade: d for d in r.dividas}, r
+    return {d.descricao: d for d in r.dividas}, r
 
 
-def test_fixture_banco_a_reproduz_a_juliana():
-    dividas, r = _dividas(A)
-    rot = dividas["CARTAO_ROTATIVO"]
-    assert (rot.saldo_devedor, rot.parcela_minima, rot.dia_vencimento) == (D("2080.00"), D("208.00"), 12)
+def _emprestimo_nubank():
+    return next(c for c in fixture.contas("L", NU, HOJE) if c["category"] == "LOAN_ACCOUNT")
+
+
+def test_fixture_nubank_rotativo_e_emprestimo():
+    dividas, r = _dividas(NU)
+    rot = dividas["Rotativo do cartão Nubank"]
+    assert (rot.modalidade, rot.saldo_devedor, rot.parcela_minima, rot.dia_vencimento) == (
+        "CARTAO_ROTATIVO", D("2080.00"), D("208.00"), 12,
+    )
     # credit_data.interest_rate é sempre null no Brasil → estimada, com badge
     assert (rot.taxa_juros_mes, rot.taxa_origem) == (D("0.1502"), "ESTIMADA")
 
-    emp = dividas["CREDITO_PESSOAL"]
+    emp = dividas["Empréstimo pessoal Nubank"]
     assert (emp.saldo_devedor, emp.taxa_juros_mes, emp.taxa_origem) == (D("4200.00"), D("0.0644"), "INFORMADA")
-    assert (emp.parcela_minima, emp.dia_vencimento, emp.parcelas_restantes) == (D("260.00"), 5, 28)
+    # monthly_payment é null no Brasil: parcela pela tabela Price, marcada como estimada
+    assert (emp.parcela_minima, emp.parcela_estimada) == (parcela_price(D("4200.00"), D("0.0644"), 28), True)
+    assert (emp.dia_vencimento, emp.parcelas_restantes, emp.parcelas_pagas, emp.parcelas_total) == (5, 28, 8, 36)
+    assert (emp.valor_contratado, emp.conta_id_externo) == (D("4630.00"), _emprestimo_nubank()["id"])
 
-    chq = dividas["CHEQUE_ESPECIAL"]
-    assert (chq.saldo_devedor, chq.taxa_juros_mes, chq.parcela_minima, chq.dia_vencimento) == (
-        D("500.00"), D("0.0749"), D("50.00"), 1,
-    )
     # PFM: todo produto do banco vira conta, não só a corrente
-    assert [c.tipo for c in r.contas] == ["CORRENTE", "CARTAO_CREDITO", "EMPRESTIMO", "ADIANTAMENTO"]
+    assert [c.tipo for c in r.contas] == ["CORRENTE", "CARTAO_CREDITO", "EMPRESTIMO"]
     corrente, cartao = r.contas[0], r.contas[1]
-    assert (corrente.saldo, corrente.disponivel) == (D("180.00"), D("180.00"))
-    assert corrente.numero_final and len(corrente.numero_final) == 4
+    assert (corrente.saldo, corrente.disponivel, corrente.numero_conta) == (D("63.40"), D("63.40"), "48213907-3")
     assert (cartao.limite_credito, cartao.saldo, cartao.disponivel) == (D("2500.00"), D("2080.00"), D("420.00"))
-    assert sorted(f.total for f in r.faturas) == [D("1950.00"), D("2080.00")]
-    anterior = min(r.faturas, key=lambda f: f.vencimento)
+    assert sorted(f.total for f in r.faturas) == [D("1720.00"), D("1840.00"), D("1950.00"), D("2080.00")]
+    anterior = max((f for f in r.faturas if f.total != D("2080.00")), key=lambda f: f.vencimento)
     assert (anterior.pago, anterior.parcelada) == (D("208.00"), False)
 
 
-def test_fixture_banco_b_e_parcelado():
-    dividas, _ = _dividas(B)
-    parc = dividas["CARTAO_PARCELADO"]
-    assert (parc.saldo_devedor, parc.taxa_juros_mes, parc.parcela_minima, parc.dia_vencimento) == (
-        D("1100.00"), D("0.0905"), D("110.00"), 20,
+def test_fixture_itau_cheque_parcelado_e_moto():
+    dividas, r = _dividas(IT)
+    # Cheque especial como LOAN_ACCOUNT (subtype CHEQUE_ESPECIAL) + conta negativa: uma dívida só.
+    assert sum(1 for d in r.dividas if d.modalidade == "CHEQUE_ESPECIAL") == 1
+    chq = dividas["Cheque especial Itaú"]
+    # taxa em interest_rate_data.pre_fixed_rate (value null)
+    assert (chq.saldo_devedor, chq.taxa_juros_mes, chq.taxa_origem, chq.parcela_minima) == (
+        D("500.00"), D("0.0749"), "INFORMADA", D("50.00"),
     )
+    parc = dividas["Fatura parcelada Itaú"]
+    assert (parc.modalidade, parc.saldo_devedor, parc.taxa_juros_mes, parc.parcela_minima, parc.dia_vencimento) == (
+        "CARTAO_PARCELADO", D("1100.00"), D("0.0905"), D("110.00"), 20,
+    )
+    moto = dividas["Financiamento de veículo Itaú"]
+    # sem interest_rates[]: a taxa vem do CET (fração anual)
+    assert (moto.modalidade, moto.taxa_juros_mes, moto.taxa_origem) == (
+        "FIN_VEICULO", normalizar_taxa("0.2720", "CET"), "INFORMADA",
+    )
+    assert (moto.saldo_devedor, moto.parcela_minima, moto.parcelas_pagas, moto.parcelas_total, moto.dia_vencimento) == (
+        D("7167.54"), D("321.14"), 18, 48, 10,
+    )
+    corrente = r.contas[0]
+    assert (corrente.tipo, corrente.saldo, corrente.usado_cheque_especial) == ("CORRENTE", D("0.00"), D("500.00"))
 
 
-def test_cheque_especial_nao_conta_duas_vezes():
-    # Conta corrente negativa + ADVANCE_DEPOSIT_ACCOUNT no mesmo link → uma dívida só.
-    contas = fixture.contas("L", A, HOJE)
-    contas[0]["balance"] = {"current": "-500.00", "available": "0"}
-    contas[0]["overdraft"] = {"arranged": "1000.00", "used": "500.00"}
-    r = mapear_contas(contas, [], HOJE, A)
+def test_fixture_caixa_consignado_e_atraso():
+    dividas, r = _dividas(CX)
+    cons = dividas["Consignado Caixa"]
+    # taxa anual em interest_rate_data (type YEARLY) → mensal equivalente
+    assert (cons.modalidade, cons.taxa_juros_mes, cons.parcela_minima, cons.em_atraso_dias) == (
+        "CONSIGNADO", normalizar_taxa("0.245", "YEARLY"), D("189.41"), 0,
+    )
+    cred = dividas["Empréstimo pessoal Caixa"]
+    assert cred.taxa_juros_mes == normalizar_taxa("2.20", "CET")
+    assert cred.em_atraso_dias > 0  # number_of_installments_past_due = 1
+    assert [c.tipo for c in r.contas] == ["POUPANCA", "EMPRESTIMO", "EMPRESTIMO"]
+
+
+def test_cheque_especial_como_adiantamento_nao_conta_duas_vezes():
+    # Mesma situação do Itaú, com o cheque especial vindo como ADVANCE_DEPOSIT_ACCOUNT.
+    contas = fixture.contas("L", IT, HOJE)
+    contas[1] = contas[1] | {"category": "ADVANCE_DEPOSIT_ACCOUNT", "subtype": "ADIANTAMENTO_DEPOSITANTES"}
+    r = mapear_contas(contas, [], HOJE, IT)
     assert sum(1 for d in r.dividas if d.modalidade == "CHEQUE_ESPECIAL") == 1
 
 
-def test_cheque_especial_pela_conta_corrente_quando_nao_ha_adiantamento():
-    corrente = fixture.contas("L", A, HOJE)[0]
+def test_cheque_especial_pela_conta_corrente_quando_nao_vem_como_conta_propria():
+    corrente = fixture.contas("L", IT, HOJE)[0]
     corrente["overdraft"] = {"arranged": "1000.00", "used": "320.00"}
-    r = mapear_contas([corrente], [], HOJE, A)
+    r = mapear_contas([corrente], [], HOJE, IT)
     (d,) = r.dividas
     assert (d.modalidade, d.saldo_devedor, d.taxa_origem, d.parcela_estimada) == (
         "CHEQUE_ESPECIAL", D("320.00"), "ESTIMADA", True,
@@ -112,24 +152,26 @@ def test_cheque_especial_pela_conta_corrente_quando_nao_ha_adiantamento():
     assert r.contas[0].usado_cheque_especial == D("320.00")
 
 
-def test_emprestimo_sem_monthly_payment_usa_price():
-    emp = next(c for c in fixture.contas("L", A, HOJE) if c["category"] == "LOAN_ACCOUNT")
-    emp["loan_data"]["monthly_payment"] = None  # o que a Belvo Brasil devolve hoje
-    (d,) = mapear_contas([emp], [], HOJE, A).dividas
-    assert d.parcela_estimada
-    assert d.parcela_minima == parcela_price(D("4200.00"), D("0.0644"), 28)
-
-
-def test_taxa_absurda_cai_para_estimada():
-    emp = next(c for c in fixture.contas("L", A, HOJE) if c["category"] == "LOAN_ACCOUNT")
+def test_taxa_absurda_cai_no_cet_e_sem_cet_na_estimada():
+    emp = _emprestimo_nubank()
     emp["loan_data"]["interest_rates"] = [{"type": "MONTHLY", "value": "64.4"}]  # 64% a.m.
-    (d,) = mapear_contas([emp], [], HOJE, A).dividas
+    (d,) = mapear_contas([emp], [], HOJE, NU).dividas
+    assert (d.taxa_origem, d.taxa_juros_mes) == ("INFORMADA", normalizar_taxa("1.1950", "CET"))
+    emp["loan_data"]["total_effective_cost"] = None
+    (d,) = mapear_contas([emp], [], HOJE, NU).dividas
     assert (d.taxa_origem, d.taxa_juros_mes) == ("ESTIMADA", D("0.0644"))
 
 
+def test_contrato_quitado_nao_e_divida():
+    emp = _emprestimo_nubank()
+    emp["loan_data"]["outstanding_balance"] = "0"
+    r = mapear_contas([emp], [], HOJE, NU)
+    assert (r.dividas, r.contas) == ([], [])
+
+
 def test_investimento_e_ignorado():
-    conta = fixture.contas("L", A, HOJE)[0] | {"category": "INVESTMENT_ACCOUNT", "id": "inv"}
-    r = mapear_contas([conta], [], HOJE, A)
+    conta = fixture.contas("L", NU, HOJE)[0] | {"category": "INVESTMENT_ACCOUNT", "id": "inv"}
+    r = mapear_contas([conta], [], HOJE, NU)
     assert (r.contas, r.dividas, r.ignoradas) == ([], [], 1)
 
 
@@ -176,27 +218,33 @@ def test_transacoes_convertem_sinal_e_classificam():
     assert not por_id["4"].conta_como_renda  # empréstimo recebido não é renda
 
 
-def test_capacidade_da_fixture_e_900():
-    ts = mapear_transacoes(fixture.transacoes("L", A, HOJE))
+def test_capacidade_da_fixture_e_1755():
+    # Os três bancos juntos: renda na conta do Itaú e do Nubank, gastos essenciais
+    # espalhados pela conta e pelos dois cartões.
+    ts = [t for b in fixture.BANCOS_DA_JULIANA for t in mapear_transacoes(fixture.transacoes("L", b, HOJE))]
     movs = [
         Movimento(t.data_mov, t.valor, t.essencial) for t in ts if t.valor < 0 or t.conta_como_renda
     ]
     entradas, essenciais, meses = medianas_mensais(movs, HOJE)
-    assert (entradas, essenciais, meses) == (D("4800.00"), D("3800.00"), 6)
-    assert capacidade_de_pagamento(entradas, essenciais) == D("900.00")
+    assert (entradas, essenciais, meses) == (D("5300.00"), D("3350.00"), 6)
+    assert capacidade_de_pagamento(entradas, essenciais) == D("1755.00")
+    # Compras de cartão trazem o final do cartão; estabelecimento só no cartão.
+    cartao = [t for t in ts if t.final_cartao]
+    assert cartao and {t.final_cartao for t in cartao} == {"5163", "8820"}
+    assert all(t.estabelecimento is None for t in ts if not t.final_cartao)
 
 
 # --- cartão de quem paga em dia (PFM, sem dívida) -------------------------------
 
 
 def _cartao_com_faturas(*faturas):
-    cartao = next(c for c in fixture.contas("L", A, HOJE) if c["category"] == "CREDIT_CARD")
+    cartao = next(c for c in fixture.contas("L", NU, HOJE) if c["category"] == "CREDIT_CARD")
     bills = [
         {"id": f"b{i}", "account": {"id": cartao["id"]}, "due_date": venc, "total_amount": total,
          "minimum_amount": "50.00", "payments": [{"amount": p} for p in pagos], "finance_charges": []}
         for i, (venc, total, pagos) in enumerate(faturas)
     ]
-    return mapear_contas([cartao], bills, HOJE, A)
+    return mapear_contas([cartao], bills, HOJE, NU)
 
 
 def test_fatura_guarda_nome_e_pagamentos_por_data():
@@ -315,3 +363,10 @@ def test_catalogo_de_instituicoes():
     assert por["of1ssbank_br_retail"].nome == "1ss Bank - Pessoa Física"  # \xa0 normalizado
     assert por["of1ssbank_br_retail"].icone_url is None  # http recusado
     assert por["sem_display"].nome == "sem_display" and por["sem_display"].logo_url is None
+
+
+def test_fixture_tem_ids_por_link():
+    # Dois usuários demo (dois links) não podem compartilhar ids da Belvo: o
+    # upsert por id externo acharia a conta do outro.
+    ids = lambda link: {c["id"] for b in fixture.BANCOS_DA_JULIANA for c in fixture.contas(link, b, HOJE)}  # noqa: E731
+    assert ids("link-1").isdisjoint(ids("link-2"))

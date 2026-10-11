@@ -64,6 +64,7 @@ const router = createBrowserRouter([
           { path: '/configuracoes', lazy: tela(() => import('@/routes/configuracoes/Configuracoes')) },
           // endereço antigo continua funcionando
           { path: '/privacidade', element: <Navigate to="/configuracoes" replace /> },
+          { path: '/dividas', lazy: tela(() => import('@/routes/dividas/Dividas')) },
           { path: '/dividas/nova', lazy: tela(() => import('@/routes/dividas/NovaDivida')) },
           { path: '/dividas/:id', lazy: tela(() => import('@/routes/dividas/ConferirDivida')) },
           { path: '/licoes/:slug', lazy: tela(() => import('@/routes/licoes/Licao')) },
