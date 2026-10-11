@@ -31,15 +31,16 @@ funcional, integrado a dados bancários reais.
 1. [O problema](#1-o-problema)
 2. [O que construímos](#2-o-que-construímos)
 3. [Como rodar](#3-como-rodar)
-4. [Roteiro de avaliação (5 minutos)](#4-roteiro-de-avaliação-5-minutos)
-5. [Arquitetura](#5-arquitetura)
-6. [Stack](#6-stack)
-7. [O motor de plano](#7-o-motor-de-plano)
-8. [Segurança e privacidade](#8-segurança-e-privacidade)
-9. [Testes](#9-testes)
-10. [Limitações atuais](#10-limitações-atuais)
-11. [Próximos passos](#11-próximos-passos)
-12. [Documentação e referências](#12-documentação-e-referências)
+4. [Telas e como navegar](#4-telas-e-como-navegar)
+5. [Roteiro de avaliação (5 minutos)](#5-roteiro-de-avaliação-5-minutos)
+6. [Arquitetura](#6-arquitetura)
+7. [Stack](#7-stack)
+8. [O motor de plano](#8-o-motor-de-plano)
+9. [Segurança e privacidade](#9-segurança-e-privacidade)
+10. [Testes](#10-testes)
+11. [Limitações atuais](#11-limitações-atuais)
+12. [Próximos passos](#12-próximos-passos)
+13. [Documentação e referências](#13-documentação-e-referências)
 
 ---
 
@@ -157,17 +158,51 @@ Juliana — os dados dela vêm do código, não do banco.
 ### Testes
 
 ```bash
-cd backend && uv run pytest     # 82 testes
+cd backend && uv run pytest     # 83 testes
 cd frontend && npm test         # 30 testes
 ```
 
 ---
 
-## 4. Roteiro de avaliação (5 minutos)
+## 4. Telas e como navegar
 
-Com o backend e o frontend no ar, entrando como Juliana:
+### Navegação
 
-1. **Raio-X** — "Você deve **R$ 20.183** em **8 compromissos**", a lista ordenada pela taxa ao ano
+- **Antes de entrar:** a página inicial (`/`) leva a **Entrar** (`/entrar`) ou **Criar conta**
+  (`/cadastro`). Na tela de entrar está o botão **"Entrar como Juliana (demonstração)"**.
+- **Depois de entrar:** uma barra fixa na parte de baixo da tela leva às seis áreas do app —
+  **Início · Contas · Raio-X · Dívidas · Plano · Configurações**. No topo ficam o selo
+  "Demonstração" (só na conta da Juliana) e o botão **Sair**.
+- **Primeira vez de uma conta nova:** Criar conta → Conectar banco → (autorização no banco, em
+  nova aba) → Raio-X → Plano → Início. Depois disso, o Início é a tela de abertura.
+
+### As telas
+
+| Tela | Rota | Para que serve e como usar |
+|---|---|---|
+| **Página inicial** | `/` | Apresenta o produto em três passos e o aviso "Este app não movimenta o seu dinheiro". Botões **Criar minha conta** e **Já tenho conta** (com sessão aberta, **Continuar de onde parei**). |
+| **Entrar** | `/entrar` | E-mail e senha, ou o botão **Entrar como Juliana (demonstração)**, que entra na conta fictícia sem digitar nada. |
+| **Criar conta** | `/cadastro` | E-mail, senha, nome completo e CPF (validado na hora; o banco usa para confirmar que é você). Uma pergunta opcional — "Você já tentou um plano para sair das dívidas antes?" — muda a estratégia sugerida no Plano. Nenhum dado financeiro é pedido. |
+| **Conectar banco** | `/conectar` | Explica o que é lido e o que não é feito, e mostra os bancos já conectados. **Conectar outro banco** abre a autorização em nova aba; ao terminar, o app volta sozinho e mostra o progresso da coleta (contas ✓ · transações…). Na conta da Juliana, a autorização é simulada (Nubank, Itaú, Caixa, e um "Banco Fora do Ar" para ver a tela de erro). Link para incluir uma dívida que não aparece pelo banco. |
+| **Início** | `/inicio` | A tela de todo dia. Sem plano: convite para ver o Raio-X. Com plano: a **data em que você fica livre**, quanto já foi pago, **O que fazer este mês** (quanto pagar em cada dívida, na ordem, com a prioridade marcada), alertas em **Precisa da sua atenção** (cada um com **Entendi** e **Entenda**, que abre uma microlição), dívidas quitadas e o mês a mês (previsto × realizado). Na conta da Juliana, o painel **Modo demonstração** simula a passagem dos meses. O card **Copiloto** aparece como "em breve". |
+| **Contas** | `/contas` | Visão financeira por banco: saldo em conta, faturas em aberto e cada produto (conta, cartão, empréstimo, financiamento), com filtro por banco e botão **Atualizar** para buscar dados novos. Toque num item para ver o detalhe. |
+| **Detalhe da conta** | `/contas/:id` | **Conta corrente/poupança:** saldo, agência e número da conta e o **extrato**, com filtros (Todas / Entradas / Saídas), período (30 a 120 dias) e busca; toque numa transação para ver data e hora, categoria, subcategoria e tipo de operação. **Cartão:** abas **Faturas** (fatura atual com total, mínimo e pagamentos; faturas anteriores) e **Extrato** (com estabelecimento, final do cartão e a fatura de cada compra). |
+| **Raio-X** | `/raiox` | O diagnóstico, de cima para baixo: quanto você deve no total, as dívidas da mais cara para a mais barata (com link para ver todas), a **data de quitação**, quanto você paga de juros por mês e o alerta quando pagar só o mínimo faz a dívida crescer. Botão **Ver meu plano de saída**. Mais abaixo, a composição da dívida e o link para a aba Dívidas. |
+| **Dívidas** | `/dividas` | Cada dívida, agrupada por banco/credor: saldo, taxa ao ano, parcela e vencimento, contrato (parcelas pagas, valor contratado, data de término), atraso e selos de estimativa. Com um plano ativo, mostra a **ordem de pagamento**, quanto vai para ela **este mês** e **quando é quitada**. Atalhos **Ver extrato** (abre a conta ou o cartão) e **Conferir** (corrigir valores estimados). |
+| **Plano** | `/plano` | O *slider* "Quanto você pode colocar por mês" (começa no valor calculado do seu histórico) move a data em tempo real. As três estratégias aparecem lado a lado, com meses, juros e primeira vitória; a sugerida vem marcada, com o motivo. Abaixo: o gráfico "Quanto você vai dever, mês a mês", os juros evitados em relação a pagar só o mínimo e a ordem de pagamento. **Começar este plano** ativa a estratégia escolhida. |
+| **Configurações** | `/configuracoes` | Seus dados (CPF mascarado), bancos conectados com a validade da autorização, **Revogar e apagar dados** por banco, **Buscar dados novos agora**, o que o app lê e o que não acessa, e **excluir a conta** (desabilitado na conta demo). |
+| **Incluir dívida** | `/dividas/nova` | Para o que não vem pelo banco (carnê, crediário, dívida com alguém): credor, tipo, quanto falta e valor da parcela; juros, vencimento e atraso são opcionais (sem juros, o app estima e marca como estimado). |
+| **Conferir dívida** | `/dividas/:id` | Corrige a parcela e a taxa quando o banco não as informou (e o saldo, nas dívidas incluídas à mão). |
+| **Microlição** | `/licoes/:slug` | Texto curto sobre o assunto de um alerta (rotativo, cheque especial, só o mínimo…), aberto pelo link **Entenda**. |
+
+---
+
+## 5. Roteiro de avaliação (5 minutos)
+
+Com o backend e o frontend no ar, clique em **"Entrar como Juliana (demonstração)"** e siga a
+jornada do produto (diagnóstico → plano → acompanhamento):
+
+1. **Raio-X** — "Você deve **R$ 20.183** em **8 compromissos**", as dívidas mais caras primeiro
    (o rotativo aparece com **436% a.a.**), a data de quitação logo abaixo e o alerta de que,
    pagando só o mínimo, o **rotativo do cartão cresce R$ 104 por mês**.
 2. **Dívidas** — as 8 dívidas por banco, com o contrato de cada uma (ex.: moto com 18 de 48
@@ -175,19 +210,23 @@ Com o backend e o frontend no ar, entrando como Juliana:
 3. **Plano** — as três estratégias lado a lado. Com a capacidade calculada do histórico
    (R$ 1.755/mês): Avalanche quita em **16 meses** (R$ 7.727 de juros), Equilibrado em **17**
    (R$ 7.941, com a primeira dívida quitada já no 1º mês), Bola de neve em **17** (R$ 9.258).
-   Arraste o *slider* e veja a data se mover. Ative um plano — a aba Dívidas passa a mostrar a
-   ordem de pagamento e quanto vai para cada uma neste mês.
-4. **Início** — o que pagar este mês, alertas pendentes e o painel de demonstração: avance um mês
-   (ou um "mês difícil", com 25% a menos no plano) e veja o previsto × realizado e a data
-   recalculada.
-5. **Contas** — saldos dos três bancos, faturas dos cartões (com pagamentos e mínimo) e extratos
+   Arraste o *slider* e veja a data se mover. Toque em **"Começar este plano"**.
+4. **Início** — agora com a data de saída, "O que fazer este mês" (quanto pagar em cada dívida,
+   na ordem) e os alertas. No painel **Modo demonstração**, toque em "Simular mês seguindo o
+   plano" e depois em "Simular um mês difícil" (25% a menos no plano): o mês a mês mostra
+   previsto × realizado e a data é recalculada, sem linguagem de falha.
+5. **Dívidas** de novo — cada dívida mostra a ordem de pagamento, quanto vai para ela este mês e
+   quando é quitada.
+6. **Contas** — saldos dos três bancos, faturas dos cartões (com pagamentos e mínimo) e extratos
    com o detalhe de cada transação (no cartão: estabelecimento, final do cartão e fatura).
-6. **Configurações** — o que o app lê e o que não lê, revogação por banco e
-   exclusão de conta (esta última desabilitada na conta demo).
+7. **Configurações** — o que o app lê e o que não lê, revogação por banco e exclusão de conta
+   (esta última desabilitada na conta demo).
+
+Para recomeçar do zero, use **"Reiniciar demonstração"** no painel da tela Início.
 
 ---
 
-## 5. Arquitetura
+## 6. Arquitetura
 
 ```mermaid
 flowchart LR
@@ -239,7 +278,7 @@ que a migração futura seja mecânica.
 
 ---
 
-## 6. Stack
+## 7. Stack
 
 | Camada | Tecnologia |
 |---|---|
@@ -254,7 +293,7 @@ frontend trabalha em centavos inteiros.
 
 ---
 
-## 7. O motor de plano
+## 8. O motor de plano
 
 O núcleo do produto (`backend/app/domain/planner.py`) é um **porte fiel** do pacote PL/SQL
 `PKG_PLANO` validado na Fase 5:
@@ -274,7 +313,7 @@ de uma pesquisa com apenas 10 respostas.
 
 ---
 
-## 8. Segurança e privacidade
+## 9. Segurança e privacidade
 
 O protótipo lida com dados financeiros reais, então foi tratado como produção:
 
@@ -294,19 +333,19 @@ O protótipo lida com dados financeiros reais, então foi tratado como produçã
 
 ---
 
-## 9. Testes
+## 10. Testes
 
 | Suíte | Quantidade | O que cobre |
 |---|---:|---|
 | `backend/tests/test_planner.py` | 20 | Os números da Fase 5 (R$ 8.260 em 5 dívidas: 18 / 19 / 21 meses, ao centavo), empates, uma dívida só, capacidade insuficiente, ausência de dívidas |
-| `backend/tests/test_mapping.py` | 44 | Belvo → domínio: modalidades, normalização da taxa de juros (inclusive pelo CET), cheque especial sem contagem dupla, contratos, faturas, transações, fuso horário |
+| `backend/tests/test_mapping.py` | 45 | Belvo → domínio: modalidades, normalização da taxa de juros (inclusive pelo CET), cheque especial sem contagem dupla, contratos, faturas, transações, fuso horário, ids por link |
 | `backend/tests/test_api.py` | 10 | Jornada da Juliana pela API, autenticação, isolamento entre usuários, webhooks |
 | `backend/tests/test_belvo.py` e `test_instituicoes.py` | 8 | Cliente da Belvo (payload do token, paginação, erros) e catálogo de bancos |
 | Frontend (Vitest) | 30 | Dinheiro em centavos, validação de CPF/e-mail, textos, datas, cadastro |
 
 ---
 
-## 10. Limitações atuais
+## 11. Limitações atuais
 
 **Para rodar:**
 
@@ -345,7 +384,7 @@ O protótipo lida com dados financeiros reais, então foi tratado como produçã
 
 ---
 
-## 11. Próximos passos
+## 12. Próximos passos
 
 | Item | Por quê |
 |---|---|
@@ -363,7 +402,7 @@ crédito, iniciação de pagamento, investimentos, score de crédito e categoriz
 
 ---
 
-## 12. Documentação e referências
+## 13. Documentação e referências
 
 | Documento | Conteúdo |
 |---|---|

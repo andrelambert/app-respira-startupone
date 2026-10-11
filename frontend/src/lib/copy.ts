@@ -100,7 +100,7 @@ export const entrar = {
   semConta: 'Ainda não tem conta?',
   criar: 'Criar conta',
   demoTitulo: 'Quer ver como funciona?',
-  demoTexto: 'Entre na conta da Juliana, uma pessoa fictícia com cinco dívidas. Nenhum banco real é acessado.',
+  demoTexto: 'Entre na conta da Juliana, uma pessoa fictícia com dívidas em três bancos. Nenhum banco real é acessado.',
   demo: 'Entrar como Juliana (demonstração)',
   erros: {
     credenciais_invalidas: 'E-mail ou senha não conferem.',
@@ -443,7 +443,7 @@ export const inicio = {
     seguir: 'Simular mês seguindo o plano',
     dificil: 'Simular um mês difícil',
     reiniciar: 'Reiniciar demonstração',
-    reiniciarAjuda: 'Volta a Juliana ao começo: as cinco dívidas, sem plano.',
+    reiniciarAjuda: 'Volta a Juliana ao começo: os três bancos e as oito dívidas, sem plano.',
   },
 };
 
