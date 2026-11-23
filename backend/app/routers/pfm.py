@@ -16,10 +16,13 @@ from app.repositories import pfm as repo
 from app.routers.comum import SessionDep, UsuarioDep, consentimento_out, logo
 from app.schemas import (
     BancoOut,
+    CategoriaGastoOut,
     ContaDetalheOut,
     ContaOut,
     ExtratoOut,
     FaturaOut,
+    GastosCategoriaOut,
+    ImpactoPlanoOut,
     PagamentoFaturaOut,
     TodasTransacoesOut,
     TransacaoOut,
@@ -241,6 +244,31 @@ def todas_transacoes(
         total_entradas=entradas,
         total_saidas=saidas,
         resultado=entradas - saidas,
+    )
+
+
+@router.get("/pfm/categorias", response_model=GastosCategoriaOut)
+def gastos_por_categoria(
+    u: UsuarioDep,
+    s: SessionDep,
+    mes: Annotated[str | None, Query(pattern=r"^\d{4}-(0[1-9]|1[0-2])$", description="YYYY-MM")] = None,
+) -> GastosCategoriaOut:
+    """Para onde foi o dinheiro (N2, F-3/F-4), ligado ao plano."""
+    from app.services import analise
+
+    alvo = date(int(mes[:4]), int(mes[5:]), 1) if mes else None
+    m, cats, impacto, meses = analise.gastos_por_categoria(s, u, alvo)
+    return GastosCategoriaOut(
+        mes=m,
+        meses_disponiveis=meses[-12:],
+        categorias=[
+            CategoriaGastoOut(
+                categoria=c.categoria, total=c.total, media_3m=c.media_3m, variacao=c.variacao, essencial=c.essencial
+            )
+            for c in cats
+        ],
+        total=sum((c.total for c in cats), Decimal("0.00")),
+        impacto_plano=ImpactoPlanoOut(**impacto.__dict__) if impacto else None,
     )
 
 

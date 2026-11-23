@@ -509,6 +509,32 @@ class TodasTransacoesOut(BaseModel):
     resultado: Dinheiro  # entradas - saídas do período filtrado
 
 
+class CategoriaGastoOut(BaseModel):
+    categoria: str  # nome da Belvo; a tela traduz
+    total: Dinheiro
+    media_3m: Dinheiro | None
+    variacao: Decimal | None  # fração: 0.38 = 38% acima da média
+    essencial: bool
+
+
+class ImpactoPlanoOut(BaseModel):
+    """N2: "se X voltasse à sua média, sobrariam R$ Y — sua data chegaria N meses antes"."""
+
+    categoria: str
+    valor_mensal: Dinheiro
+    meses_antecipados: int
+    data_atual: date
+    data_nova: date
+
+
+class GastosCategoriaOut(BaseModel):
+    mes: date
+    meses_disponiveis: list[date]  # para o seletor de mês
+    categorias: list[CategoriaGastoOut]
+    total: Dinheiro
+    impacto_plano: ImpactoPlanoOut | None
+
+
 class VencimentoOut(BaseModel):
     """N3: um vencimento — fatura de cartão ou parcela de contrato."""
 

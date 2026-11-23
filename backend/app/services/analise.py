@@ -14,6 +14,7 @@ from typing import Sequence
 
 from sqlmodel import Session
 
+from app.domain import gastos as gastos_dom
 from app.domain import planner
 from app.domain import vencimentos as vencimentos_dom
 from app.domain.events import EventoDetectado, desvio_plano
@@ -495,6 +496,69 @@ def vencimentos(s: Session, u: Usuario, dias: int) -> tuple[date, list[tuple[ven
         valor_plano = do_plano.get(v.divida_id) if (plano and v.divida_id and v.dias <= 31) else None
         out.append((v, valor_plano, logo))
     return hoje, out
+
+
+@dataclass
+class ImpactoPlano:
+    categoria: str
+    valor_mensal: Decimal
+    meses_antecipados: int
+    data_atual: date
+    data_nova: date
+
+
+def gastos_por_categoria(
+    s: Session, u: Usuario, mes: date | None
+) -> tuple[date, list[gastos_dom.CategoriaMes], ImpactoPlano | None, list[date]]:
+    """N2: gasto do mês por categoria × média dos 3 anteriores, e quanto a
+    maior categoria não essencial acima da média anteciparia a data de saída.
+
+    Mês padrão: o último mês completo (o corrente ainda está pela metade e
+    pareceria sempre abaixo da média).
+    """
+    assert u.id is not None
+    hoje = hoje_do_usuario(u)
+    mes = (mes or adicionar_meses(hoje.replace(day=1), -1)).replace(day=1)
+    todas = repo_f.transacoes(s, u.id, adicionar_meses(hoje.replace(day=1), -13))
+    meses_com_dado = sorted({t.data_mov.replace(day=1) for t in todas})
+    desde = adicionar_meses(mes, -gastos_dom.MESES_MEDIA)
+    ate = adicionar_meses(mes, 1)
+    gastos = [
+        gastos_dom.Gasto(t.data_mov, t.categoria, -t.valor, t.essencial)
+        for t in todas
+        if t.valor < 0 and not t.pagamento_divida and desde <= t.data_mov < ate
+    ]
+    categorias = gastos_dom.por_categoria(gastos, mes, set(meses_com_dado))
+    return mes, categorias, _impacto(s, u, gastos_dom.candidata_a_corte(categorias)), meses_com_dado
+
+
+def _impacto(s: Session, u: Usuario, cat: gastos_dom.CategoriaMes | None) -> ImpactoPlano | None:
+    """Simula o plano com a capacidade atual e com ela + o excesso da categoria.
+    Só devolve quando antecipa pelo menos 1 mês (parcimônia)."""
+    if cat is None or cat.media_3m is None:
+        return None
+    assert u.id is not None
+    hoje = hoje_do_usuario(u)
+    entradas = _entradas(repo_f.dividas(s, u.id))
+    if not entradas:
+        return None
+    ativo = repo_p.ativo(s, u.id)
+    if ativo is not None:
+        cap, metodo = ativo.capacidade_mensal, Metodo(ativo.metodo)
+    else:
+        cap, metodo = capacidade(s, u, hoje).valor, planner.metodo_pre_selecionado(u.ja_desistiu_de_plano)
+    # Valor mensal em reais inteiros: é uma estimativa, não um centavo exato.
+    extra = arredondar(cat.total - cat.media_3m).to_integral_value()
+    if cap <= 0 or extra <= 0:
+        return None
+    atual = planner.simular(entradas, cap, metodo, hoje)
+    nova = planner.simular(entradas, cap + extra, metodo, hoje)
+    if not (atual.converge and nova.converge and atual.data_quitacao and nova.data_quitacao):
+        return None
+    antecipa = atual.meses - nova.meses
+    if antecipa < 1:
+        return None
+    return ImpactoPlano(cat.categoria, extra, antecipa, atual.data_quitacao, nova.data_quitacao)
 
 
 _MESES_BELVO = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
