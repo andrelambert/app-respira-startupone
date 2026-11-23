@@ -26,6 +26,9 @@ export const configSchema = z.object({
   demo_disponivel: z.boolean(),
   belvo_configurada: z.boolean(),
   webhooks: z.boolean(),
+  modo_publico: z.boolean(),
+  banco: z.enum(['oracle', 'sqlite']),
+  regiao: z.string().nullable(),
 });
 export type Config = z.infer<typeof configSchema>;
 
@@ -101,8 +104,27 @@ const projecaoSchema = z.object({
   data_quitacao: data.nullable(),
   juros_totais: dinheiro,
   primeira_quitacao_mes: z.number().int().nullable(),
+  // A2: 1ª dívida quitada por qualquer meio — é o que a interface mostra.
+  primeira_quitacao_qualquer_mes: z.number().int().nullable(),
 });
 export type Projecao = z.infer<typeof projecaoSchema>;
+
+const resultadoMotorSchema = z.object({
+  meses: z.number().int(),
+  juros: dinheiro,
+  primeira_quitacao_mes: z.number().int().nullable(),
+  converge: z.boolean(),
+});
+
+// M3: o mesmo plano pelo planner.py e pelo PL/SQL dentro do Oracle.
+const conferenciaOracleSchema = z.object({
+  metodo,
+  capacidade: dinheiro,
+  python: resultadoMotorSchema,
+  oracle: resultadoMotorSchema,
+  coincide: z.boolean(),
+});
+export type ConferenciaOracle = z.infer<typeof conferenciaOracleSchema>;
 
 const capacidadeSchema = z.object({
   valor: dinheiro,
@@ -330,6 +352,88 @@ export const extratoSchema = z.object({
   total_saidas: dinheiro,
 });
 export type Extrato = z.infer<typeof extratoSchema>;
+// N1: todas as transações, de todas as contas, com banco de origem.
+const transacaoUnificadaSchema = transacaoSchema.extend({
+  conta_id: z.number().int().nullable(),
+  banco: z.string().nullable(),
+  banco_logo: z.string().nullable(),
+  conta_nome: z.string().nullable(),
+  pagamento_divida: z.boolean(),
+});
+export type TransacaoUnificada = z.infer<typeof transacaoUnificadaSchema>;
+
+const todasTransacoesSchema = extratoSchema.extend({
+  itens: z.array(transacaoUnificadaSchema),
+  resultado: dinheiro,
+});
+export type TodasTransacoes = z.infer<typeof todasTransacoesSchema>;
+
+// N2: para onde foi o dinheiro, ligado ao plano.
+const gastosCategoriaSchema = z.object({
+  mes: data,
+  meses_disponiveis: z.array(data).max(24),
+  categorias: z.array(
+    z.object({
+      categoria: z.string().max(80),
+      total: dinheiro,
+      media_3m: dinheiro.nullable(),
+      variacao: z.string().nullable(), // fração decimal: "0.88" = 88% acima da média
+      essencial: z.boolean(),
+    }),
+  ),
+  total: dinheiro,
+  impacto_plano: z
+    .object({
+      categoria: z.string(),
+      valor_mensal: dinheiro,
+      meses_antecipados: z.number().int(),
+      data_atual: data,
+      data_nova: data,
+    })
+    .nullable(),
+});
+export type GastosCategoria = z.infer<typeof gastosCategoriaSchema>;
+
+// N5: de onde vem a capacidade do plano.
+const fluxoMensalSchema = z.object({
+  meses: z
+    .array(
+      z.object({
+        mes: data,
+        entradas: dinheiro,
+        essenciais: dinheiro,
+        outros_gastos: dinheiro,
+        pagamentos_divida: dinheiro,
+        sobra: dinheiro,
+      }),
+    )
+    .max(12),
+  capacidade: dinheiro,
+  capacidade_origem: z.string(),
+  entradas_mediana: dinheiro.nullable(),
+  essenciais_mediana: dinheiro.nullable(),
+  reserva_pct: z.number().int(),
+});
+export type FluxoMensal = z.infer<typeof fluxoMensalSchema>;
+
+// N3: próximos vencimentos (faturas e parcelas).
+const vencimentoSchema = z.object({
+  data,
+  tipo: z.enum(['FATURA', 'PARCELA']),
+  credor: z.string(),
+  descricao: z.string(),
+  valor: dinheiro,
+  valor_total: dinheiro.nullable(),
+  valor_plano: dinheiro.nullable(),
+  status: z.enum(['PAGO', 'PENDENTE', 'ATRASADO']),
+  dias: z.number().int(),
+  divida_id: z.number().int().nullable(),
+  conta_id: z.number().int().nullable(),
+  banco_logo: z.string().url().nullable(),
+});
+export type Vencimento = z.infer<typeof vencimentoSchema>;
+const vencimentosSchema = z.object({ hoje: data, dias: z.number().int(), itens: z.array(vencimentoSchema) });
+
 export type FiltroExtrato = {
   pagina: number;
   direcao?: 'ENTRADA' | 'SAIDA';
@@ -398,7 +502,7 @@ export const api = {
     email: string;
     senha: string;
     nome_completo: string;
-    cpf: string;
+    cpf?: string;
     ja_desistiu_de_plano: boolean | null;
   }) => chamar('/auth/registrar', usuarioSchema, json(dados)),
   entrar: (email: string, senha: string) => chamar('/auth/entrar', usuarioSchema, json({ email, senha })),
@@ -431,7 +535,16 @@ export const api = {
     if (f.dias) q.set('dias', String(f.dias));
     return chamar(`/contas/${id}/transacoes?${q.toString()}`, extratoSchema, { signal: sinal });
   },
-  dividas: () => chamar('/dividas', z.array(dividaSchema)),
+  todasTransacoes: (params: Record<string, string>, pagina: number, sinal?: AbortSignal) => {
+    const q = new URLSearchParams({ ...params, pagina: String(pagina), por_pagina: '30' });
+    return chamar(`/transacoes?${q.toString()}`, todasTransacoesSchema, { signal: sinal });
+  },
+  gastosCategoria: (mes?: string) =>
+    chamar(`/pfm/categorias${mes ? `?mes=${mes}` : ''}`, gastosCategoriaSchema),
+  fluxoMensal: () => chamar('/pfm/fluxo-mensal?meses=6', fluxoMensalSchema),
+  vencimentos: (dias: number) => chamar(`/vencimentos?dias=${dias}`, vencimentosSchema),
+  categoriasTransacoes: () => chamar('/transacoes/categorias', z.array(z.string().max(80)).max(200)),
+  dividas: (quitadas = false) => chamar(`/dividas${quitadas ? '?quitadas=true' : ''}`, z.array(dividaSchema)),
   criarDivida: (dados: {
     credor: string;
     modalidade: string;
@@ -455,6 +568,12 @@ export const api = {
   ativarPlano: (metodoEscolhido: Metodo, capacidade: string) =>
     chamar('/plano', planoAtivoSchema, json({ metodo: metodoEscolhido, capacidade })),
   planoAtivo: () => chamar('/plano/ativo', planoAtivoSchema),
+  conferenciaOracle: (metodoEscolhido: Metodo, capacidade: string, sinal?: AbortSignal) =>
+    chamar(
+      `/plano/conferencia-oracle?metodo=${metodoEscolhido}&capacidade=${encodeURIComponent(capacidade)}`,
+      conferenciaOracleSchema,
+      { signal: sinal },
+    ),
   recalcular: () => chamar('/plano/recalcular', planoAtivoSchema, { method: 'POST' }),
 
   eventos: (naoNotificados = false) =>

@@ -6,6 +6,7 @@ estão em ``domain/`` (planner, xray, events).
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
@@ -13,7 +14,9 @@ from typing import Sequence
 
 from sqlmodel import Session
 
+from app.domain import gastos as gastos_dom
 from app.domain import planner
+from app.domain import vencimentos as vencimentos_dom
 from app.domain.events import EventoDetectado, desvio_plano
 from app.domain.planner import (
     DividaEntrada,
@@ -31,18 +34,23 @@ from app.models import (
     CapacidadeOrigem,
     Direcao,
     Divida,
+    Fatura,
     MetodoPlano,
     Plano,
     PlanoItem,
     StatusPlano,
+    TipoConta,
     Transacao,
     Usuario,
 )
 from app.repositories import eventos as repo_e
 from app.repositories import financeiro as repo_f
+from app.repositories import pfm as repo_pfm
 from app.repositories import planos as repo_p
 from app.services.coleta import detectar_e_registrar, snapshot
 from app.services.contexto import hoje_do_usuario
+
+log = logging.getLogger("respira.plano")
 
 # Fração do plano que deixa de entrar num "mês difícil" da demonstração. Precisa
 # passar de 20% para cruzar a regra de DESVIO_PLANO (< 80%, §8.3) — proporcional
@@ -231,7 +239,6 @@ def ativar(s: Session, u: Usuario, metodo: Metodo, valor: Decimal) -> Plano:
 @dataclass
 class ResultadoPlanoAtivo:
     plano: Plano
-    itens: list[PlanoItem]
     projecao: Simulacao
     dividas: dict[int, Divida]
     divida_atual: Decimal
@@ -255,7 +262,6 @@ def plano_ativo(s: Session, u: Usuario) -> ResultadoPlanoAtivo | None:
     assert plano.id is not None
     return ResultadoPlanoAtivo(
         plano=plano,
-        itens=repo_p.itens(s, plano.id),
         projecao=projecao,
         dividas={d.id: d for d in todas if d.id is not None},
         divida_atual=sum((d.saldo_devedor for d in abertas), Decimal("0.00")),
@@ -353,15 +359,22 @@ def avancar_mes_demo(s: Session, u: Usuario, mes_dificil: bool) -> Acompanhament
     um_mes = planner.simular(_entradas(abertas), pago_no_mes, Metodo(plano.metodo), hoje)
     pagamentos = {int(i.divida_id): i.valor_mensal for i in um_mes.itens}
     realizado = Decimal("0.00")
+    pagos_reais: dict[int, Decimal] = {}
     for d in abertas:
         assert d.id is not None
         juros = arredondar(d.saldo_devedor * d.taxa_juros_mes)
         pago = min(pagamentos.get(d.id, Decimal(0)), d.saldo_devedor + juros)
+        pagos_reais[d.id] = pago
         d.saldo_devedor = max(d.saldo_devedor + juros - pago, Decimal("0.00"))
         if d.saldo_devedor <= planner.SALDO_RESIDUAL:
             d.saldo_devedor = Decimal("0.00")
             d.quitada_em = hoje
         d.em_atraso_dias = 0 if pago >= d.parcela_minima or d.saldo_devedor == 0 else d.em_atraso_dias
+        # A16: o contrato também anda — uma parcela a mais paga.
+        if pago >= d.parcela_minima and d.parcelas_total and d.parcelas_pagas is not None:
+            d.parcelas_pagas = min(d.parcelas_pagas + 1, d.parcelas_total)
+            if d.parcelas_restantes is not None:
+                d.parcelas_restantes = max(d.parcelas_restantes - 1, 0)
         repo_f.salvar_divida(s, d)
         realizado += pago
         if pago > 0:
@@ -385,10 +398,239 @@ def avancar_mes_demo(s: Session, u: Usuario, mes_dificil: bool) -> Acompanhament
     s.add(u)
     s.commit()
     s.refresh(u)
+    _avancar_contas_demo(s, u, abertas, pagos_reais, hoje_do_usuario(u))
 
     a = _registrar_mes(s, u, plano, mes, realizado, data_anterior)
     detectar_e_registrar(s, u, hoje_do_usuario(u), anteriores)
     return a
+
+
+@dataclass
+class Conferencia:
+    metodo: Metodo
+    capacidade: Decimal
+    python: dict[str, object]
+    oracle: dict[str, object]
+    coincide: bool
+
+
+def conferir_no_oracle(s: Session, u: Usuario, metodo: Metodo, capacidade: Decimal | None) -> Conferencia:
+    """M3 — "dupla execução": o mesmo plano pelo planner.py e pelo PKG_PLANO_APP,
+    sobre as mesmas linhas da tabela DIVIDA. Divergência não é escondida: o selo
+    some e fica um aviso no log."""
+    from app.repositories import oracle as repo_oracle
+
+    assert u.id is not None
+    r = simular(s, u, capacidade)
+    sim = r.simulacoes[metodo]
+    py = {
+        "meses": sim.meses,
+        "juros": arredondar(sim.juros_totais),
+        "primeira_quitacao_mes": sim.primeira_quitacao_mes,
+        "converge": sim.converge,
+    }
+    bruto = repo_oracle.simular(s, u.id, metodo.value, sim.capacidade)
+    ora = {
+        "meses": int(bruto["meses"]),
+        "juros": arredondar(Decimal(str(bruto["juros"]))),
+        "primeira_quitacao_mes": bruto.get("primeira"),
+        "converge": bool(bruto.get("converge")),
+    }
+    coincide = py == ora
+    if not coincide:
+        log.warning("conferencia_oracle_divergiu metodo=%s python=%s oracle=%s", metodo.value, py, ora)
+    return Conferencia(metodo, sim.capacidade, py, ora, coincide)
+
+
+def vencimentos(s: Session, u: Usuario, dias: int) -> tuple[date, list[tuple[vencimentos_dom.Vencimento, Decimal | None, str | None]]]:
+    """N3: próximos vencimentos + o valor do plano (se houver) + logo do banco."""
+    from app.repositories import consentimentos as repo_c
+
+    assert u.id is not None
+    hoje = hoje_do_usuario(u)
+    abertas = repo_f.dividas(s, u.id)
+    por_conta_ext = {d.conta_id_externo: d for d in abertas if d.conta_id_externo and d.modalidade in vencimentos_dom.MODALIDADES_CARTAO}
+
+    def inst(inst_id: int | None):
+        return repo_c.obter_instituicao(s, inst_id)
+
+    faturas: list[vencimentos_dom.FaturaVenc] = []
+    logos: dict[tuple[str, int], str | None] = {}
+    for c in repo_pfm.contas(s, u.id):
+        if c.tipo is not TipoConta.CARTAO_CREDITO or c.id is None:
+            continue
+        i = inst(c.instituicao_id)
+        logos[("c", c.id)] = (i.icone_url or i.logo_url) if i else None
+        ligada = por_conta_ext.get(c.id_externo)
+        for f in repo_pfm.faturas(s, c.id):
+            if f.vencimento is None or f.id is None:
+                continue
+            faturas.append(
+                vencimentos_dom.FaturaVenc(
+                    id=f.id, conta_id=c.id, credor=i.nome if i else "", descricao=c.nome or "Cartão",
+                    vencimento=f.vencimento, total=f.total, minimo=f.minimo, pago=f.pago,
+                    divida_id=ligada.id if ligada else None,
+                )
+            )
+    dividas_v = []
+    for d in abertas:
+        if d.id is None:
+            continue
+        i = inst(d.instituicao_id)
+        logos[("d", d.id)] = (i.icone_url or i.logo_url) if i else None
+        dividas_v.append(
+            vencimentos_dom.DividaVenc(
+                id=d.id, credor=i.nome if i else "", descricao=d.descricao, modalidade=d.modalidade,
+                dia_vencimento=d.dia_vencimento, parcela=d.parcela_minima, em_atraso_dias=d.em_atraso_dias,
+                saldo=d.saldo_devedor,
+            )
+        )
+    lista = vencimentos_dom.montar(hoje=hoje, dias=dias, faturas=faturas, dividas=dividas_v)
+
+    # Valor do plano: o que a projeção atual manda pagar neste mês, por dívida.
+    plano = plano_ativo(s, u)
+    do_plano = {int(i.divida_id): i.valor_mensal for i in plano.projecao.itens} if plano else {}
+    out = []
+    for v in lista:
+        logo = logos.get(("c", v.conta_id)) if v.conta_id else logos.get(("d", v.divida_id or 0))
+        valor_plano = do_plano.get(v.divida_id) if (plano and v.divida_id and v.dias <= 31) else None
+        out.append((v, valor_plano, logo))
+    return hoje, out
+
+
+@dataclass
+class ImpactoPlano:
+    categoria: str
+    valor_mensal: Decimal
+    meses_antecipados: int
+    data_atual: date
+    data_nova: date
+
+
+def gastos_por_categoria(
+    s: Session, u: Usuario, mes: date | None
+) -> tuple[date, list[gastos_dom.CategoriaMes], ImpactoPlano | None, list[date]]:
+    """N2: gasto do mês por categoria × média dos 3 anteriores, e quanto a
+    maior categoria não essencial acima da média anteciparia a data de saída.
+
+    Mês padrão: o último mês completo (o corrente ainda está pela metade e
+    pareceria sempre abaixo da média).
+    """
+    assert u.id is not None
+    hoje = hoje_do_usuario(u)
+    mes = (mes or adicionar_meses(hoje.replace(day=1), -1)).replace(day=1)
+    todas = repo_f.transacoes(s, u.id, adicionar_meses(hoje.replace(day=1), -13))
+    meses_com_dado = sorted({t.data_mov.replace(day=1) for t in todas})
+    desde = adicionar_meses(mes, -gastos_dom.MESES_MEDIA)
+    ate = adicionar_meses(mes, 1)
+    gastos = [
+        gastos_dom.Gasto(t.data_mov, t.categoria, -t.valor, t.essencial)
+        for t in todas
+        if t.valor < 0 and not t.pagamento_divida and desde <= t.data_mov < ate
+    ]
+    categorias = gastos_dom.por_categoria(gastos, mes, set(meses_com_dado))
+    return mes, categorias, _impacto(s, u, gastos_dom.candidata_a_corte(categorias)), meses_com_dado
+
+
+def fluxo_mensal(s: Session, u: Usuario, meses: int) -> tuple[list[gastos_dom.FluxoMes], Capacidade]:
+    """N5: os mesmos meses completos que a capacidade usa, e a capacidade em si."""
+    assert u.id is not None
+    hoje = hoje_do_usuario(u)
+    inicio = adicionar_meses(hoje.replace(day=1), -meses)
+    lista_meses = [adicionar_meses(inicio, i) for i in range(meses)]
+    movs = [
+        gastos_dom.Movimento(t.data_mov, t.valor, t.essencial, t.pagamento_divida, t.entrada_renda, t.categoria)
+        for t in repo_f.transacoes(s, u.id, inicio)
+    ]
+    return gastos_dom.fluxo_mensal(movs, lista_meses), capacidade(s, u, hoje)
+
+
+def _impacto(s: Session, u: Usuario, cat: gastos_dom.CategoriaMes | None) -> ImpactoPlano | None:
+    """Simula o plano com a capacidade atual e com ela + o excesso da categoria.
+    Só devolve quando antecipa pelo menos 1 mês (parcimônia)."""
+    if cat is None or cat.media_3m is None:
+        return None
+    assert u.id is not None
+    hoje = hoje_do_usuario(u)
+    entradas = _entradas(repo_f.dividas(s, u.id))
+    if not entradas:
+        return None
+    ativo = repo_p.ativo(s, u.id)
+    if ativo is not None:
+        cap, metodo = ativo.capacidade_mensal, Metodo(ativo.metodo)
+    else:
+        cap, metodo = capacidade(s, u, hoje).valor, planner.metodo_pre_selecionado(u.ja_desistiu_de_plano)
+    # Valor mensal em reais inteiros: é uma estimativa, não um centavo exato.
+    extra = arredondar(cat.total - cat.media_3m).to_integral_value()
+    if cap <= 0 or extra <= 0:
+        return None
+    atual = planner.simular(entradas, cap, metodo, hoje)
+    nova = planner.simular(entradas, cap + extra, metodo, hoje)
+    if not (atual.converge and nova.converge and atual.data_quitacao and nova.data_quitacao):
+        return None
+    antecipa = atual.meses - nova.meses
+    if antecipa < 1:
+        return None
+    return ImpactoPlano(cat.categoria, extra, antecipa, atual.data_quitacao, nova.data_quitacao)
+
+
+_MESES_BELVO = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+
+
+def _avancar_contas_demo(
+    s: Session, u: Usuario, dividas: Sequence[Divida], pagos: dict[int, Decimal], hoje: date
+) -> None:
+    """A16 (Fase 7): na demo, contas e faturas acompanham o mês simulado.
+
+    Sem isto, o relógio da demo andava e as faturas não: a do cartão aparecia
+    "atrasada" e os saldos de cartão e empréstimo ficavam nos valores iniciais.
+    Para cada dívida ligada a uma conta (``conta_id_externo``):
+    - o saldo da conta (cartão, empréstimo, financiamento) ou o uso do cheque
+      especial (conta corrente) passa a ser o saldo da dívida;
+    - no cartão, o pagamento do mês entra na fatura aberta e, quando o
+      vencimento dela já passou, nasce a do mês seguinte com o saldo atual.
+    """
+    assert u.id is not None
+    for d in dividas:
+        if not d.conta_id_externo or d.id is None:
+            continue
+        conta = repo_f.conta_por_externo(s, u.id, d.conta_id_externo)
+        if conta is None or conta.id is None:
+            continue
+        if conta.tipo in (TipoConta.CORRENTE, TipoConta.PAGAMENTO):
+            conta.usado_cheque_especial = d.saldo_devedor
+            repo_pfm.salvar(s, conta)
+            continue
+        conta.saldo = d.saldo_devedor
+        repo_pfm.salvar(s, conta)
+        if conta.tipo is not TipoConta.CARTAO_CREDITO:
+            continue
+        faturas = repo_pfm.faturas(s, conta.id)  # mais recente primeiro
+        if not faturas or faturas[0].vencimento is None:
+            continue
+        atual = faturas[0]
+        pago = pagos.get(d.id, Decimal(0))
+        if pago > 0:
+            data_pgto = min(atual.vencimento, hoje)
+            atual.pago += pago
+            atual.pagamentos = [*atual.pagamentos, {"data": data_pgto.isoformat(), "valor": str(pago)}]
+            repo_pfm.salvar(s, atual)
+        n = 0
+        while atual.vencimento is not None and atual.vencimento < hoje and d.saldo_devedor > 0:
+            n += 1
+            venc = adicionar_meses(atual.vencimento.replace(day=1), 1).replace(day=atual.vencimento.day)
+            atual = Fatura(
+                usuario_id=u.id,
+                consentimento_id=atual.consentimento_id,
+                conta_id=conta.id,
+                id_externo=f"{atual.id_externo[:48]}-sim{u.meses_simulados}-{n}",
+                nome=f"{_MESES_BELVO[venc.month - 1]}-{venc.year}",
+                vencimento=venc,
+                total=d.saldo_devedor,
+                minimo=min(d.parcela_minima, d.saldo_devedor),
+                parcelada=atual.parcelada,
+            )
+            repo_pfm.salvar(s, atual)
 
 
 def taxa_anual_de(d: Divida) -> Decimal:

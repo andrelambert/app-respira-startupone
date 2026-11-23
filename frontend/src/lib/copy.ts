@@ -209,6 +209,8 @@ export const errosConexao: Record<string, string> = {
   link_nao_encontrado: 'Não encontramos essa autorização. Comece a conexão de novo por aqui.',
   cadastro_incompleto: 'Precisamos do seu nome completo e CPF para o banco confirmar que é você.',
   token_falhou: 'Não conseguimos abrir a conexão segura agora. Tente de novo em instantes.',
+  modo_publico:
+    'Na versão pública, a conexão com bancos reais fica desligada por segurança. Use a demonstração ou inclua dívidas à mão.',
   belvo_nao_configurada:
     'A conexão com bancos ainda não está configurada: faltam as chaves da Belvo no backend/.env.',
   popup: 'Seu navegador bloqueou a nova aba.',
@@ -344,6 +346,31 @@ export const dividas = {
     titulo: 'Nenhuma dívida por aqui',
     texto: 'Conecte um banco ou inclua uma dívida que não aparece no Open Finance.',
   },
+  // N4 (Fase 7): filtrar e ordenar
+  ordenar: 'Ordenar',
+  ordens: {
+    plano: 'Ordem do plano',
+    banco: 'Por banco',
+    taxa: 'Maior taxa',
+    saldo: 'Maior saldo',
+    vencimento: 'Próximo vencimento',
+  } as Record<string, string>,
+  filtrar: 'Filtrar',
+  banco: 'Banco ou credor',
+  tipo: 'Tipo',
+  tipos: {
+    cartao: 'Cartão',
+    emprestimo: 'Empréstimo',
+    financiamento: 'Financiamento',
+    cheque: 'Cheque especial',
+    manual: 'Incluída à mão',
+  } as Record<string, string>,
+  situacao: 'Situação',
+  situacoes: { atraso: 'Em atraso', estimada: 'Com valor estimado', quitadas: 'Quitadas' } as Record<string, string>,
+  limpar: 'Limpar filtros',
+  mostrando: (n: number, de: number, total: Centavos) =>
+    `Mostrando ${n} de ${de} ${plural(de, 'dívida', 'dívidas')} · ${r$(total)}`,
+  nenhumaNoFiltro: 'Nenhuma dívida com esses filtros.',
 };
 
 // --- plano (F3) ------------------------------------------------------------------------------------
@@ -358,8 +385,11 @@ export const plano = {
   voltarCalculado: 'Voltar ao valor calculado',
   livreEm: 'Livre em',
   juros: 'Juros no total',
-  primeiraVitoria: 'Primeira dívida some no',
+  primeiraQuitada: '1ª dívida quitada',
   recomendado: 'Sugerido para você',
+  conferidoOracle: 'Conferido no Oracle',
+  conferidoOracleExplica:
+    'Este plano foi calculado duas vezes — aqui e por um motor separado dentro do banco de dados Oracle — e os dois deram o mesmo resultado, centavo por centavo.',
   motivo: {
     PADRAO: 'Sugerimos o mais econômico porque ele custa menos juros no total.',
     JA_DESISTIU:
@@ -418,7 +448,8 @@ export const inicio = {
   faltam: (n: number) => `faltam ${meses(n)}`,
   abatido: (abatido: Centavos, inicial: Centavos) => `${r$(abatido)} de ${r$(inicial)} já pagos`,
   esteMes: 'O que fazer este mês',
-  esteMesAjuda: 'Nesta ordem. Se sobrar, vai para a primeira da lista.',
+  // A7: a soma do mês costuma passar do saldo em conta; o pagamento acompanha o salário.
+  esteMesAjuda: 'Valores para pagar ao longo do mês, conforme o salário entrar. Nesta ordem; se sobrar, vai para a primeira da lista.',
   minimo: 'só o mínimo',
   principal: 'prioridade',
   alertas: 'Precisa da sua atenção',
@@ -473,28 +504,118 @@ export function fraseAcompanhamento(a: {
 // --- alertas (§8.3) — sempre ação concreta + valor em reais ----------------------------------------
 
 /** Categorias da Belvo (enum de TransactionOpenFinanceBrazil.category) em português. */
-const categoriaNome: Record<string, string> = {
-  'Online Platforms & Leisure': 'delivery, streaming e lazer',
-  'Food & Groceries': 'mercado',
-  'Personal Shopping': 'compras pessoais',
-  'Transport & Travel': 'transporte',
-  'Bills & Utilities': 'contas da casa',
-  'Home & Life': 'casa e saúde',
-  'Fees & Charges': 'tarifas',
-  'Credits & Loans': 'crédito e empréstimos',
-  'Income & Payments': 'renda e recebimentos',
-  'Investments & Savings': 'investimentos',
-  Deposits: 'depósitos',
-  Transfers: 'transferências',
-  Taxes: 'impostos',
-  Insurance: 'seguros',
-  'Withdrawal & ATM': 'saques',
-  Unknown: 'outros',
+// --- Rótulos vindos da Belvo, em pt-BR (A6, Fase 7) ---------------------------------
+// Único lugar que traduz categorias, subcategorias, tipos de produto e nomes de
+// fatura. O que não estiver no dicionário cai em "Outros" — nunca em inglês na tela.
+
+const CATEGORIAS: Record<string, string> = {
+  'Online Platforms & Leisure': 'Delivery, streaming e lazer',
+  'Food & Groceries': 'Mercado',
+  'Personal Shopping': 'Compras pessoais',
+  'Transport & Travel': 'Transporte',
+  'Bills & Utilities': 'Contas da casa',
+  'Home & Life': 'Casa e saúde',
+  'Fees & Charges': 'Tarifas',
+  'Credits & Loans': 'Crédito e empréstimos',
+  'Income & Payments': 'Renda e recebimentos',
+  'Investments & Savings': 'Investimentos',
+  'Business Services': 'Serviços',
+  Deposits: 'Depósitos',
+  Transfers: 'Transferências',
+  Taxes: 'Impostos',
+  Insurance: 'Seguros',
+  'Withdrawal & ATM': 'Saques',
+  Unknown: 'Outros',
 };
+
+const SUBCATEGORIAS: Record<string, string> = {
+  Clothing: 'Roupas',
+  'Credit card payment': 'Pagamento de fatura',
+  Electricity: 'Luz',
+  'Food delivery': 'Delivery de comida',
+  Fuel: 'Combustível',
+  Groceries: 'Mercado',
+  Interest: 'Juros',
+  'Loan payment': 'Parcela de empréstimo',
+  Pharmacy: 'Farmácia',
+  Pix: 'Pix',
+  'Public transport': 'Transporte público',
+  Rent: 'Aluguel',
+  'Ride sharing': 'Transporte por app',
+  Salary: 'Salário',
+  Savings: 'Poupança',
+  Streaming: 'Streaming',
+  Telecommunications: 'Internet e telefone',
+  Water: 'Água',
+};
+
+// product_type do Open Finance Brasil (contas, cartões e operações de crédito).
+const TIPOS_PRODUTO: Record<string, string> = {
+  CONTA_DEPOSITO_A_VISTA: 'Conta corrente',
+  CONTA_POUPANCA: 'Poupança',
+  CONTA_PAGAMENTO_PRE_PAGA: 'Conta de pagamento',
+  EMPRESTIMOS: 'Empréstimo',
+  FINANCIAMENTOS: 'Financiamento',
+  FINANCIAMENTOS_RURAIS: 'Financiamento rural',
+  FINANCIAMENTOS_IMOBILIARIOS: 'Financiamento imobiliário',
+  ADIANTAMENTO_A_DEPOSITANTES: 'Cheque especial',
+  DIREITOS_CREDITORIOS_DESCONTADOS: 'Antecipação de recebíveis',
+  STANDARD: 'Standard',
+  GOLD: 'Gold',
+  PLATINUM: 'Platinum',
+  INFINITE: 'Infinite',
+  BLACK: 'Black',
+  ELECTRON: 'Electron',
+  INTERNACIONAL: 'Internacional',
+  NACIONAL: 'Nacional',
+  OUTROS: 'Outros',
+};
+
+const MESES_EN: Record<string, string> = {
+  Jan: 'jan', Feb: 'fev', Mar: 'mar', Apr: 'abr', May: 'mai', Jun: 'jun',
+  Jul: 'jul', Aug: 'ago', Sep: 'set', Oct: 'out', Nov: 'nov', Dec: 'dez',
+};
+
+/** "Food & Groceries" → "Mercado"; desconhecida → "Outros". */
+const REGIOES: Record<string, string> = {
+  'sa-saopaulo-1': 'São Paulo (Brasil)',
+  'sa-vinhedo-1': 'Vinhedo (Brasil)',
+};
+
+/** "sa-saopaulo-1" → "São Paulo (Brasil)". */
+export function regiaoNome(regiao: string | null): string {
+  return (regiao && REGIOES[regiao]) || regiao || 'Brasil';
+}
+
+export function categoriaNome(categoria: string | null | undefined): string {
+  return (categoria && CATEGORIAS[categoria]) || 'Outros';
+}
+
+export function subcategoriaNome(sub: string | null | undefined): string | null {
+  if (!sub) return null;
+  return SUBCATEGORIAS[sub] ?? 'Outros';
+}
+
+/** "EMPRESTIMOS" → "Empréstimo". Fora do dicionário: o código, legível, sem inglês. */
+export function tipoBelvo(tipo: string | null): string | null {
+  if (!tipo) return null;
+  if (TIPOS_PRODUTO[tipo]) return TIPOS_PRODUTO[tipo];
+  const t = tipo.replace(/_/g, ' ').toLowerCase().trim();
+  return t.charAt(0).toUpperCase() + t.slice(1);
+}
+
+/** bill_name da Belvo "Oct-2026" → "out/2026". Outros formatos passam como vieram. */
+export function nomeFatura(nome: string | null | undefined): string | null {
+  if (!nome) return null;
+  const [, mes, ano] = /^([A-Z][a-z]{2})-(\d{4})$/.exec(nome) ?? [];
+  const pt = mes ? MESES_EN[mes] : undefined;
+  return pt ? `${pt}/${ano}` : nome;
+}
 
 export type Tom = 'fato' | 'atencao' | 'conquista' | 'info';
 
-export function mensagemEvento(e: Evento): { titulo: string; texto: string; tom: Tom } {
+/** ``temPlano``: só diz que algo "já está no seu plano" quando existe um plano ativo (A4). */
+export function mensagemEvento(e: Evento, { temPlano }: { temPlano: boolean }): { titulo: string; texto: string; tom: Tom } {
   const c = e.contexto;
   const s = (k: string) => (typeof c[k] === 'string' ? (c[k] as string) : '');
   const n = (k: string) => (typeof c[k] === 'number' ? (c[k] as number) : 0);
@@ -509,24 +630,27 @@ export function mensagemEvento(e: Evento): { titulo: string; texto: string; tom:
       return {
         tom: 'atencao',
         titulo: `${s('descricao')} vence ${n('dias') === 0 ? 'hoje' : `em ${n('dias')} ${plural(n('dias'), 'dia', 'dias')}`}`,
-        texto: `A parcela é de ${r$s(c.parcela)} e sua conta tem ${r$s(c.saldo_conta)}. Faltam ${r$s(c.falta)} até ${diaMes(s('vencimento'))} para não atrasar.`,
+        // A5: nomeia a conta, para não parecer contradizer o saldo total da tela.
+        texto: `A parcela é de ${r$s(c.parcela)} e ${s('conta') ? `sua conta ${s('conta')} tem` : 'suas contas somam'} ${r$s(c.saldo_conta)}. Faltam ${r$s(c.falta)} até ${diaMes(s('vencimento'))} para não atrasar.`,
       };
     case 'ATRASO_CONFIRMADO':
       return {
         tom: 'fato',
         titulo: `${s('descricao')} está com ${n('dias')} ${plural(n('dias'), 'dia', 'dias')} de atraso`,
-        texto: `Pagar a parcela de ${r$s(c.parcela)} interrompe a multa e os juros de atraso. Ela já está no seu plano.`,
+        texto: `Pagar a parcela de ${r$s(c.parcela)} interrompe a multa e os juros de atraso. ${temPlano ? 'Ela já está no seu plano.' : 'Ao montar seu plano, ela entra na conta.'}`,
       };
     case 'CHEQUE_ESPECIAL':
       return {
         tom: 'fato',
         titulo: `Você está usando ${r$s(c.usado)} do cheque especial`,
         texto: c.juros_mes
-          ? `Ele custa ${pctAno(c.taxa_anual)}: ${r$s(c.juros_mes)} de juros por mês. No plano, ele tem data para acabar.`
-          : 'No plano, ele tem data para acabar.',
+          ? `Ele custa ${pctAno(c.taxa_anual)}: ${r$s(c.juros_mes)} de juros por mês. ${temPlano ? 'No plano, ele tem data para acabar.' : 'Um plano dá a ele uma data para acabar.'}`
+          : temPlano
+            ? 'No plano, ele tem data para acabar.'
+            : 'Um plano dá a ele uma data para acabar.',
       };
     case 'PICO_CATEGORIA': {
-      const cat = categoriaNome[s('categoria')] ?? s('categoria').toLowerCase();
+      const cat = categoriaNome(s('categoria')).toLowerCase();
       return {
         tom: 'atencao',
         titulo: `Em ${nomeMes(s('mes'))}, ${cat} somou ${r$s(c.gasto)}`,
@@ -569,6 +693,10 @@ export const alerta = {
 export const privacidade = {
   titulo: 'Configurações',
   seusDados: 'Seus dados',
+  // M3: só aparece quando o backend usa o Oracle.
+  ondeFicam: 'Onde ficam os seus dados',
+  ondeFicamTexto: (regiao: string) =>
+    `Oracle Autonomous AI Database · ${regiao} · criptografado em repouso pela Oracle.`,
   nome: 'Nome completo',
   email: 'E-mail',
   cpf: 'CPF',
@@ -647,6 +775,16 @@ export const corrigir = {
 
 // --- estados gerais ------------------------------------------------------------------------------------
 
+export const erroRota = {
+  titulo: 'Algo não carregou',
+  texto: 'Recarregue para continuar. Seus dados estão seguros.',
+  recarregar: 'Recarregar',
+  inicio: 'Ir para o Início',
+};
+
+// M5: faixa da versão pública.
+export const versaoPublica = 'Versão de demonstração acadêmica — não informe dados reais.';
+
 export const estados = {
   carregando: 'Carregando…',
   erroTitulo: 'Não conseguimos carregar agora',
@@ -665,11 +803,99 @@ export const licao = {
 // --- PFM: contas, faturas e extrato ------------------------------------------------------
 
 /** ``type`` da Belvo (ex.: CONTA_DEPOSITO_A_VISTA) em texto legível. */
-export function tipoBelvo(tipo: string | null): string | null {
-  if (!tipo) return null;
-  const t = tipo.replace(/_/g, ' ').toLowerCase().trim();
-  return t.charAt(0).toUpperCase() + t.slice(1);
-}
+// N1 (Fase 7): todas as transações, de todas as contas, com filtros.
+export const transacoes = {
+  titulo: 'Todas as transações',
+  verTodas: 'Ver todas as transações',
+  voltar: 'Suas contas',
+  buscar: 'Buscar por descrição ou loja',
+  filtros: 'Filtros',
+  limpar: 'Limpar filtros',
+  carregarMais: 'Carregar mais',
+  entradas: 'Entradas',
+  saidas: 'Saídas',
+  resultado: 'Resultado',
+  quantidade: (n: number) => (n === 1 ? '1 transação' : `${n} transações`),
+  vazio: 'Nenhuma transação com esses filtros.',
+  soDivida: 'Só pagamentos de dívida',
+  soDividaAjuda: 'Quanto você pagou de dívida no período.',
+  periodo: 'Período',
+  periodos: {
+    tudo: 'Tudo',
+    mes: 'Este mês',
+    mes_passado: 'Mês passado',
+    '30': '30 dias',
+    '90': '90 dias',
+    personalizado: 'Escolher datas',
+  } as Record<string, string>,
+  de: 'De',
+  ate: 'Até',
+  contas: 'Banco e conta',
+  tipo: 'Tipo',
+  tipos: { ENTRADA: 'Entradas', SAIDA: 'Saídas' } as Record<string, string>,
+  todos: 'Todos',
+  categorias: 'Categoria',
+  valor: 'Valor (R$)',
+  valorMin: 'Mínimo',
+  valorMax: 'Máximo',
+  aplicar: 'Aplicar',
+  ordem: 'Ordenar',
+  ordens: { recentes: 'Mais recentes', maior_valor: 'Maior valor' } as Record<string, string>,
+  chipValor: (min: string | null, max: string | null) =>
+    min && max ? `R$ ${min} a R$ ${max}` : min ? `a partir de R$ ${min}` : `até R$ ${max ?? ''}`,
+  chipBusca: (b: string) => `"${b}"`,
+  chipDatas: (de: string | null, ate: string | null) => [de, ate].filter(Boolean).join(' a ') || 'Datas',
+};
+
+// N2 (Fase 7): para onde foi o dinheiro — existe para liberar capacidade para o plano.
+export const gastos = {
+  titulo: 'Para onde foi o dinheiro',
+  subtitulo: (mes: string) => `Gastos de ${mes}, comparados com a sua média dos 3 meses anteriores.`,
+  mes: 'Mês',
+  media: (valor: string) => `média ${valor}`,
+  acimaDaMedia: (pct: number) => `+${pct}% que a sua média`,
+  abaixoDaMedia: (pct: number) => `${pct}% abaixo da média`,
+  essencial: 'essencial',
+  semDados: 'Ainda não há gastos para mostrar neste mês.',
+  verTransacoes: (cat: string) => `Ver as transações de ${cat}`,
+  foraDaConta: 'Fora da conta: pagamentos de dívida e transferências.',
+  impacto: (cat: string, valor: string, meses: number, nova: string, atual: string) =>
+    `Se ${cat} voltasse à sua média, sobrariam ${valor} por mês — sua data de saída chegaria ${meses} ${meses === 1 ? 'mês' : 'meses'} antes: ${nova} em vez de ${atual}.`,
+  impactoAviso: 'Projeção com o valor que você coloca por mês nas dívidas. O app organiza e projeta; a escolha é sua.',
+};
+
+// N5 (Fase 7): de onde vem o valor do plano — F-7.
+export const fluxo = {
+  titulo: 'Entradas, gastos e dívida, mês a mês',
+  verDeOndeVeio: 'Ver de onde veio',
+  esconder: 'Esconder',
+  conta: (entradas: string, essenciais: string, reserva: number, capacidade: string) =>
+    `Nos últimos 6 meses, num mês típico entraram ${entradas} e os gastos essenciais foram ${essenciais}. ` +
+    `A diferença, menos ${reserva}% de reserva para imprevistos, dá ${capacidade} por mês para as dívidas.`,
+  mediana:
+    'Usamos o mês típico (a mediana), não a média: um mês fora da curva — um bônus, uma despesa rara — não puxa o valor para cima nem para baixo.',
+  cartao: 'Compras no cartão contam como gasto; o pagamento da fatura aparece em dívida.',
+  semHistorico: 'Ainda não há meses completos suficientes para mostrar.',
+  series: { entradas: 'Entradas', essenciais: 'Gastos essenciais', outros: 'Outros gastos', divida: 'Pagamentos de dívida', sobra: 'Sobra (entradas − essenciais)' },
+  tabela: 'Ver em tabela',
+};
+
+// N3 (Fase 7): próximos vencimentos — organiza o que existe, sem alerta novo.
+export const vencimentos = {
+  titulo: 'Próximos vencimentos',
+  verTodos: 'Ver todos os vencimentos',
+  janela: (dias: number) => `${dias} dias`,
+  janelas: [7, 15, 30],
+  vazio: (dias: number) => `Nada vence nos próximos ${dias} dias.`,
+  status: { PAGO: 'Pago', PENDENTE: 'Pendente', ATRASADO: 'Atrasado' } as Record<string, string>,
+  quando: (dias: number) =>
+    dias < 0 ? `venceu há ${-dias} ${dias === -1 ? 'dia' : 'dias'}` : dias === 0 ? 'vence hoje' : dias === 1 ? 'vence amanhã' : `em ${dias} dias`,
+  minimo: 'mínimo',
+  parcela: 'parcela',
+  daFatura: (total: string) => `de ${total} da fatura`,
+  noPlano: (valor: string) => `no plano: ${valor}`,
+  ajuda: 'Faturas de cartão e parcelas dos seus contratos. Para parcelas, o banco não informa se a do mês já foi paga.',
+};
 
 export const pfm = {
   titulo: 'Suas contas',
@@ -705,6 +931,9 @@ export const pfm = {
   semFatura: 'Nenhuma fatura recebida ainda.',
   vence: (data: string) => `vence em ${data}`,
   venceu: (data: string) => `venceu em ${data}`,
+  /** A14: "venceu em" quando a data já passou (ou a fatura está atrasada). Datas ISO comparam como texto. */
+  vencimento: (iso: string, hoje: string, formatada: string, atrasada = false) =>
+    atrasada || iso < hoje ? `venceu em ${formatada}` : `vence em ${formatada}`,
   minimo: 'Mínimo',
   pago: 'Pago',
   faltaPagar: 'Falta pagar',
@@ -727,6 +956,7 @@ export const pfm = {
   abasCartao: 'Faturas e extrato do cartão',
   abas: { faturas: 'Faturas', extrato: 'Extrato' },
   detalhe: {
+    conta: 'Conta',
     descricao: 'Descrição',
     data: 'Data',
     dataHora: 'Data e hora',

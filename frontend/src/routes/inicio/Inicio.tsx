@@ -1,4 +1,4 @@
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, Navigate } from 'react-router';
 
 import {
@@ -30,7 +30,8 @@ import {
   useVisaoGeral,
 } from '@/hooks/queries';
 import { api, type PlanoAtivo } from '@/lib/api';
-import { fraseAcompanhamento, inicio as copy, pfm as copyPfm, raiox as copyRaioX } from '@/lib/copy';
+import { ListaVencimentos } from '@/components/respira/ListaVencimentos';
+import { fraseAcompanhamento, inicio as copy, pfm as copyPfm, raiox as copyRaioX, vencimentos as copyVencimentos } from '@/lib/copy';
 import { nomeMes } from '@/lib/datas';
 
 const COPILOTO_LIGADO = import.meta.env.VITE_FEATURE_COPILOTO === 'true';
@@ -86,12 +87,14 @@ export default function Inicio() {
         </Link>
       )}
 
+      <ProximosVencimentos />
+
       {pendentes.length > 0 && (
         <section className="flex flex-col gap-2">
           <h2 className="font-semibold text-navy">{copy.alertas}</h2>
           <ul className="flex flex-col gap-2">
             {pendentes.map((e) => (
-              <AlertBanner key={e.id} evento={e} />
+              <AlertBanner key={e.id} evento={e} temPlano={Boolean(plano.data)} />
             ))}
           </ul>
         </section>
@@ -234,5 +237,23 @@ function PainelDemo({ comPlano }: { comPlano: boolean }) {
         {copy.demo.reiniciar}
       </Button>
     </Card>
+  );
+}
+
+/** N3: os 3 próximos vencimentos (atrasados primeiro). Some quando não há nada. */
+function ProximosVencimentos() {
+  const q = useQuery({ queryKey: chaves.vencimentos(30), queryFn: () => api.vencimentos(30) });
+  const itens = (q.data?.itens ?? []).filter((v) => v.status !== 'PAGO').slice(0, 3);
+  if (itens.length === 0) return null;
+  return (
+    <section className="flex flex-col gap-2" aria-labelledby="proximos-vencimentos">
+      <h2 id="proximos-vencimentos" className="font-semibold text-navy">
+        {copyVencimentos.titulo}
+      </h2>
+      <ListaVencimentos itens={itens} />
+      <Link to="/vencimentos" className="min-h-toque text-sm font-semibold text-blue underline">
+        {copyVencimentos.verTodos}
+      </Link>
+    </section>
   );
 }

@@ -3,11 +3,12 @@ import './index.css';
 import { QueryCache, QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
-import { createBrowserRouter, Navigate, RouterProvider } from 'react-router';
+import { createBrowserRouter, Navigate, type RouteObject, RouterProvider } from 'react-router';
 
 import { ExigeLogin, LayoutApp, LayoutSimples } from '@/components/Layout';
 import { chaves } from '@/hooks/queries';
 import { ApiError } from '@/lib/api';
+import ErroRota from '@/routes/ErroRota';
 
 const queryClient: QueryClient = new QueryClient({
   // Sessão expirou no meio do uso: zera o usuário e o guard leva para /entrar.
@@ -31,7 +32,7 @@ const tela = (carregar: () => Promise<{ default: React.ComponentType }>) => asyn
   Component: (await carregar()).default,
 });
 
-const router = createBrowserRouter([
+const rotas: RouteObject[] = [
   {
     element: <LayoutSimples />,
     children: [
@@ -59,6 +60,8 @@ const router = createBrowserRouter([
           { path: '/inicio', lazy: tela(() => import('@/routes/inicio/Inicio')) },
           { path: '/contas', lazy: tela(() => import('@/routes/contas/Contas')) },
           { path: '/contas/:id', lazy: tela(() => import('@/routes/contas/ContaDetalhe')) },
+          { path: '/transacoes', lazy: tela(() => import('@/routes/transacoes/Transacoes')) },
+          { path: '/vencimentos', lazy: tela(() => import('@/routes/vencimentos/Vencimentos')) },
           { path: '/raiox', lazy: tela(() => import('@/routes/raiox/RaioX')) },
           { path: '/plano', lazy: tela(() => import('@/routes/plano/Plano')) },
           { path: '/configuracoes', lazy: tela(() => import('@/routes/configuracoes/Configuracoes')) },
@@ -73,7 +76,10 @@ const router = createBrowserRouter([
       { path: '*', lazy: tela(() => import('@/routes/NaoEncontrada')) },
     ],
   },
-]);
+];
+
+// A3: qualquer erro de rota (inclusive chunk que não carregou) cai na tela própria.
+const router = createBrowserRouter([{ errorElement: <ErroRota />, children: rotas }]);
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

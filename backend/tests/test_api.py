@@ -1,5 +1,6 @@
 """Jornada via API: conta demo (Juliana, fixture) e conta real (Belvo)."""
 
+import os
 import re
 import time
 from decimal import Decimal as D
@@ -57,7 +58,27 @@ def test_login_errado_e_bloqueio(api):
 
 def test_config(api):
     cfg = api.get("/config").json()
-    assert cfg == {"demo_disponivel": True, "belvo_configurada": False, "webhooks": False}
+    banco = "oracle" if os.environ["DATABASE_URL"].startswith("oracle") else "sqlite"
+    assert {k: cfg[k] for k in ("demo_disponivel", "belvo_configurada", "webhooks", "banco")} == {
+        "demo_disponivel": True, "belvo_configurada": False, "webhooks": False, "banco": banco,
+    }
+
+
+def test_health_consulta_o_banco(api):
+    h = api.get("/health")
+    assert h.status_code == 200
+    corpo = h.json()
+    assert corpo["status"] == "ok" and corpo["versao"]
+    assert corpo["banco"] == ("oracle" if os.environ["DATABASE_URL"].startswith("oracle") else "sqlite")
+    assert set(corpo) == {"status", "banco", "versao", "regiao"}  # nada de usuário, dsn ou caminho
+
+
+def test_conferencia_oracle_so_existe_no_oracle(api):
+    if os.environ["DATABASE_URL"].startswith("oracle"):
+        pytest.skip("no Oracle, coberto por test_motor_coincide_no_oracle")
+    api.cookies.clear()
+    api.post("/auth/entrar", json=DEMO, headers=H)
+    assert api.get("/plano/conferencia-oracle").status_code == 404
 
 
 def test_jornada_juliana(api):
@@ -98,11 +119,21 @@ def test_jornada_juliana(api):
     assert (por["EQUILIBRADO"]["meses"], por["EQUILIBRADO"]["juros_totais"], por["EQUILIBRADO"]["primeira_quitacao_mes"]) == (17, "7940.64", 1)
     assert (por["SNOWBALL"]["meses"], por["SNOWBALL"]["juros_totais"], por["SNOWBALL"]["primeira_quitacao_mes"]) == (17, "9257.67", 1)
     assert sim["capacidade_minima"] == "1395.00"
+    # A2: a "1ª dívida quitada" da interface conta a quitação por qualquer meio
+    # (o carnê zera no 5º mês só com a parcela); o campo da referência PL/SQL
+    # continua contando só a sobra.
+    assert [por[m]["primeira_quitacao_qualquer_mes"] for m in ("AVALANCHE", "EQUILIBRADO", "SNOWBALL")] == [5, 1, 1]
+    for e in sim["estrategias"]:
+        meses_quitacao = [i["mes_quitacao"] for i in e["itens"] if i["mes_quitacao"] is not None]
+        assert e["primeira_quitacao_qualquer_mes"] == min(meses_quitacao)
 
     # --- ativar + eventos ----------------------------------------------------------
     assert api.post("/plano", json={"metodo": "AVALANCHE", "capacidade": "1000.00"}, headers=H).status_code == 422
     plano = api.post("/plano", json={"metodo": "AVALANCHE", "capacidade": "1755.00"}, headers=H).json()
     assert sum(D(p["valor"]) for p in plano["este_mes"]) == D("1755.00")
+    assert plano["projecao_atual"]["primeira_quitacao_qualquer_mes"] == min(
+        i["mes_quitacao"] for i in plano["cronograma"] if i["mes_quitacao"] is not None
+    )
     tipos = {e["tipo"] for e in api.get("/eventos").json()}
     assert {"ENTRADA_ROTATIVO", "ATRASO_CONFIRMADO", "CHEQUE_ESPECIAL", "PICO_CATEGORIA"} <= tipos
 
@@ -129,7 +160,9 @@ def test_conta_real_registro_isolamento_e_belvo(api):
     assert r.status_code == 201, r.text
     u = r.json()
     assert u["email"] == "pessoa.real@exemplo.com" and u["demo"] is False and u["apelido"] == "Pessoa"
-    assert u["cpf_mascarado"] == "529.***.***-25"
+    # Sem Belvo configurada, o CPF não é guardado (minimização, M5); com Belvo, ver
+    # test_cpf_guardado_mascarado_quando_ha_belvo.
+    assert u["cpf_mascarado"] is None
     assert u["nome_completo"] == "Pessoa de Teste"
     assert api.post("/auth/registrar", json=REAL, headers=H).json()["detail"] == "email_em_uso"
 
@@ -254,3 +287,19 @@ def test_pfm_contas_faturas_e_extrato(api):
     assert api.get(f"/contas/{corrente['id']}").status_code == 404
     assert api.get(url).status_code == 404
     assert api.get("/pfm/visao-geral").json()["bancos"] == []
+
+
+def test_cpf_guardado_mascarado_quando_ha_belvo(api, monkeypatch):
+    """O CPF só existe para o consentimento da Belvo: com ela, é obrigatório e
+    volta mascarado; sem ela (versão pública), nem é pedido."""
+    from app.config import Settings
+
+    monkeypatch.setattr(Settings, "belvo_configurada", lambda self: True)
+    api.cookies.clear()
+    dados = {**REAL, "email": "com.belvo@exemplo.com", "cpf": "390.533.447-05"}
+    sem_cpf = {k: v for k, v in dados.items() if k != "cpf"}
+    r = api.post("/auth/registrar", json=sem_cpf, headers=H)
+    assert r.status_code == 422 and r.json()["detail"] == "cpf_obrigatorio"
+    r = api.post("/auth/registrar", json=dados, headers=H)
+    assert r.status_code == 201, r.text
+    assert r.json()["cpf_mascarado"] == "390.***.***-05"

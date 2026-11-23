@@ -9,13 +9,22 @@ from __future__ import annotations
 
 import logging
 import uuid
+from datetime import timedelta
 from decimal import Decimal
 
 from sqlmodel import Session
 
 from app.config import get_settings
 from app.db import engine
-from app.models import RECURSOS_ESSENCIAIS, Divida, Origem, TaxaOrigem, TipoInstituicao, Usuario
+from app.models import (
+    RECURSOS_ESSENCIAIS,
+    Divida,
+    Origem,
+    TaxaOrigem,
+    TipoInstituicao,
+    Usuario,
+    agora,
+)
 from app.providers.fixture import BANCOS_DA_JULIANA
 from app.repositories import consentimentos as repo_c
 from app.repositories import financeiro as repo_f
@@ -30,9 +39,10 @@ BANCOS_DEMO = BANCOS_DA_JULIANA
 
 async def garantir_juliana() -> None:
     s_cfg = get_settings()
-    if not s_cfg.demo_configurada():
+    # A Juliana fixa (uso local) precisa de e-mail e senha; na versão pública
+    # (DEMO_POR_VISITANTE) cada visitante ganha a sua e ela não existe.
+    if not (s_cfg.demo_habilitada and s_cfg.demo_email and s_cfg.demo_senha):
         return
-    assert s_cfg.demo_email and s_cfg.demo_senha
     email = s_cfg.demo_email.strip().lower()
     senha = s_cfg.demo_senha.get_secret_value()
     with Session(engine) as s:
@@ -80,16 +90,21 @@ async def garantir_juliana() -> None:
                         await coleta.processar_recurso(c.id, recurso, confirmar_vazio=True)
 
 
-async def semear(s: Session, u: Usuario) -> None:
+async def semear(s: Session, u: Usuario, *, coletar_em_segundo_plano: bool = False) -> None:
+    """``coletar_em_segundo_plano``: a demo por visitante (M5) não espera a coleta
+    — os três bancos ficam "conectados" na hora e os dados chegam pela mesma
+    coleta de uma conexão real, com a tela de espera do Raio-X. Contra o Oracle
+    em São Paulo, esperar tudo levava ~10 s no clique de "Entrar como Juliana"."""
     assert u.id is not None
     for codigo in BANCOS_DEMO:
         _, url = await conexao.iniciar(s, u)
         token = url.split("access_token=")[1].split("&")[0]
         link = fixture().autorizar(token, codigo)
-        c = await conexao.concluir(s, u, link, codigo, iniciar_coleta=False)
+        c = await conexao.concluir(s, u, link, codigo, iniciar_coleta=coletar_em_segundo_plano)
         assert c.id is not None
-        for recurso in RECURSOS_ESSENCIAIS:
-            await coleta.processar_recurso(c.id, recurso, confirmar_vazio=True)
+        if not coletar_em_segundo_plano:
+            for recurso in RECURSOS_ESSENCIAIS:
+                await coleta.processar_recurso(c.id, recurso, confirmar_vazio=True)
 
     # O carnê da Loja D não trafega pelo Open Finance: cadastro manual (§7.9).
     inst = repo_c.instituicao(s, "manual_loja_d", "Loja D", TipoInstituicao.CREDIARIO)
@@ -123,3 +138,46 @@ async def reiniciar(s: Session, u: Usuario) -> None:
     u.meses_simulados = 0
     repo_u.salvar(s, u)
     await semear(s, u)
+
+
+# --- demo por visitante (M5, Fase 7) --------------------------------------------------
+
+
+class DemosEsgotadas(Exception):
+    """Limite de demos ativas atingido (o Always Free tem espaço e sessões limitados)."""
+
+
+async def criar_demo_visitante(s: Session) -> Usuario:
+    """Uma Juliana só deste visitante, apagada com todos os dados depois de
+    ``DEMO_VALIDADE_HORAS``. Os ids da fixture são por link, então várias
+    Julianas convivem sem colidir."""
+    cfg = get_settings()
+    if repo_u.demos_ativas(s, agora()) >= cfg.demo_max_ativas:
+        raise DemosEsgotadas()
+    u = repo_u.criar(
+        s,
+        Usuario(
+            uuid_externo=str(uuid.uuid4()),
+            email=f"demo+{uuid.uuid4().hex[:16]}@respira.example",
+            senha_hash=None,  # ninguém entra com senha: só pelo cookie desta sessão
+            demo=True,
+            apelido="Juliana",
+            nome_completo="Juliana Ramos",  # persona fictícia
+            ja_desistiu_de_plano=False,
+            expira_em=agora() + timedelta(hours=cfg.demo_validade_horas),
+        ),
+    )
+    await semear(s, u, coletar_em_segundo_plano=True)
+    log.info("demo_visitante_criada")
+    return u
+
+
+def apagar_demos_expiradas() -> int:
+    """Apaga demos efêmeras vencidas com tudo o que é delas. Roda na subida e a cada hora."""
+    with Session(engine) as s:
+        ids = repo_u.demos_expiradas(s, agora())
+        for i in ids:
+            repo_u.apagar_tudo(s, i)
+    if ids:
+        log.info("demos_expiradas_apagadas qtd=%s", len(ids))
+    return len(ids)

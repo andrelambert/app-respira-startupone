@@ -360,7 +360,7 @@ def test_catalogo_de_instituicoes():
     assert set(por) == {"ofnubank_br_retail", "of1ssbank_br_retail", "sem_display"}
     assert por["ofnubank_br_retail"].nome == "Nubank"
     assert por["ofnubank_br_retail"].icone_url.endswith("nubank-icon.svg")
-    assert por["of1ssbank_br_retail"].nome == "1ss Bank - Pessoa Física"  # \xa0 normalizado
+    assert por["of1ssbank_br_retail"].nome == "1ss Bank"  # \xa0 normalizado e sufixo PF cortado (A12)
     assert por["of1ssbank_br_retail"].icone_url is None  # http recusado
     assert por["sem_display"].nome == "sem_display" and por["sem_display"].logo_url is None
 
@@ -370,3 +370,16 @@ def test_fixture_tem_ids_por_link():
     # upsert por id externo acharia a conta do outro.
     ids = lambda link: {c["id"] for b in fixture.BANCOS_DA_JULIANA for c in fixture.contas(link, b, HOJE)}  # noqa: E731
     assert ids("link-1").isdisjoint(ids("link-2"))
+
+
+def test_nome_curto_do_banco_sem_pessoa_fisica():
+    """A12 (Fase 7): o app é só para pessoa física — o sufixo não informa nada."""
+    from app.providers.mapping import mapear_instituicoes, nome_curto
+
+    assert nome_curto("Itaú - Pessoa Física") == "Itaú"
+    assert nome_curto("Bradesco Pessoa Fisica") == "Bradesco"
+    assert nome_curto("Banco RCI - Brasil - Pessoa Física") == "Banco RCI - Brasil"
+    assert nome_curto("Itaú - Pessoa Jurídica") == "Itaú - Pessoa Jurídica"  # PJ continua distinto
+    assert nome_curto("Nubank") == "Nubank"
+    [i] = mapear_instituicoes([{"name": "itau_br_retail", "display_name": "Itaú - Pessoa Física"}])
+    assert i.nome == "Itaú"

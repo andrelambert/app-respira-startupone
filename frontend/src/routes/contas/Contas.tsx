@@ -15,9 +15,11 @@ import {
   cx,
 } from '@/components/ui';
 import { LogoBanco } from '@/components/respira';
-import { chavesFinanceiras, useVisaoGeral } from '@/hooks/queries';
+import { FluxoMensal } from '@/components/respira/FluxoMensal';
+import { GastosCategoria } from '@/components/respira/GastosCategoria';
+import { chavesFinanceiras, useHoje, useVisaoGeral } from '@/hooks/queries';
 import { api, type Banco, type ContaBancaria } from '@/lib/api';
-import { coleta as copyColeta, pfm as copy, tipoBelvo } from '@/lib/copy';
+import { coleta as copyColeta, pfm as copy, tipoBelvo, transacoes as copyTransacoes } from '@/lib/copy';
 import { carimbo, diaMes } from '@/lib/datas';
 import { soma, type Centavos } from '@/lib/money';
 
@@ -86,6 +88,17 @@ export default function Contas() {
           <Money valor={faturas} className="text-xl font-bold text-navy" />
         </Card>
       </div>
+
+      {/* N1: extrato unificado, com filtros. */}
+      <LinkBotao to="/transacoes" variante="secundario">
+        {copyTransacoes.verTodas}
+      </LinkBotao>
+
+      {/* N2: para onde foi o dinheiro, ligado ao plano. */}
+      <GastosCategoria />
+
+      {/* N5: de onde vem o valor do plano. */}
+      <FluxoMensal id="fluxo-mensal" />
 
       {bancos.map((b) => (
         <SecaoBanco key={b.consentimento_id} banco={b} />
@@ -219,6 +232,7 @@ function ResumoValor({ c }: { c: ContaBancaria }) {
 }
 
 function ResumoCartao({ c }: { c: ContaBancaria }) {
+  const hoje = useHoje();
   const f = c.fatura_atual;
   const pct = c.limite_credito && c.limite_credito > 0 ? Math.min(100, (c.saldo / c.limite_credito) * 100) : null;
   return (
@@ -226,7 +240,7 @@ function ResumoCartao({ c }: { c: ContaBancaria }) {
       {f ? (
         <p className="flex flex-wrap items-center gap-2 text-sm text-slate">
           <SituacaoFatura situacao={f.situacao} />
-          {f.vencimento && (f.situacao === 'ATRASADA' ? copy.venceu(diaMes(f.vencimento)) : copy.vence(diaMes(f.vencimento)))}
+          {f.vencimento && copy.vencimento(f.vencimento, hoje, diaMes(f.vencimento), f.situacao === 'ATRASADA')}
         </p>
       ) : (
         <p className="text-sm text-slate">{copy.semFatura}</p>

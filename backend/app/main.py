@@ -3,6 +3,7 @@
     uv run uvicorn app.main:app --reload --port 8000
 """
 
+import asyncio
 import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -12,7 +13,8 @@ from alembic.config import Config
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from sqlmodel import Session
+from sqlalchemy import inspect
+from sqlmodel import Session, SQLModel
 
 from app.config import get_settings
 from app.content.licoes import LICOES
@@ -20,8 +22,11 @@ from app.db import engine
 from app.models import Licao, Usuario
 from app.repositories import consentimentos as repo_c
 from app.repositories import eventos as repo_e
+from app.repositories import oracle as repo_oracle
+from app.repositories import sistema as repo_sistema
 from app.routers import analise, belvo_webhook, consentimentos, demo, eventos, pfm, usuarios
 from app.services import coleta, instituicoes
+from app.services import demo as demo_svc
 from app.services.contexto import fixture
 from app.services.demo import garantir_juliana
 
@@ -43,7 +48,22 @@ def _migrar() -> None:
     # Sem isto o fileConfig do alembic.ini silencia nossos logs INFO —
     # inclusive o diagnóstico da taxa de juros (§7.7).
     cfg.attributes["configure_logger"] = False
-    command.upgrade(cfg, "head")
+    if settings.banco == "oracle" and not inspect(engine).has_table("alembic_version"):
+        # Bootstrap do Oracle (M2): o histórico Alembic foi escrito para o SQLite.
+        # Banco novo → esquema direto dos modelos e marca a versão atual; daqui
+        # em diante, migrações novas rodam nos dois bancos.
+        SQLModel.metadata.create_all(engine)
+        command.stamp(cfg, "head")
+        log.info("oracle_bootstrap esquema criado a partir dos modelos")
+    else:
+        command.upgrade(cfg, "head")
+    if settings.banco == "oracle":
+        # M3: o motor em PL/SQL fica instalado no banco (CREATE OR REPLACE, idempotente).
+        erros = repo_oracle.instalar_pacote(engine)
+        if erros:
+            log.warning("pkg_plano_app_com_erros %s", erros[:5])
+        else:
+            log.info("pkg_plano_app instalado")
 
 
 def _preparar() -> None:
@@ -60,14 +80,33 @@ def _preparar() -> None:
                 coleta.iniciar(c.id)
 
 
+async def _limpar_demos_periodicamente() -> None:
+    """M5: demos por visitante vencidas saem com todos os dados, a cada hora."""
+    while True:
+        await asyncio.sleep(3600)
+        try:
+            await asyncio.to_thread(demo_svc.apagar_demos_expiradas)
+        except Exception:  # a limpeza nunca derruba o servidor
+            log.exception("limpeza_demos_falhou")
+
+
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     _migrar()
     _preparar()
     await garantir_juliana()
+    limpeza = None
+    if settings.demo_por_visitante:
+        demo_svc.apagar_demos_expiradas()
+        limpeza = asyncio.create_task(_limpar_demos_periodicamente())
     instituicoes.agendar()  # catálogo de bancos da Belvo, em segundo plano
-    log.info("respira_pronto belvo_configurada=%s", settings.belvo_configurada())
+    log.info(
+        "respira_pronto banco=%s belvo_configurada=%s modo_publico=%s demo_por_visitante=%s",
+        settings.banco, settings.belvo_configurada(), settings.modo_publico, settings.demo_por_visitante,
+    )
     yield
+    if limpeza:
+        limpeza.cancel()
 
 
 app = FastAPI(title="Respira API", version="0.1.0", lifespan=lifespan)
@@ -79,6 +118,15 @@ app.add_middleware(
     allow_methods=["GET", "POST", "PATCH", "DELETE"],
     allow_headers=["Content-Type", "X-Respira"],
 )
+
+
+@app.middleware("http")
+async def sem_indexacao_no_modo_publico(request: Request, call_next):
+    """Versão pública é vitrine acadêmica: nada de buscador indexando (M5)."""
+    resposta = await call_next(request)
+    if settings.modo_publico:
+        resposta.headers["X-Robots-Tag"] = "noindex, nofollow"
+    return resposta
 
 
 @app.middleware("http")
@@ -106,6 +154,21 @@ app.include_router(demo.router)  # cada rota exige conta demo logada
 
 
 @app.get("/health", tags=["sistema"])
-def health() -> dict[str, str]:
-    return {"status": "ok"}
+def health() -> JSONResponse:
+    """Público e sem dados de usuário. Consulta o banco de verdade — é o que o
+    keep-alive (§7.6) usa para manter o Oracle ativo. Banco fora: 503."""
+    try:
+        with Session(engine) as s:
+            versao = repo_sistema.versao_do_banco(s, settings.banco)
+    except Exception as e:  # noqa: BLE001 — qualquer falha de conexão vira 503
+        log.warning("health_banco_indisponivel erro=%s", type(e).__name__)
+        return JSONResponse({"status": "banco_indisponivel", "banco": settings.banco}, status_code=503)
+    return JSONResponse(
+        {
+            "status": "ok",
+            "banco": settings.banco,
+            "versao": versao,
+            "regiao": settings.oracle_regiao if settings.banco == "oracle" else None,
+        }
+    )
 

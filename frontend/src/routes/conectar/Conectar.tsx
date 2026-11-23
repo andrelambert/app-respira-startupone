@@ -107,7 +107,9 @@ function Fluxo({ demo }: { demo: boolean }) {
       {semBelvo && estado.tipo !== 'erro' && (
         <Card tom="atencao" className="flex items-start gap-2" as="div">
           <span className="mt-0.5 text-amber-ink">{Icone.alerta}</span>
-          <p className="text-sm text-amber-ink">{erroConexao('belvo_nao_configurada')}</p>
+          <p className="text-sm text-amber-ink">
+            {erroConexao(config?.modo_publico ? 'modo_publico' : 'belvo_nao_configurada')}
+          </p>
         </Card>
       )}
 

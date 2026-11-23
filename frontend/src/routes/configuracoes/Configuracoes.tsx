@@ -4,9 +4,9 @@ import { Navigate, useNavigate } from 'react-router';
 
 import { LogoBanco, NaoMovimenta } from '@/components/respira';
 import { Badge, Button, Card, Carregando, EstadoErro, Icone, LinkBotao } from '@/components/ui';
-import { chavesFinanceiras, useConsentimentos, useUsuario } from '@/hooks/queries';
+import { chavesFinanceiras, useConfig, useConsentimentos, useUsuario } from '@/hooks/queries';
 import { api, ApiError, type Consentimento } from '@/lib/api';
-import { conectar, erroConexao, privacidade as copy } from '@/lib/copy';
+import { conectar, erroConexao, privacidade as copy, regiaoNome } from '@/lib/copy';
 import { carimbo, dataCompleta } from '@/lib/datas';
 
 /**
@@ -16,6 +16,7 @@ import { carimbo, dataCompleta } from '@/lib/datas';
 export default function Configuracoes() {
   const { data: usuario, isLoading } = useUsuario();
   const consentimentos = useConsentimentos();
+  const config = useConfig();
   if (isLoading || consentimentos.isLoading) return <Carregando />;
   if (!usuario) return <Navigate to="/entrar" replace />;
   if (consentimentos.isError) return <EstadoErro onTentar={() => void consentimentos.refetch()} />;
@@ -35,6 +36,15 @@ export default function Configuracoes() {
           <Dado rotulo={copy.cpf} valor={usuario.cpf_mascarado} ajuda={usuario.cpf_mascarado ? copy.cpfAjuda : undefined} />
         </dl>
       </Card>
+
+      {config.data?.banco === 'oracle' && (
+        <Card className="flex flex-col gap-1" aria-labelledby="onde-ficam">
+          <h2 id="onde-ficam" className="font-semibold text-navy">
+            {copy.ondeFicam}
+          </h2>
+          <p className="text-sm text-ink">{copy.ondeFicamTexto(regiaoNome(config.data.regiao))}</p>
+        </Card>
+      )}
 
       <div>
         <h2 className="text-lg font-bold text-navy">{copy.privacidadeTitulo}</h2>

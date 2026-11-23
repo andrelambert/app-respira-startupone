@@ -11,7 +11,7 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import date, timedelta
 from decimal import Decimal
-from typing import Any, Sequence
+from typing import Any, Mapping, Sequence
 
 from app.domain.planner import adicionar_meses, arredondar
 from app.domain.xray import taxa_anual
@@ -74,7 +74,12 @@ def detectar(
     saldo_em_conta: Decimal | None,  # None = sem conta conectada: não há como avaliar
     usado_cheque_especial: Decimal,
     gastos: Sequence[GastoCategoria],
+    saldo_por_banco: Mapping[str, Decimal] | None = None,
 ) -> list[EventoDetectado]:
+    """``saldo_por_banco``: saldo das contas de cada instituição. Quando a dívida é
+    de um banco onde a pessoa tem conta, o atraso iminente compara com o saldo
+    dessa conta e diz o nome dela (A5, Fase 7); senão, com a soma das contas."""
+    saldo_por_banco = saldo_por_banco or {}
     eventos: list[EventoDetectado] = []
     mes = hoje.strftime("%Y-%m")
 
@@ -104,10 +109,12 @@ def detectar(
         if d.dia_vencimento and d.saldo > 0 and d.minima > 0:
             venc = _proximo_vencimento(hoje, d.dia_vencimento)
             dias = (venc - hoje).days
+            conta = d.instituicao if d.instituicao in saldo_por_banco else None
+            disponivel = saldo_por_banco[conta] if conta else saldo_em_conta
             if (
-                saldo_em_conta is not None
+                disponivel is not None
                 and dias <= DIAS_ATRASO_IMINENTE
-                and saldo_em_conta < d.minima
+                and disponivel < d.minima
             ):
                 eventos.append(
                     EventoDetectado(
@@ -119,8 +126,9 @@ def detectar(
                             "descricao": d.descricao,
                             "instituicao": d.instituicao,
                             "parcela": _s(d.minima),
-                            "saldo_conta": _s(max(saldo_em_conta, Decimal(0))),
-                            "falta": _s(d.minima - max(saldo_em_conta, Decimal(0))),
+                            "conta": conta,  # None = soma de todas as contas
+                            "saldo_conta": _s(max(disponivel, Decimal(0))),
+                            "falta": _s(d.minima - max(disponivel, Decimal(0))),
                             "vencimento": venc.isoformat(),
                             "dias": dias,
                         },
@@ -168,23 +176,26 @@ def detectar(
     )
     if usado_cheque_especial > 0 and usado_cheque_especial > usado_antes:
         cheque = next((d for d in dividas if d.modalidade == "CHEQUE_ESPECIAL"), None)
-        taxa = cheque.taxa_mes if cheque else None
         eventos.append(
             EventoDetectado(
                 "CHEQUE_ESPECIAL",
                 f"CE:{mes}",
                 2,
                 cheque.id if cheque else None,
-                {
-                    "usado": _s(usado_cheque_especial),
-                    "taxa_anual": str(taxa_anual(taxa)) if taxa is not None else None,
-                    "juros_mes": _s(usado_cheque_especial * taxa) if taxa is not None else None,
-                },
+                contexto_cheque_especial(usado_cheque_especial, cheque.taxa_mes if cheque else None),
             )
         )
 
     eventos.extend(_picos(hoje, gastos))
     return eventos
+
+
+def contexto_cheque_especial(usado: Decimal, taxa_mes: Decimal | None) -> dict[str, Any]:
+    return {
+        "usado": _s(usado),
+        "taxa_anual": str(taxa_anual(taxa_mes)) if taxa_mes is not None else None,
+        "juros_mes": _s(usado * taxa_mes) if taxa_mes is not None else None,
+    }
 
 
 def _picos(hoje: date, gastos: Sequence[GastoCategoria]) -> list[EventoDetectado]:
@@ -225,6 +236,87 @@ def _picos(hoje: date, gastos: Sequence[GastoCategoria]) -> list[EventoDetectado
                 )
             )
     return eventos
+
+
+# --- ciclo de vida dos alertas (A1, Fase 7) ------------------------------------------
+#
+# A ``chave`` de cada evento inclui o mês ou o vencimento, para que o mesmo fato
+# volte a ser avisado num ciclo novo. Sem uma regra de saída, os avisos de ciclos
+# anteriores ficavam pendentes para sempre. Duas regras resolvem isso:
+#   1. substituição — só o aviso mais recente de cada ``grupo`` fica pendente;
+#   2. resolução — o aviso sai quando o fato que o gerou deixa de valer.
+
+
+@dataclass(frozen=True)
+class EventoPendente:
+    id: int
+    tipo: str
+    divida_id: int | None
+    contexto: dict[str, Any]
+
+
+def grupo(tipo: str, divida_id: int | None, contexto: dict[str, Any]) -> str:
+    """No máximo um alerta pendente por grupo: (tipo, dívida) ou (pico, categoria)."""
+    if tipo == "PICO_CATEGORIA":
+        return f"{tipo}:{contexto.get('categoria')}"
+    return f"{tipo}:{divida_id}"
+
+
+def resolvidos(
+    *,
+    hoje: date,
+    pendentes: Sequence[EventoPendente],
+    dividas: Sequence[DividaEstado],
+    detectados: Sequence[EventoDetectado],
+    usado_cheque_especial: Decimal,
+) -> list[int]:
+    """Ids dos alertas pendentes cujo fato deixou de valer em ``hoje``."""
+    por_id = {d.id: d for d in dividas}
+    iminentes_agora = {e.divida_id for e in detectados if e.tipo == "ATRASO_IMINENTE"}
+    ultimo_mes_completo = adicionar_meses(hoje.replace(day=1), -1)
+    fora = []
+    for p in pendentes:
+        d = por_id.get(p.divida_id) if p.divida_id is not None else None
+        quitada = p.divida_id is not None and (d is None or d.saldo <= 0)
+        if p.tipo == "ATRASO_IMINENTE":
+            # Venceu, foi paga, ou o dinheiro em conta já cobre a parcela.
+            venc = p.contexto.get("vencimento")
+            passou = venc is not None and date.fromisoformat(venc) < hoje
+            sai = quitada or passou or p.divida_id not in iminentes_agora
+        elif p.tipo == "ATRASO_CONFIRMADO":
+            sai = quitada or (d is not None and d.em_atraso_dias == 0)
+        elif p.tipo == "ENTRADA_ROTATIVO":
+            sai = quitada or (d is not None and d.modalidade != "CARTAO_ROTATIVO")
+        elif p.tipo == "CHEQUE_ESPECIAL":
+            sai = usado_cheque_especial <= 0
+        elif p.tipo == "PICO_CATEGORIA":
+            # O pico é de um mês fechado; quando outro mês fecha, ele perde o sentido.
+            mes = p.contexto.get("mes")
+            sai = mes is not None and date.fromisoformat(mes) < ultimo_mes_completo
+        else:
+            sai = False  # DIVIDA_QUITADA é marco; DESVIO_PLANO sai por substituição
+        if sai:
+            fora.append(p.id)
+    return fora
+
+
+def contextos_atualizados(
+    *, pendentes: Sequence[EventoPendente], dividas: Sequence[DividaEstado], usado_cheque_especial: Decimal
+) -> dict[int, dict[str, Any]]:
+    """Alertas que descrevem um estado atual — não um fato datado — mostram o
+    número de hoje enquanto pendentes. O do cheque especial só é recriado quando
+    o uso cresce; quando o plano o reduz, o texto não pode ficar no valor antigo."""
+    novos: dict[int, dict[str, Any]] = {}
+    for p in pendentes:
+        if p.tipo != "CHEQUE_ESPECIAL" or usado_cheque_especial <= 0:
+            continue
+        cheque = next((d for d in dividas if d.id == p.divida_id), None) or next(
+            (d for d in dividas if d.modalidade == "CHEQUE_ESPECIAL"), None
+        )
+        ctx = contexto_cheque_especial(usado_cheque_especial, cheque.taxa_mes if cheque else None)
+        if ctx != p.contexto:
+            novos[p.id] = ctx
+    return novos
 
 
 def desvio_plano(previsto: Decimal, realizado: Decimal) -> bool:

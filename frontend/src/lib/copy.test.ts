@@ -1,7 +1,20 @@
 import { describe, expect, it } from 'vitest';
 
 import type { Evento } from './api';
-import { alertaMinimo, erroConexao, fraseAcompanhamento, fraseComparacao, fraseRaioX, mensagemEvento } from './copy';
+import {
+  alertaMinimo,
+  categoriaNome,
+  erroConexao,
+  fraseAcompanhamento,
+  fraseComparacao,
+  fraseRaioX,
+  mensagemEvento,
+  nomeFatura,
+  pfm,
+  regiaoNome,
+  subcategoriaNome,
+  tipoBelvo,
+} from './copy';
 import { centavos } from './money';
 
 const nbsp = (s: string) => s.replace(/ /g, ' ');
@@ -90,7 +103,7 @@ describe('frases canônicas do docs/contexto-produto.md §11', () => {
       notificado_em: null,
       licao: 'rotativo',
     };
-    const m = mensagemEvento(e);
+    const m = mensagemEvento(e, { temPlano: true });
     expect(nbsp(m.texto)).toContain('R$ 312 de juros por mês');
     expect(m.texto).toContain('436% ao ano');
     expect(m.tom).toBe('fato');
@@ -113,10 +126,72 @@ describe('frases canônicas do docs/contexto-produto.md §11', () => {
       detectado_em: '2026-11-01T00:00:00Z',
       notificado_em: null,
       licao: 'plano-dobra',
-    });
+    }, { temPlano: true });
     expect(m.tom).toBe('atencao');
     expect(nbsp(m.texto)).toBe(
       'Sua data nova é maio de 2028. Colocando R$ 80 a mais nos próximos 3 meses, você repõe o que faltou.',
     );
+  });
+});
+
+describe('alertas: plano e conta nomeada (A4, A5)', () => {
+  const base = { severidade: 3, divida_id: 7, detectado_em: '2026-11-01T00:00:00Z', notificado_em: null, licao: null };
+
+  it('sem plano ativo, não diz que a parcela "já está no seu plano"', () => {
+    const atraso: Evento = { ...base, id: 3, tipo: 'ATRASO_CONFIRMADO', contexto: { descricao: 'Carnê', dias: 12, parcela: '95.00' } };
+    expect(mensagemEvento(atraso, { temPlano: false }).texto).not.toContain('já está no seu plano');
+    expect(mensagemEvento(atraso, { temPlano: true }).texto).toContain('já está no seu plano');
+    const cheque: Evento = { ...base, id: 4, tipo: 'CHEQUE_ESPECIAL', contexto: { usado: '500.00', taxa_anual: '138.0', juros_mes: '37.45' } };
+    expect(mensagemEvento(cheque, { temPlano: false }).texto).not.toContain('No plano');
+  });
+
+  it('atraso iminente diz de qual conta é o saldo', () => {
+    const contexto = { descricao: 'Rotativo', parcela: '208.00', saldo_conta: '63.40', falta: '144.60', vencimento: '2026-11-12', dias: 2 };
+    const ai: Evento = { ...base, id: 5, tipo: 'ATRASO_IMINENTE', contexto: { ...contexto, conta: 'Nubank' } };
+    expect(nbsp(mensagemEvento(ai, { temPlano: true }).texto)).toContain('sua conta Nubank tem R$ 63');
+    const soma: Evento = { ...ai, contexto: { ...contexto, conta: null } };
+    expect(nbsp(mensagemEvento(soma, { temPlano: true }).texto)).toContain('suas contas somam R$ 63');
+  });
+});
+
+describe('rótulos da Belvo em pt-BR (A6)', () => {
+  it('traduz todas as categorias que a demo devolve, e o resto vira "Outros"', () => {
+    const daDemo = [
+      'Bills & Utilities', 'Credits & Loans', 'Food & Groceries', 'Home & Life', 'Income & Payments',
+      'Investments & Savings', 'Online Platforms & Leisure', 'Personal Shopping', 'Transfers', 'Transport & Travel',
+    ];
+    for (const c of daDemo) expect(categoriaNome(c)).not.toMatch(/[&]|^Outros$/);
+    expect(categoriaNome('Food & Groceries')).toBe('Mercado');
+    expect(categoriaNome('Categoria Nova Da Belvo')).toBe('Outros');
+    expect(categoriaNome(null)).toBe('Outros');
+    expect(subcategoriaNome('Credit card payment')).toBe('Pagamento de fatura');
+    expect(subcategoriaNome('Something new')).toBe('Outros');
+  });
+
+  it('tipos de produto e nome de fatura', () => {
+    expect(tipoBelvo('EMPRESTIMOS')).toBe('Empréstimo');
+    expect(tipoBelvo('CONTA_PAGAMENTO_PRE_PAGA')).toBe('Conta de pagamento');
+    expect(tipoBelvo('CONTA_DEPOSITO_A_VISTA')).toBe('Conta corrente');
+    expect(nomeFatura('Oct-2026')).toBe('out/2026');
+    expect(nomeFatura('Feb-2027')).toBe('fev/2027');
+    expect(nomeFatura('Fatura de outubro')).toBe('Fatura de outubro');
+    expect(nomeFatura(null)).toBeNull();
+  });
+});
+
+describe('vencimento de fatura (A14)', () => {
+  it('data passada vira "venceu em"; futura e hoje, "vence em"', () => {
+    expect(pfm.vencimento('2026-10-12', '2026-11-23', '12 de outubro')).toBe('venceu em 12 de outubro');
+    expect(pfm.vencimento('2026-12-12', '2026-11-23', '12 de dezembro')).toBe('vence em 12 de dezembro');
+    expect(pfm.vencimento('2026-11-23', '2026-11-23', '23 de novembro')).toBe('vence em 23 de novembro');
+    expect(pfm.vencimento('2026-12-12', '2026-11-23', '12 de dezembro', true)).toBe('venceu em 12 de dezembro');
+  });
+});
+
+describe('onde ficam os dados (M3)', () => {
+  it('região da Oracle em português', () => {
+    expect(regiaoNome('sa-saopaulo-1')).toBe('São Paulo (Brasil)');
+    expect(regiaoNome('us-ashburn-1')).toBe('us-ashburn-1');
+    expect(regiaoNome(null)).toBe('Brasil');
   });
 });

@@ -2,6 +2,8 @@
 .env
 .env.*
 !.env.example
+# Só o caminho da API do build de produção ("/api") — não é segredo.
+!frontend/.env.production
 *.db
 *.db-shm
 *.db-wal
@@ -21,3 +23,6 @@ dist/
 
 # Sistema
 .DS_Store
+
+# docker compose sem wallet (uso local com SQLite)
+backend/.sem-wallet/

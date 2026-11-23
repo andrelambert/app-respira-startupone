@@ -57,6 +57,9 @@ class ConfigOut(BaseModel):
     demo_disponivel: bool  # existe a conta da Juliana para entrar
     belvo_configurada: bool  # há chaves da Belvo no backend/.env
     webhooks: bool
+    modo_publico: bool  # versão pública: sem banco real, cadastro sem CPF, faixa de aviso
+    banco: Literal["oracle", "sqlite"]  # card "Onde ficam os seus dados" (M3)
+    regiao: str | None  # região do Oracle, ex.: sa-saopaulo-1
 
 
 # --- autenticação e usuário ------------------------------------------------------
@@ -79,7 +82,7 @@ class RegistroEntrada(Entrada):
     senha: Senha
     # Nome completo e CPF são exigidos pelo token da Belvo (identification_info, §7.2).
     nome_completo: Nome
-    cpf: Cpf
+    cpf: Cpf | None = None  # obrigatório só quando a Belvo está configurada
     ja_desistiu_de_plano: bool | None = None
 
 
@@ -246,7 +249,8 @@ class ProjecaoOut(BaseModel):
     meses: int
     data_quitacao: date | None
     juros_totais: Dinheiro
-    primeira_quitacao_mes: int | None
+    primeira_quitacao_mes: int | None  # só pela sobra (referência PL/SQL)
+    primeira_quitacao_qualquer_mes: int | None  # por qualquer meio — o que a interface mostra
 
 
 class CapacidadeOut(BaseModel):
@@ -373,6 +377,23 @@ class EventoOut(BaseModel):
     licao: str | None
 
 
+class ResultadoMotorOut(BaseModel):
+    meses: int
+    juros: Dinheiro
+    primeira_quitacao_mes: int | None
+    converge: bool
+
+
+class ConferenciaOracleOut(BaseModel):
+    """M3: o mesmo plano calculado pelo planner.py e pelo PKG_PLANO_APP (PL/SQL)."""
+
+    metodo: Metodo
+    capacidade: Dinheiro
+    python: ResultadoMotorOut
+    oracle: ResultadoMotorOut
+    coincide: bool
+
+
 class LicaoOut(BaseModel):
     slug: str
     titulo: str
@@ -466,6 +487,96 @@ class TransacaoOut(BaseModel):
     subcategoria: str | None
     valor: Dinheiro  # negativo = saída
     direcao: Literal["ENTRADA", "SAIDA"]
+
+
+class TransacaoUnificadaOut(TransacaoOut):
+    """N1: transação de qualquer conta, com o banco e a conta de origem."""
+
+    conta_id: int | None  # None: pagamento registrado pela demonstração
+    banco: str | None
+    banco_logo: str | None
+    conta_nome: str | None
+    pagamento_divida: bool
+
+
+class TodasTransacoesOut(BaseModel):
+    itens: list[TransacaoUnificadaOut]
+    pagina: int
+    por_pagina: int
+    total: int
+    paginas: int
+    total_entradas: Dinheiro
+    total_saidas: Dinheiro
+    resultado: Dinheiro  # entradas - saídas do período filtrado
+
+
+class CategoriaGastoOut(BaseModel):
+    categoria: str  # nome da Belvo; a tela traduz
+    total: Dinheiro
+    media_3m: Dinheiro | None
+    variacao: Decimal | None  # fração: 0.38 = 38% acima da média
+    essencial: bool
+
+
+class ImpactoPlanoOut(BaseModel):
+    """N2: "se X voltasse à sua média, sobrariam R$ Y — sua data chegaria N meses antes"."""
+
+    categoria: str
+    valor_mensal: Dinheiro
+    meses_antecipados: int
+    data_atual: date
+    data_nova: date
+
+
+class GastosCategoriaOut(BaseModel):
+    mes: date
+    meses_disponiveis: list[date]  # para o seletor de mês
+    categorias: list[CategoriaGastoOut]
+    total: Dinheiro
+    impacto_plano: ImpactoPlanoOut | None
+
+
+class FluxoMesOut(BaseModel):
+    mes: date
+    entradas: Dinheiro
+    essenciais: Dinheiro
+    outros_gastos: Dinheiro
+    pagamentos_divida: Dinheiro
+    sobra: Dinheiro
+
+
+class FluxoMensalOut(BaseModel):
+    """N5: de onde vem a capacidade do plano."""
+
+    meses: list[FluxoMesOut]
+    capacidade: Dinheiro
+    capacidade_origem: str  # TRANSACOES | INCOMES
+    entradas_mediana: Dinheiro | None
+    essenciais_mediana: Dinheiro | None
+    reserva_pct: int  # 10: a reserva para imprevistos (§5.1)
+
+
+class VencimentoOut(BaseModel):
+    """N3: um vencimento — fatura de cartão ou parcela de contrato."""
+
+    data: date
+    tipo: Literal["FATURA", "PARCELA"]
+    credor: str
+    descricao: str
+    valor: Dinheiro  # mínimo da fatura ou parcela
+    valor_total: Dinheiro | None  # fatura: o que falta dela inteira
+    valor_plano: Dinheiro | None  # com plano ativo: quanto o plano manda pagar neste mês
+    status: Literal["PAGO", "PENDENTE", "ATRASADO"]
+    dias: int  # negativo = já venceu
+    divida_id: int | None
+    conta_id: int | None
+    banco_logo: str | None
+
+
+class VencimentosOut(BaseModel):
+    hoje: date
+    dias: int
+    itens: list[VencimentoOut]
 
 
 class ExtratoOut(BaseModel):

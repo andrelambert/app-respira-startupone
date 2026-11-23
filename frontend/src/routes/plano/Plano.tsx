@@ -3,12 +3,21 @@ import { lazy, Suspense, useState } from 'react';
 import { Navigate, useNavigate } from 'react-router';
 
 import { JurosEvitados } from '@/components/respira';
+import { FluxoMensal } from '@/components/respira/FluxoMensal';
 import { Badge, Button, Card, Carregando, EstadoErro, EstadoVazio, Icone, LinkBotao, Money, cx } from '@/components/ui';
-import { chaves, chavesFinanceiras, usePlanoAtivo, useUsuario } from '@/hooks/queries';
+import { chaves, chavesFinanceiras, useConfig, usePlanoAtivo, useUsuario } from '@/hooks/queries';
 import { useDebounced } from '@/hooks/useDebounced';
 import { api, ApiError, type Estrategia, type Metodo, type Simulacoes } from '@/lib/api';
 import { COR_METODO } from '@/lib/cores';
-import { conectar, erroConexao, fraseComparacao, metodoNome, plano as copy, raiox as copyRaioX } from '@/lib/copy';
+import {
+  conectar,
+  erroConexao,
+  fluxo as copyFluxo,
+  fraseComparacao,
+  metodoNome,
+  plano as copy,
+  raiox as copyRaioX,
+} from '@/lib/copy';
 import { mesAno, meses, ordinalMes } from '@/lib/datas';
 import { brl, centavos, paraDecimal, reaisInteiros, type Centavos } from '@/lib/money';
 
@@ -69,6 +78,7 @@ function Simulador({
     capacidadeAtiva !== null ? reaisInteiros(capacidadeAtiva) : capacidadeInicial(base),
   );
   const [metodo, setMetodo] = useState<Metodo>(metodoAtivo ?? base.pre_selecionado);
+  const [verOrigem, setVerOrigem] = useState(false);
   const debounced = useDebounced(reais, 200);
   const navigate = useNavigate();
   const qc = useQueryClient();
@@ -127,6 +137,18 @@ function Simulador({
         <p className="text-sm text-slate">
           {calculada > 0 ? copy.sliderAjuda(base.capacidade_calculada.valor) : copy.sliderSemHistorico}
         </p>
+        {/* N5 (F-7): de onde veio o valor calculado — o gráfico abre aqui mesmo. */}
+        {calculada > 0 && (
+          <Button
+            variante="fantasma"
+            className="self-start px-0"
+            aria-expanded={verOrigem}
+            onClick={() => setVerOrigem((v) => !v)}
+          >
+            {verOrigem ? copyFluxo.esconder : copyFluxo.verDeOndeVeio}
+          </Button>
+        )}
+        {verOrigem && <FluxoMensal />}
         {calculada > 0 && reais !== calculada && (
           <Button variante="fantasma" className="self-start px-0" onClick={() => setReais(calculada)}>
             {copy.voltarCalculado}
@@ -149,8 +171,8 @@ function Simulador({
       {converge && economica.converge && (
         <p className="text-lg leading-snug text-ink">
           {fraseComparacao(
-            { metodo, meses: escolhida.meses, juros: escolhida.juros_totais, primeira: escolhida.primeira_quitacao_mes },
-            { meses: economica.meses, juros: economica.juros_totais, primeira: economica.primeira_quitacao_mes },
+            { metodo, meses: escolhida.meses, juros: escolhida.juros_totais, primeira: escolhida.primeira_quitacao_qualquer_mes },
+            { meses: economica.meses, juros: economica.juros_totais, primeira: economica.primeira_quitacao_qualquer_mes },
           )}
         </p>
       )}
@@ -170,6 +192,8 @@ function Simulador({
           {copy.motivo[base.motivo_pre_selecao]} {copy.escolha}
         </p>
       </fieldset>
+
+      {converge && <SeloOracle metodo={metodo} capacidade={debounced} />}
 
       {converge && (
         <Card className="flex flex-col gap-3">
@@ -223,15 +247,46 @@ function Simulador({
       )}
 
       <p className="text-xs text-slate">{copy.projecaoAviso}</p>
-      {ativar.isError && (
-        <p role="alert" className="text-sm text-amber-ink">
-          {erroConexao(ativar.error instanceof ApiError ? ativar.error.codigo : null)}
-        </p>
-      )}
-      <Button largo onClick={() => ativar.mutate()} disabled={!converge || ativar.isPending}>
-        {ativar.isPending ? copy.ativando : copy.ativar}
-      </Button>
+      {/* A8: o botão fica fixo no rodapé, logo acima da barra de navegação (56 px + borda),
+          em vez de no fim de uma página de ~3 telas. */}
+      <div className="sticky bottom-[calc(3.5rem+1px)] z-10 -mx-4 flex flex-col gap-2 border-t border-line bg-light/95 px-4 py-3 backdrop-blur">
+        {ativar.isError && (
+          <p role="alert" className="text-sm text-amber-ink">
+            {erroConexao(ativar.error instanceof ApiError ? ativar.error.codigo : null)}
+          </p>
+        )}
+        <Button largo onClick={() => ativar.mutate()} disabled={!converge || ativar.isPending}>
+          {ativar.isPending ? copy.ativando : copy.ativar}
+        </Button>
+      </div>
     </div>
+  );
+}
+
+/**
+ * M3: selo "Conferido no Oracle" quando o planner.py e o PL/SQL dão o mesmo
+ * resultado. Só no Oracle; se divergir ou falhar, simplesmente não aparece
+ * (a divergência fica no log do backend — não é escondida, mas também não vira
+ * selo falso).
+ */
+function SeloOracle({ metodo, capacidade }: { metodo: Metodo; capacidade: number }) {
+  const config = useConfig();
+  const oracle = config.data?.banco === 'oracle';
+  const conf = useQuery({
+    queryKey: ['conferencia-oracle', metodo, capacidade],
+    queryFn: ({ signal }) => api.conferenciaOracle(metodo, `${capacidade}.00`, signal),
+    enabled: oracle,
+    retry: false,
+    staleTime: 60_000,
+  });
+  if (!oracle || !conf.data?.coincide) return null;
+  return (
+    <details className="text-sm">
+      <summary className="inline-flex min-h-toque cursor-pointer items-center gap-1 font-semibold text-green-ink">
+        <span aria-hidden="true">✓</span> {copy.conferidoOracle}
+      </summary>
+      <p className="mt-1 text-slate">{copy.conferidoOracleExplica}</p>
+    </details>
   );
 }
 
@@ -284,8 +339,10 @@ function StrategyCard({
             </dd>
           </div>
           <div>
-            <dt className="text-slate">1ª vitória</dt>
-            <dd className="font-semibold text-ink">{e.primeira_quitacao_mes ? ordinalMes(e.primeira_quitacao_mes) : '—'}</dd>
+            <dt className="text-slate">{copy.primeiraQuitada}</dt>
+            <dd className="font-semibold text-ink">
+              {e.primeira_quitacao_qualquer_mes ? ordinalMes(e.primeira_quitacao_qualquer_mes) : '—'}
+            </dd>
           </div>
         </dl>
       ) : (

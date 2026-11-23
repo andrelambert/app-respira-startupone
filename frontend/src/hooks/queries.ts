@@ -12,6 +12,7 @@ export const chaves = {
   eventos: ['eventos'] as const,
   licao: (slug: string) => ['licao', slug] as const,
   dividas: ['dividas'] as const,
+  vencimentos: (dias: number) => ['vencimentos', dias] as const,
   visaoGeral: ['pfm', 'visao-geral'] as const,
   conta: (id: number) => ['pfm', 'conta', id] as const,
   extrato: (id: number, filtro: object) => ['pfm', 'extrato', id, filtro] as const,
@@ -26,6 +27,8 @@ export const chavesFinanceiras = [
   chaves.dividas,
   chaves.consentimentos,
   ['pfm'],
+  ['vencimentos'],
+  ['transacoes'],
 ];
 
 export function useConfig() {
@@ -44,6 +47,14 @@ export function useUsuario() {
       }
     },
   });
+}
+
+/** "Hoje" do usuário (a demo pode estar meses à frente); sem usuário, a data local. */
+export function useHoje(): string {
+  const { data } = useUsuario();
+  if (data?.hoje) return data.hoje;
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
 export function useConsentimentos(polling = false) {

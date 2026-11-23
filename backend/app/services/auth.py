@@ -38,6 +38,23 @@ class LoginBloqueado(Exception):
     pass
 
 
+_eventos: dict[str, deque[float]] = defaultdict(deque)
+
+
+def dentro_do_limite(chave: str, maximo: int, janela_s: float) -> bool:
+    """Janela deslizante em memória (M5/M6): registra a tentativa e diz se ela
+    ainda cabe no limite. Uma instância só no Render (§10 do briefing) — em mais
+    de uma, isto teria de ir para o banco."""
+    agora = time.monotonic()
+    fila = _eventos[chave]
+    while fila and agora - fila[0] > janela_s:
+        fila.popleft()
+    if len(fila) >= maximo:
+        return False
+    fila.append(agora)
+    return True
+
+
 def hash_senha(senha: str) -> str:
     return _hasher.hash(senha)
 

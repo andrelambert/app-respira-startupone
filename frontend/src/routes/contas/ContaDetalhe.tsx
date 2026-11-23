@@ -3,12 +3,13 @@ import { useEffect, useRef, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router';
 
 import { LogoBanco } from '@/components/respira';
+import { LinhaTransacao } from '@/components/respira/LinhaTransacao';
 import { Button, Card, Carregando, EstadoErro, EstadoVazio, Money, cx } from '@/components/ui';
-import { chaves } from '@/hooks/queries';
+import { chaves, useHoje } from '@/hooks/queries';
 import { useDebounced } from '@/hooks/useDebounced';
-import { api, type ContaBancaria, type Fatura, type FiltroExtrato, type Transacao } from '@/lib/api';
-import { pfm as copy, tipoBelvo } from '@/lib/copy';
-import { dataCompleta, dataHoraLocal, diaMes } from '@/lib/datas';
+import { api, type ContaBancaria, type Fatura, type FiltroExtrato } from '@/lib/api';
+import { nomeFatura, pfm as copy, tipoBelvo } from '@/lib/copy';
+import { dataCompleta, diaMes } from '@/lib/datas';
 import { brl } from '@/lib/money';
 import { SituacaoFatura, identificacaoConta } from './Contas';
 
@@ -169,6 +170,7 @@ function Valor({ rotulo, valor }: { rotulo: string; valor: Parameters<typeof brl
 }
 
 function Faturas({ faturas }: { faturas: Fatura[] }) {
+  const hoje = useHoje();
   const [atual, ...anteriores] = faturas;
   if (!atual) {
     return (
@@ -184,15 +186,15 @@ function Faturas({ faturas }: { faturas: Fatura[] }) {
         <div className="flex items-start justify-between gap-2">
           <div>
             <p className="text-sm text-slate">{copy.faturaAtual}</p>
-            {/* Título: bill_name, como a Belvo manda (ex.: Sep-2026). */}
-            <h2 className="text-lg font-bold text-navy">{atual.nome || copy.faturaAtual}</h2>
+            {/* Título: bill_name da Belvo traduzido (Sep-2026 → set/2026, A6). */}
+            <h2 className="text-lg font-bold text-navy">{nomeFatura(atual.nome) || copy.faturaAtual}</h2>
           </div>
           <SituacaoFatura situacao={atual.situacao} />
         </div>
         <Money valor={aberta ? atual.em_aberto : atual.total} className="text-4xl font-bold text-navy" />
         {atual.vencimento && (
           <p className="text-sm text-slate">
-            {atual.situacao === 'ATRASADA' ? copy.venceu(dataCompleta(atual.vencimento)) : copy.vence(dataCompleta(atual.vencimento))}
+            {copy.vencimento(atual.vencimento, hoje, dataCompleta(atual.vencimento), atual.situacao === 'ATRASADA')}
           </p>
         )}
         <dl className="grid grid-cols-3 gap-2 text-sm">
@@ -228,8 +230,8 @@ function Faturas({ faturas }: { faturas: Fatura[] }) {
               <li key={f.id} className="flex flex-col gap-2 px-4 py-3 text-sm">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <p className="font-bold text-navy">{f.nome || (f.vencimento ? diaMes(f.vencimento) : '—')}</p>
-                    {f.vencimento && <p className="text-xs text-slate">{copy.vence(dataCompleta(f.vencimento))}</p>}
+                    <p className="font-bold text-navy">{nomeFatura(f.nome) || (f.vencimento ? diaMes(f.vencimento) : '—')}</p>
+                    {f.vencimento && <p className="text-xs text-slate">{copy.vencimento(f.vencimento, hoje, dataCompleta(f.vencimento))}</p>}
                   </div>
                   <Money valor={f.total} className="shrink-0 font-semibold text-navy" />
                 </div>
@@ -390,70 +392,5 @@ function ExtratoConta({ contaId, cartao = false }: { contaId: number; cartao?: b
         </div>
       )}
     </section>
-  );
-}
-
-function LinhaTransacao({ t, cartao }: { t: Transacao; cartao: boolean }) {
-  const [aberta, setAberta] = useState(false);
-  const entrada = t.direcao === 'ENTRADA';
-  const abs = Math.abs(t.valor) as typeof t.valor;
-  const valor = `${entrada ? '+' : '−'}${brl(abs)}`;
-  return (
-    <li>
-      <button
-        type="button"
-        aria-expanded={aberta}
-        aria-controls={`tx-${t.id}`}
-        onClick={() => setAberta((v) => !v)}
-        className="flex min-h-toque w-full items-center justify-between gap-3 px-4 py-3 text-left hover:bg-light"
-      >
-        <div className="min-w-0">
-          <p className="truncate font-medium text-ink">{(cartao && t.estabelecimento) || t.descricao || '—'}</p>
-          <p className="truncate text-xs text-slate">
-            {diaMes(t.data)} · {t.categoria ?? copy.semCategoria}
-          </p>
-        </div>
-        {/* Sinal + cor: a direção nunca depende só da cor (§10). */}
-        <span className={cx('tabular shrink-0 font-semibold', entrada ? 'text-green-ink' : 'text-ink')}>{valor}</span>
-      </button>
-      {aberta && (
-        <dl id={`tx-${t.id}`} className="grid grid-cols-2 gap-x-3 gap-y-2 bg-light px-4 py-3 text-sm">
-          <Detalhe rotulo={copy.detalhe.descricao} valor={t.descricao} largo />
-          {t.transacionado_em ? (
-            <Detalhe rotulo={copy.detalhe.dataHora} valor={dataHoraLocal(t.transacionado_em)} />
-          ) : (
-            <Detalhe rotulo={copy.detalhe.data} valor={dataCompleta(t.data)} />
-          )}
-          <Detalhe rotulo={copy.detalhe.valor} valor={valor} />
-          {/* Categoria, subcategoria e tipo de operação: exatamente como a Belvo manda. */}
-          <Detalhe rotulo={copy.detalhe.categoria} valor={t.categoria} />
-          <Detalhe rotulo={copy.detalhe.subcategoria} valor={t.subcategoria} />
-          <Detalhe rotulo={copy.detalhe.tipoOperacao} valor={t.tipo_operacao} />
-          {/* Estabelecimento e final do cartão só existem em transação de cartão. */}
-          {cartao && <Detalhe rotulo={copy.detalhe.finalCartao} valor={t.final_cartao} />}
-          {cartao && <Detalhe rotulo={copy.detalhe.fatura} valor={t.fatura} />}
-          {cartao && <Detalhe rotulo={copy.detalhe.estabelecimento} valor={t.estabelecimento} />}
-          {cartao && t.estabelecimento_site && (
-            <div>
-              <dt className="text-slate">{copy.detalhe.site}</dt>
-              <dd className="truncate">
-                <a href={t.estabelecimento_site} target="_blank" rel="noopener noreferrer" className="font-medium text-blue underline">
-                  {t.estabelecimento_site.replace(/^https:\/\//, '')}
-                </a>
-              </dd>
-            </div>
-          )}
-        </dl>
-      )}
-    </li>
-  );
-}
-
-function Detalhe({ rotulo, valor, largo }: { rotulo: string; valor: string | null | undefined; largo?: boolean }) {
-  return (
-    <div className={largo ? 'col-span-2' : undefined}>
-      <dt className="text-slate">{rotulo}</dt>
-      <dd className="break-words font-medium text-ink">{valor || '—'}</dd>
-    </div>
   );
 }

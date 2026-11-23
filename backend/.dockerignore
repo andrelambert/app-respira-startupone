@@ -1,0 +1,13 @@
+# Nada de segredo, banco local, cache ou teste dentro da imagem.
+.env
+.env.*
+!.env.example
+*.db
+*.db-*
+wallet/
+.venv/
+tests/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
