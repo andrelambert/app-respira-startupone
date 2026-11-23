@@ -90,16 +90,21 @@ async def garantir_juliana() -> None:
                         await coleta.processar_recurso(c.id, recurso, confirmar_vazio=True)
 
 
-async def semear(s: Session, u: Usuario) -> None:
+async def semear(s: Session, u: Usuario, *, coletar_em_segundo_plano: bool = False) -> None:
+    """``coletar_em_segundo_plano``: a demo por visitante (M5) não espera a coleta
+    — os três bancos ficam "conectados" na hora e os dados chegam pela mesma
+    coleta de uma conexão real, com a tela de espera do Raio-X. Contra o Oracle
+    em São Paulo, esperar tudo levava ~10 s no clique de "Entrar como Juliana"."""
     assert u.id is not None
     for codigo in BANCOS_DEMO:
         _, url = await conexao.iniciar(s, u)
         token = url.split("access_token=")[1].split("&")[0]
         link = fixture().autorizar(token, codigo)
-        c = await conexao.concluir(s, u, link, codigo, iniciar_coleta=False)
+        c = await conexao.concluir(s, u, link, codigo, iniciar_coleta=coletar_em_segundo_plano)
         assert c.id is not None
-        for recurso in RECURSOS_ESSENCIAIS:
-            await coleta.processar_recurso(c.id, recurso, confirmar_vazio=True)
+        if not coletar_em_segundo_plano:
+            for recurso in RECURSOS_ESSENCIAIS:
+                await coleta.processar_recurso(c.id, recurso, confirmar_vazio=True)
 
     # O carnê da Loja D não trafega pelo Open Finance: cadastro manual (§7.9).
     inst = repo_c.instituicao(s, "manual_loja_d", "Loja D", TipoInstituicao.CREDIARIO)
@@ -162,7 +167,7 @@ async def criar_demo_visitante(s: Session) -> Usuario:
             expira_em=agora() + timedelta(hours=cfg.demo_validade_horas),
         ),
     )
-    await semear(s, u)
+    await semear(s, u, coletar_em_segundo_plano=True)
     log.info("demo_visitante_criada")
     return u
 
