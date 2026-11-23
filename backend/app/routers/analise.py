@@ -259,16 +259,19 @@ def _plano_ativo_out(s: SessionDep, r: analise.ResultadoPlanoAtivo) -> PlanoAtiv
         progresso_pct=progresso,
         projecao_atual=projecao_out(r.projecao),
         este_mes=este_mes,
+        # A18: o cronograma vem da projeção atual (meses contados a partir de
+        # hoje), a mesma que dá a data de saída. O da ativação (``r.itens``)
+        # contava a partir de outro mês e desalinhava as datas por dívida.
         cronograma=[
             ItemPlanoOut(
-                divida_id=i.divida_id,
-                descricao=r.dividas[i.divida_id].descricao if i.divida_id in r.dividas else "",
+                divida_id=int(i.divida_id),
+                descricao=r.dividas[int(i.divida_id)].descricao if int(i.divida_id) in r.dividas else "",
                 ordem=i.ordem,
                 valor_mensal=i.valor_mensal,
                 mes_quitacao=i.mes_quitacao,
-                juros_pagos=i.juros_pagos,
+                juros_pagos=arredondar(i.juros_pagos),
             )
-            for i in r.itens
+            for i in r.projecao.itens
         ],
         acompanhamentos=[
             AcompanhamentoOut(

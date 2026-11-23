@@ -231,7 +231,6 @@ def ativar(s: Session, u: Usuario, metodo: Metodo, valor: Decimal) -> Plano:
 @dataclass
 class ResultadoPlanoAtivo:
     plano: Plano
-    itens: list[PlanoItem]
     projecao: Simulacao
     dividas: dict[int, Divida]
     divida_atual: Decimal
@@ -255,7 +254,6 @@ def plano_ativo(s: Session, u: Usuario) -> ResultadoPlanoAtivo | None:
     assert plano.id is not None
     return ResultadoPlanoAtivo(
         plano=plano,
-        itens=repo_p.itens(s, plano.id),
         projecao=projecao,
         dividas={d.id: d for d in todas if d.id is not None},
         divida_atual=sum((d.saldo_devedor for d in abertas), Decimal("0.00")),

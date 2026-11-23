@@ -9,7 +9,7 @@ from fastapi.testclient import TestClient
 
 from app.domain.events import DividaEstado, EventoPendente, detectar, grupo, resolvidos
 from app.main import app
-from tests.test_api import DEMO, H, _aguardar_coleta
+from tests.test_api import H
 
 
 @pytest.fixture(scope="module")
@@ -20,18 +20,6 @@ def api():
 
 def _pendentes(api):
     return [e for e in api.get("/eventos").json() if not e["notificado_em"] and e["tipo"] != "DIVIDA_QUITADA"]
-
-
-@pytest.fixture
-def demo_limpa(api):
-    """Entra na Juliana do zero e devolve a demo ao começo para os outros módulos."""
-    api.cookies.clear()
-    assert api.post("/auth/entrar", json=DEMO, headers=H).status_code == 200
-    assert api.post("/demo/reiniciar", headers=H).status_code == 204
-    _aguardar_coleta(api)
-    yield api
-    assert api.post("/demo/reiniciar", headers=H).status_code == 204
-    _aguardar_coleta(api)
 
 
 def test_tres_meses_simulados_sem_alerta_repetido(demo_limpa):
@@ -122,3 +110,4 @@ def test_marco_de_quitacao_nunca_sai():
 def test_grupo_separa_picos_por_categoria():
     assert grupo("PICO_CATEGORIA", None, {"categoria": "A"}) != grupo("PICO_CATEGORIA", None, {"categoria": "B"})
     assert grupo("ATRASO_IMINENTE", 1, {}) != grupo("ATRASO_IMINENTE", 2, {})
+

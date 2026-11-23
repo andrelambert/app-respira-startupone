@@ -17,3 +17,23 @@ os.environ.update(
         "LOG_LEVEL": "WARNING",
     }
 )
+
+
+import pytest
+
+
+@pytest.fixture
+def demo_limpa(api):
+    """Entra na Juliana do zero e devolve a demo ao começo para os outros módulos.
+
+    Usa o ``api`` (TestClient) do módulo que pede a fixture.
+    """
+    from tests.test_api import DEMO, H, _aguardar_coleta
+
+    api.cookies.clear()
+    assert api.post("/auth/entrar", json=DEMO, headers=H).status_code == 200
+    assert api.post("/demo/reiniciar", headers=H).status_code == 204
+    _aguardar_coleta(api)
+    yield api
+    assert api.post("/demo/reiniciar", headers=H).status_code == 204
+    _aguardar_coleta(api)
