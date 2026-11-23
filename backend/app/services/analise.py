@@ -532,6 +532,19 @@ def gastos_por_categoria(
     return mes, categorias, _impacto(s, u, gastos_dom.candidata_a_corte(categorias)), meses_com_dado
 
 
+def fluxo_mensal(s: Session, u: Usuario, meses: int) -> tuple[list[gastos_dom.FluxoMes], Capacidade]:
+    """N5: os mesmos meses completos que a capacidade usa, e a capacidade em si."""
+    assert u.id is not None
+    hoje = hoje_do_usuario(u)
+    inicio = adicionar_meses(hoje.replace(day=1), -meses)
+    lista_meses = [adicionar_meses(inicio, i) for i in range(meses)]
+    movs = [
+        gastos_dom.Movimento(t.data_mov, t.valor, t.essencial, t.pagamento_divida, t.entrada_renda, t.categoria)
+        for t in repo_f.transacoes(s, u.id, inicio)
+    ]
+    return gastos_dom.fluxo_mensal(movs, lista_meses), capacidade(s, u, hoje)
+
+
 def _impacto(s: Session, u: Usuario, cat: gastos_dom.CategoriaMes | None) -> ImpactoPlano | None:
     """Simula o plano com a capacidade atual e com ela + o excesso da categoria.
     Só devolve quando antecipa pelo menos 1 mês (parcimônia)."""

@@ -82,6 +82,55 @@ def por_categoria(gastos: Sequence[Gasto], mes: date, meses_com_dado: set[date])
     return sorted(out, key=lambda c: (-c.total, c.categoria))
 
 
+@dataclass(frozen=True)
+class Movimento:
+    data: date
+    valor: Decimal  # negativo = saída
+    essencial: bool
+    pagamento_divida: bool
+    entrada_renda: bool
+    categoria: str | None
+
+
+@dataclass(frozen=True)
+class FluxoMes:
+    mes: date
+    entradas: Decimal  # renda (as mesmas entradas que a capacidade usa)
+    essenciais: Decimal
+    outros_gastos: Decimal
+    pagamentos_divida: Decimal
+    # entradas - essenciais: a mesma base da capacidade (§5.1). Outros gastos e
+    # dívida não entram na conta: a compra no cartão já está nos gastos e o
+    # pagamento da fatura está na dívida — somar os dois contaria o mesmo
+    # dinheiro duas vezes.
+    sobra: Decimal
+
+
+def fluxo_mensal(movimentos: Sequence[Movimento], meses: Sequence[date]) -> list[FluxoMes]:
+    """N5: entradas × gastos × pagamentos de dívida, mês a mês, nos mesmos meses e
+    com o mesmo critério de entrada (renda) e de essencial da capacidade (§5.1)."""
+    soma: dict[date, dict[str, Decimal]] = {m: defaultdict(Decimal) for m in meses}
+    for mv in movimentos:
+        m = mv.data.replace(day=1)
+        if m not in soma:
+            continue
+        if mv.valor > 0:
+            if mv.entrada_renda:
+                soma[m]["entradas"] += mv.valor
+        elif mv.pagamento_divida:
+            soma[m]["divida"] += -mv.valor
+        elif mv.essencial:
+            soma[m]["essenciais"] += -mv.valor
+        elif (mv.categoria or "") not in CATEGORIAS_FORA:
+            soma[m]["outros"] += -mv.valor
+    out = []
+    for m in meses:
+        s = soma[m]
+        e, ess, o, d = (arredondar(s[k]) for k in ("entradas", "essenciais", "outros", "divida"))
+        out.append(FluxoMes(m, e, ess, o, d, e - ess))
+    return out
+
+
 def candidata_a_corte(categorias: Sequence[CategoriaMes]) -> CategoriaMes | None:
     """A maior categoria NÃO essencial acima da média: é onde cortar dói menos."""
     acima = [c for c in categorias if not c.essencial and c.media_3m is not None and c.total > c.media_3m]

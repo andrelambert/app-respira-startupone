@@ -535,6 +535,26 @@ class GastosCategoriaOut(BaseModel):
     impacto_plano: ImpactoPlanoOut | None
 
 
+class FluxoMesOut(BaseModel):
+    mes: date
+    entradas: Dinheiro
+    essenciais: Dinheiro
+    outros_gastos: Dinheiro
+    pagamentos_divida: Dinheiro
+    sobra: Dinheiro
+
+
+class FluxoMensalOut(BaseModel):
+    """N5: de onde vem a capacidade do plano."""
+
+    meses: list[FluxoMesOut]
+    capacidade: Dinheiro
+    capacidade_origem: str  # TRANSACOES | INCOMES
+    entradas_mediana: Dinheiro | None
+    essenciais_mediana: Dinheiro | None
+    reserva_pct: int  # 10: a reserva para imprevistos (§5.1)
+
+
 class VencimentoOut(BaseModel):
     """N3: um vencimento — fatura de cartão ou parcela de contrato."""
 

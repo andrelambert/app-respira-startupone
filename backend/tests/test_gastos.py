@@ -84,3 +84,43 @@ def test_api_gastos_e_impacto_no_plano(demo_limpa):
 def test_gastos_exigem_login(api):
     api.cookies.clear()
     assert api.get("/pfm/categorias").status_code == 401
+
+
+def test_fluxo_mensal_usa_a_base_da_capacidade():
+    from app.domain.gastos import Movimento, fluxo_mensal
+
+    def mv(dia, valor, **kw):
+        base = {"essencial": False, "pagamento_divida": False, "entrada_renda": False, "categoria": None}
+        return Movimento(dia, D(valor), **{**base, **kw})
+
+    movs = [
+        mv(date(2026, 10, 5), "3100", entrada_renda=True),
+        mv(date(2026, 10, 6), "500"),  # entrada que não é renda (ex.: estorno): fora
+        mv(date(2026, 10, 7), "-1200", essencial=True),
+        mv(date(2026, 10, 8), "-200"),
+        mv(date(2026, 10, 9), "-900", categoria="Transfers"),  # transferência: fora
+        mv(date(2026, 10, 12), "-208", pagamento_divida=True),
+        mv(date(2026, 11, 1), "-50", essencial=True),  # fora da janela
+    ]
+    [f] = fluxo_mensal(movs, [OUT])
+    assert (f.entradas, f.essenciais, f.outros_gastos, f.pagamentos_divida) == (
+        D("3100.00"), D("1200.00"), D("200.00"), D("208.00"),
+    )
+    assert f.sobra == D("1900.00")  # entradas - essenciais, como a capacidade
+
+
+def test_api_fluxo_mensal_bate_com_a_capacidade(demo_limpa):
+    from statistics import median
+
+    api = demo_limpa
+    r = api.get("/pfm/fluxo-mensal")
+    assert r.status_code == 200
+    v = r.json()
+    assert len(v["meses"]) == 6 and v["reserva_pct"] == 10
+    entradas = median(D(m["entradas"]) for m in v["meses"])
+    essenciais = median(D(m["essenciais"]) for m in v["meses"])
+    assert (D(v["entradas_mediana"]), D(v["essenciais_mediana"])) == (entradas, essenciais)
+    assert D(v["capacidade"]) == ((entradas - essenciais) * D("0.90")).quantize(D("0.01"))
+    assert D(v["capacidade"]) == D(api.get("/plano/simulacoes").json()["capacidade_calculada"]["valor"])
+    for invalido in ("2", "13", "x"):
+        assert api.get("/pfm/fluxo-mensal", params={"meses": invalido}).status_code == 422

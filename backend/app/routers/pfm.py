@@ -21,6 +21,8 @@ from app.schemas import (
     ContaOut,
     ExtratoOut,
     FaturaOut,
+    FluxoMensalOut,
+    FluxoMesOut,
     GastosCategoriaOut,
     ImpactoPlanoOut,
     PagamentoFaturaOut,
@@ -269,6 +271,23 @@ def gastos_por_categoria(
         ],
         total=sum((c.total for c in cats), Decimal("0.00")),
         impacto_plano=ImpactoPlanoOut(**impacto.__dict__) if impacto else None,
+    )
+
+
+@router.get("/pfm/fluxo-mensal", response_model=FluxoMensalOut)
+def fluxo_mensal(u: UsuarioDep, s: SessionDep, meses: Annotated[int, Query(ge=3, le=12)] = 6) -> FluxoMensalOut:
+    """Entradas × gastos × dívida, mês a mês, e a conta da capacidade (N5, F-7)."""
+    from app.domain.planner import FATOR_RESERVA
+    from app.services import analise
+
+    fluxo, cap = analise.fluxo_mensal(s, u, meses)
+    return FluxoMensalOut(
+        meses=[FluxoMesOut(**f.__dict__) for f in fluxo],
+        capacidade=cap.valor,
+        capacidade_origem=cap.origem.value,
+        entradas_mediana=cap.entradas,
+        essenciais_mediana=cap.essenciais,
+        reserva_pct=int((1 - FATOR_RESERVA) * 100),
     )
 
 
