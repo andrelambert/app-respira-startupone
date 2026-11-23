@@ -60,6 +60,7 @@ const rotas: RouteObject[] = [
           { path: '/inicio', lazy: tela(() => import('@/routes/inicio/Inicio')) },
           { path: '/contas', lazy: tela(() => import('@/routes/contas/Contas')) },
           { path: '/contas/:id', lazy: tela(() => import('@/routes/contas/ContaDetalhe')) },
+          { path: '/transacoes', lazy: tela(() => import('@/routes/transacoes/Transacoes')) },
           { path: '/raiox', lazy: tela(() => import('@/routes/raiox/RaioX')) },
           { path: '/plano', lazy: tela(() => import('@/routes/plano/Plano')) },
           { path: '/configuracoes', lazy: tela(() => import('@/routes/configuracoes/Configuracoes')) },

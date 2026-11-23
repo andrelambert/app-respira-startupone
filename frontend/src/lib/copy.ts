@@ -773,6 +773,50 @@ export const licao = {
 // --- PFM: contas, faturas e extrato ------------------------------------------------------
 
 /** ``type`` da Belvo (ex.: CONTA_DEPOSITO_A_VISTA) em texto legível. */
+// N1 (Fase 7): todas as transações, de todas as contas, com filtros.
+export const transacoes = {
+  titulo: 'Todas as transações',
+  verTodas: 'Ver todas as transações',
+  voltar: 'Suas contas',
+  buscar: 'Buscar por descrição ou loja',
+  filtros: 'Filtros',
+  limpar: 'Limpar filtros',
+  carregarMais: 'Carregar mais',
+  entradas: 'Entradas',
+  saidas: 'Saídas',
+  resultado: 'Resultado',
+  quantidade: (n: number) => (n === 1 ? '1 transação' : `${n} transações`),
+  vazio: 'Nenhuma transação com esses filtros.',
+  soDivida: 'Só pagamentos de dívida',
+  soDividaAjuda: 'Quanto você pagou de dívida no período.',
+  periodo: 'Período',
+  periodos: {
+    tudo: 'Tudo',
+    mes: 'Este mês',
+    mes_passado: 'Mês passado',
+    '30': '30 dias',
+    '90': '90 dias',
+    personalizado: 'Escolher datas',
+  } as Record<string, string>,
+  de: 'De',
+  ate: 'Até',
+  contas: 'Banco e conta',
+  tipo: 'Tipo',
+  tipos: { ENTRADA: 'Entradas', SAIDA: 'Saídas' } as Record<string, string>,
+  todos: 'Todos',
+  categorias: 'Categoria',
+  valor: 'Valor (R$)',
+  valorMin: 'Mínimo',
+  valorMax: 'Máximo',
+  aplicar: 'Aplicar',
+  ordem: 'Ordenar',
+  ordens: { recentes: 'Mais recentes', maior_valor: 'Maior valor' } as Record<string, string>,
+  chipValor: (min: string | null, max: string | null) =>
+    min && max ? `R$ ${min} a R$ ${max}` : min ? `a partir de R$ ${min}` : `até R$ ${max ?? ''}`,
+  chipBusca: (b: string) => `"${b}"`,
+  chipDatas: (de: string | null, ate: string | null) => [de, ate].filter(Boolean).join(' a ') || 'Datas',
+};
+
 export const pfm = {
   titulo: 'Suas contas',
   todos: 'Todos',
@@ -832,6 +876,7 @@ export const pfm = {
   abasCartao: 'Faturas e extrato do cartão',
   abas: { faturas: 'Faturas', extrato: 'Extrato' },
   detalhe: {
+    conta: 'Conta',
     descricao: 'Descrição',
     data: 'Data',
     dataHora: 'Data e hora',

@@ -351,6 +351,22 @@ export const extratoSchema = z.object({
   total_saidas: dinheiro,
 });
 export type Extrato = z.infer<typeof extratoSchema>;
+// N1: todas as transações, de todas as contas, com banco de origem.
+const transacaoUnificadaSchema = transacaoSchema.extend({
+  conta_id: z.number().int().nullable(),
+  banco: z.string().nullable(),
+  banco_logo: z.string().nullable(),
+  conta_nome: z.string().nullable(),
+  pagamento_divida: z.boolean(),
+});
+export type TransacaoUnificada = z.infer<typeof transacaoUnificadaSchema>;
+
+const todasTransacoesSchema = extratoSchema.extend({
+  itens: z.array(transacaoUnificadaSchema),
+  resultado: dinheiro,
+});
+export type TodasTransacoes = z.infer<typeof todasTransacoesSchema>;
+
 export type FiltroExtrato = {
   pagina: number;
   direcao?: 'ENTRADA' | 'SAIDA';
@@ -452,6 +468,11 @@ export const api = {
     if (f.dias) q.set('dias', String(f.dias));
     return chamar(`/contas/${id}/transacoes?${q.toString()}`, extratoSchema, { signal: sinal });
   },
+  todasTransacoes: (params: Record<string, string>, pagina: number, sinal?: AbortSignal) => {
+    const q = new URLSearchParams({ ...params, pagina: String(pagina), por_pagina: '30' });
+    return chamar(`/transacoes?${q.toString()}`, todasTransacoesSchema, { signal: sinal });
+  },
+  categoriasTransacoes: () => chamar('/transacoes/categorias', z.array(z.string().max(80)).max(200)),
   dividas: () => chamar('/dividas', z.array(dividaSchema)),
   criarDivida: (dados: {
     credor: string;

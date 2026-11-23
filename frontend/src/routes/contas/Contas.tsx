@@ -17,7 +17,7 @@ import {
 import { LogoBanco } from '@/components/respira';
 import { chavesFinanceiras, useHoje, useVisaoGeral } from '@/hooks/queries';
 import { api, type Banco, type ContaBancaria } from '@/lib/api';
-import { coleta as copyColeta, pfm as copy, tipoBelvo } from '@/lib/copy';
+import { coleta as copyColeta, pfm as copy, tipoBelvo, transacoes as copyTransacoes } from '@/lib/copy';
 import { carimbo, diaMes } from '@/lib/datas';
 import { soma, type Centavos } from '@/lib/money';
 
@@ -86,6 +86,11 @@ export default function Contas() {
           <Money valor={faturas} className="text-xl font-bold text-navy" />
         </Card>
       </div>
+
+      {/* N1: extrato unificado, com filtros. */}
+      <LinkBotao to="/transacoes" variante="secundario">
+        {copyTransacoes.verTodas}
+      </LinkBotao>
 
       {bancos.map((b) => (
         <SecaoBanco key={b.consentimento_id} banco={b} />
