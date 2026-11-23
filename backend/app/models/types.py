@@ -7,7 +7,8 @@ import json
 from decimal import Decimal
 from typing import Any
 
-from sqlalchemy import Numeric, String, Text
+from sqlalchemy import String, Text
+from sqlalchemy.dialects.oracle import NUMBER
 from sqlalchemy.engine.interfaces import Dialect
 from sqlalchemy.types import TypeDecorator, TypeEngine
 
@@ -20,6 +21,8 @@ class DecimalTexto(TypeDecorator[Decimal]):
       volta exatamente igual.
     - Oracle: ``NUMBER`` sem precisão nem escala (exato até 38 dígitos). Permite
       somar e ordenar em SQL e a conferência do motor em PL/SQL (§5 do briefing).
+      Atenção: ``NUMERIC`` sem argumentos (o que ``sa.Numeric()`` gera) vira
+      ``NUMBER(38)`` no Oracle — inteiro, e arredonda todo valor gravado.
     """
 
     impl = String(40)
@@ -27,7 +30,7 @@ class DecimalTexto(TypeDecorator[Decimal]):
 
     def load_dialect_impl(self, dialect: Dialect) -> TypeEngine[Any]:
         if dialect.name == "oracle":
-            return dialect.type_descriptor(Numeric(asdecimal=True))
+            return NUMBER(asdecimal=True)  # sem type_descriptor: ele o troca por NUMERIC
         return dialect.type_descriptor(String(40))
 
     def process_bind_param(self, value: Decimal | None, dialect: Dialect) -> Any:

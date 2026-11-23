@@ -15,6 +15,18 @@ class Settings(BaseSettings):
     app_public_url: str = "http://localhost:5173"
     app_terms_url: str = "https://exemplo.com/termos"
     database_url: str = "sqlite:///./respira.db"
+
+    # --- Oracle Autonomous AI Database (M2, Fase 7) --------------------------
+    # Usado quando database_url começa com "oracle". Modo thin + mTLS pela wallet:
+    # só tnsnames.ora e ewallet.pem em oracle_config_dir, sem Instant Client.
+    oracle_user: str | None = None
+    oracle_password: SecretStr | None = None
+    oracle_dsn: str | None = None  # alias do tnsnames.ora, ex.: respira_tp
+    oracle_config_dir: str | None = None
+    oracle_wallet_password: SecretStr | None = None
+    # O Always Free limita sessões simultâneas: pool pequeno.
+    oracle_pool_size: int = Field(default=3, ge=1, le=10)
+    oracle_regiao: str | None = None
     log_level: str = "INFO"
     sessao_dias: int = Field(default=7, ge=1, le=30)
 
@@ -39,6 +51,11 @@ class Settings(BaseSettings):
     demo_senha: SecretStr | None = None
     # Atraso entre os webhooks simulados da fixture.
     fixture_coleta_segundos: float = Field(default=2.0, ge=0)
+
+    @property
+    def banco(self) -> str:
+        """"oracle" ou "sqlite" — o nome do dialeto, nunca a URL."""
+        return "oracle" if self.database_url.startswith("oracle") else "sqlite"
 
     @property
     def cors_origins(self) -> list[str]:

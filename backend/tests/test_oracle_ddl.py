@@ -50,3 +50,43 @@ def test_nomes_cabem_no_oracle():
         assert len(t.name) <= 128
         for c in t.columns:
             assert len(c.name) <= 128, (t.name, c.name)
+
+
+def test_dinheiro_e_taxa_sao_number_sem_escala_no_oracle():
+    """NUMERIC sem precisão é NUMBER(38) no Oracle — inteiro: R$ 20.183,13 viraria
+    R$ 20.183 e a taxa de 0,1502 viraria 0. Tem de ser NUMBER puro."""
+    from app.models.types import DecimalTexto
+
+    colunas = [
+        (t.name, c.name) for t in TABELAS for c in t.columns if isinstance(c.type, DecimalTexto)
+    ]
+    assert ("divida", "taxa_juros_mes") in colunas and ("divida", "saldo_devedor") in colunas
+    for tabela, coluna in colunas:
+        linha = next(
+            ln for ln in _ddl(SQLModel.metadata.tables[tabela]).splitlines() if ln.strip().startswith(coluna + " ")
+        )
+        assert re.match(rf"\s*{coluna} NUMBER\b(?!\s*\()", linha), linha
+
+
+@pytest.mark.oracle
+def test_decimal_volta_exato_do_oracle():
+    """Ida e volta no banco de verdade: centavos e taxa com 6 casas, sem arredondar."""
+    from decimal import Decimal
+
+    from sqlalchemy import Column, MetaData, Table, select
+
+    from app.db import engine
+    from app.models.types import DecimalTexto
+
+    md = MetaData()
+    t = Table("teste_decimal_m2", md, Column("v", DecimalTexto))
+    md.drop_all(engine)
+    md.create_all(engine)
+    try:
+        valores = [Decimal("20183.13"), Decimal("0.150200"), Decimal("-0.01"), Decimal("123456789012.34")]
+        with engine.begin() as c:
+            c.execute(t.insert(), [{"v": v} for v in valores])
+            lidos = [r[0] for r in c.execute(select(t.c.v))]
+        assert sorted(lidos) == sorted(valores)
+    finally:
+        md.drop_all(engine)

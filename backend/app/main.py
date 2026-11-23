@@ -12,7 +12,8 @@ from alembic.config import Config
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from sqlmodel import Session
+from sqlalchemy import inspect
+from sqlmodel import Session, SQLModel
 
 from app.config import get_settings
 from app.content.licoes import LICOES
@@ -43,6 +44,14 @@ def _migrar() -> None:
     # Sem isto o fileConfig do alembic.ini silencia nossos logs INFO —
     # inclusive o diagnóstico da taxa de juros (§7.7).
     cfg.attributes["configure_logger"] = False
+    if settings.banco == "oracle" and not inspect(engine).has_table("alembic_version"):
+        # Bootstrap do Oracle (M2): o histórico Alembic foi escrito para o SQLite.
+        # Banco novo → esquema direto dos modelos e marca a versão atual; daqui
+        # em diante, migrações novas rodam nos dois bancos.
+        SQLModel.metadata.create_all(engine)
+        command.stamp(cfg, "head")
+        log.info("oracle_bootstrap esquema criado a partir dos modelos")
+        return
     command.upgrade(cfg, "head")
 
 

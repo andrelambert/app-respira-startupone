@@ -8,6 +8,7 @@ dependencies = [
     "argon2-cffi>=23.1",
     "fastapi>=0.115",
     "httpx>=0.28",
+    "oracledb>=3",
     "pydantic>=2.10",
     "pydantic-settings>=2.6",
     "sqlmodel>=0.0.22",
@@ -26,6 +27,7 @@ testpaths = ["tests"]
 addopts = "-q"
 asyncio_mode = "auto"
 filterwarnings = ["ignore:Using .httpx. with .starlette.testclient."]
+markers = ["oracle: só faz sentido no Oracle (pulado no SQLite)"]
 
 [tool.ruff]
 line-length = 100
