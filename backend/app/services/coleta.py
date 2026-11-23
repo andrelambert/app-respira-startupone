@@ -21,7 +21,7 @@ from sqlmodel import Session
 
 from app.config import get_settings
 from app.db import engine
-from app.domain.events import DividaEstado, GastoCategoria, detectar, resolvidos
+from app.domain.events import DividaEstado, GastoCategoria, contextos_atualizados, detectar, resolvidos
 from app.domain.planner import adicionar_meses
 from app.models import (
     RECURSOS_ESSENCIAIS,
@@ -131,6 +131,13 @@ def detectar_e_registrar(
             dividas=atuais,
             detectados=detectados,
             usado_cheque_especial=usado_cheque,
+        ),
+    )
+    repo_e.atualizar_contextos(
+        s,
+        usuario.id,
+        contextos_atualizados(
+            pendentes=repo_e.pendentes(s, usuario.id), dividas=atuais, usado_cheque_especial=usado_cheque
         ),
     )
     return novos

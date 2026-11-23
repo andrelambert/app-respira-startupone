@@ -176,23 +176,26 @@ def detectar(
     )
     if usado_cheque_especial > 0 and usado_cheque_especial > usado_antes:
         cheque = next((d for d in dividas if d.modalidade == "CHEQUE_ESPECIAL"), None)
-        taxa = cheque.taxa_mes if cheque else None
         eventos.append(
             EventoDetectado(
                 "CHEQUE_ESPECIAL",
                 f"CE:{mes}",
                 2,
                 cheque.id if cheque else None,
-                {
-                    "usado": _s(usado_cheque_especial),
-                    "taxa_anual": str(taxa_anual(taxa)) if taxa is not None else None,
-                    "juros_mes": _s(usado_cheque_especial * taxa) if taxa is not None else None,
-                },
+                contexto_cheque_especial(usado_cheque_especial, cheque.taxa_mes if cheque else None),
             )
         )
 
     eventos.extend(_picos(hoje, gastos))
     return eventos
+
+
+def contexto_cheque_especial(usado: Decimal, taxa_mes: Decimal | None) -> dict[str, Any]:
+    return {
+        "usado": _s(usado),
+        "taxa_anual": str(taxa_anual(taxa_mes)) if taxa_mes is not None else None,
+        "juros_mes": _s(usado * taxa_mes) if taxa_mes is not None else None,
+    }
 
 
 def _picos(hoje: date, gastos: Sequence[GastoCategoria]) -> list[EventoDetectado]:
@@ -295,6 +298,25 @@ def resolvidos(
         if sai:
             fora.append(p.id)
     return fora
+
+
+def contextos_atualizados(
+    *, pendentes: Sequence[EventoPendente], dividas: Sequence[DividaEstado], usado_cheque_especial: Decimal
+) -> dict[int, dict[str, Any]]:
+    """Alertas que descrevem um estado atual — não um fato datado — mostram o
+    número de hoje enquanto pendentes. O do cheque especial só é recriado quando
+    o uso cresce; quando o plano o reduz, o texto não pode ficar no valor antigo."""
+    novos: dict[int, dict[str, Any]] = {}
+    for p in pendentes:
+        if p.tipo != "CHEQUE_ESPECIAL" or usado_cheque_especial <= 0:
+            continue
+        cheque = next((d for d in dividas if d.id == p.divida_id), None) or next(
+            (d for d in dividas if d.modalidade == "CHEQUE_ESPECIAL"), None
+        )
+        ctx = contexto_cheque_especial(usado_cheque_especial, cheque.taxa_mes if cheque else None)
+        if ctx != p.contexto:
+            novos[p.id] = ctx
+    return novos
 
 
 def desvio_plano(previsto: Decimal, realizado: Decimal) -> bool:

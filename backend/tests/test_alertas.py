@@ -131,3 +131,27 @@ def test_atraso_iminente_usa_a_conta_do_mesmo_banco_e_diz_o_nome():
         saldo_por_banco={"Nubank": D("100.00")},
     )
     assert next(e for e in sem_conta if e.tipo == "ATRASO_IMINENTE").contexto["conta"] is None
+
+
+def test_alerta_do_cheque_especial_mostra_o_uso_atual(demo_limpa):
+    """O alerta só é recriado quando o uso cresce; quando o plano o reduz, os
+    números do alerta pendente acompanham (antes ficava "R$ 500" para sempre)."""
+    api = demo_limpa
+    assert api.post("/plano", json={"metodo": "AVALANCHE", "capacidade": "1755.00"}, headers=H).status_code == 201
+    for _ in range(2):
+        assert api.post("/demo/avancar-mes", json={"mes_dificil": False}, headers=H).status_code == 200
+    cheque = next(d for d in api.get("/dividas").json() if d["modalidade"] == "CHEQUE_ESPECIAL")
+    alerta = next(e for e in _pendentes(api) if e["tipo"] == "CHEQUE_ESPECIAL")
+    assert D(cheque["saldo"]) < D("500.00")
+    assert alerta["contexto"]["usado"] == cheque["saldo"]
+
+
+def test_contextos_atualizados_so_mexe_no_cheque_especial():
+    from app.domain.events import contextos_atualizados
+
+    ce = EventoPendente(1, "CHEQUE_ESPECIAL", 3, {"usado": "500.00", "taxa_anual": "x", "juros_mes": "37.45"})
+    rot = EventoPendente(2, "ENTRADA_ROTATIVO", 1, {"saldo": "2080.00"})
+    cheque = _divida(id=3, modalidade="CHEQUE_ESPECIAL", saldo=D("459.46"), taxa_mes=D("0.0749"))
+    novos = contextos_atualizados(pendentes=[ce, rot], dividas=[cheque], usado_cheque_especial=D("459.46"))
+    assert list(novos) == [1] and novos[1]["usado"] == "459.46" and novos[1]["juros_mes"] == "34.41"
+    assert contextos_atualizados(pendentes=[ce], dividas=[cheque], usado_cheque_especial=D(0)) == {}

@@ -56,6 +56,15 @@ def resolver(session: Session, usuario_id: int, ids: list[int]) -> None:
     session.commit()
 
 
+def atualizar_contextos(session: Session, usuario_id: int, novos: dict[int, dict]) -> None:
+    if not novos:
+        return
+    for e in session.exec(select(Evento).where(Evento.usuario_id == usuario_id, col(Evento.id).in_(list(novos)))):
+        e.contexto = novos[e.id]  # type: ignore[index]
+        session.add(e)
+    session.commit()
+
+
 def listar(
     session: Session, usuario_id: int, *, nao_notificados: bool = False, tipo: TipoEvento | None = None
 ) -> list[Evento]:
