@@ -647,6 +647,13 @@ export const corrigir = {
 
 // --- estados gerais ------------------------------------------------------------------------------------
 
+export const erroRota = {
+  titulo: 'Algo não carregou',
+  texto: 'Recarregue para continuar. Seus dados estão seguros.',
+  recarregar: 'Recarregar',
+  inicio: 'Ir para o Início',
+};
+
 export const estados = {
   carregando: 'Carregando…',
   erroTitulo: 'Não conseguimos carregar agora',
