@@ -509,6 +509,29 @@ class TodasTransacoesOut(BaseModel):
     resultado: Dinheiro  # entradas - saídas do período filtrado
 
 
+class VencimentoOut(BaseModel):
+    """N3: um vencimento — fatura de cartão ou parcela de contrato."""
+
+    data: date
+    tipo: Literal["FATURA", "PARCELA"]
+    credor: str
+    descricao: str
+    valor: Dinheiro  # mínimo da fatura ou parcela
+    valor_total: Dinheiro | None  # fatura: o que falta dela inteira
+    valor_plano: Dinheiro | None  # com plano ativo: quanto o plano manda pagar neste mês
+    status: Literal["PAGO", "PENDENTE", "ATRASADO"]
+    dias: int  # negativo = já venceu
+    divida_id: int | None
+    conta_id: int | None
+    banco_logo: str | None
+
+
+class VencimentosOut(BaseModel):
+    hoje: date
+    dias: int
+    itens: list[VencimentoOut]
+
+
 class ExtratoOut(BaseModel):
     itens: list[TransacaoOut]
     pagina: int

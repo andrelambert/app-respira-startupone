@@ -15,6 +15,7 @@ from typing import Sequence
 from sqlmodel import Session
 
 from app.domain import planner
+from app.domain import vencimentos as vencimentos_dom
 from app.domain.events import EventoDetectado, desvio_plano
 from app.domain.planner import (
     DividaEntrada,
@@ -43,8 +44,8 @@ from app.models import (
 )
 from app.repositories import eventos as repo_e
 from app.repositories import financeiro as repo_f
-from app.repositories import planos as repo_p
 from app.repositories import pfm as repo_pfm
+from app.repositories import planos as repo_p
 from app.services.coleta import detectar_e_registrar, snapshot
 from app.services.contexto import hoje_do_usuario
 
@@ -438,6 +439,62 @@ def conferir_no_oracle(s: Session, u: Usuario, metodo: Metodo, capacidade: Decim
     if not coincide:
         log.warning("conferencia_oracle_divergiu metodo=%s python=%s oracle=%s", metodo.value, py, ora)
     return Conferencia(metodo, sim.capacidade, py, ora, coincide)
+
+
+def vencimentos(s: Session, u: Usuario, dias: int) -> tuple[date, list[tuple[vencimentos_dom.Vencimento, Decimal | None, str | None]]]:
+    """N3: próximos vencimentos + o valor do plano (se houver) + logo do banco."""
+    from app.repositories import consentimentos as repo_c
+
+    assert u.id is not None
+    hoje = hoje_do_usuario(u)
+    abertas = repo_f.dividas(s, u.id)
+    por_conta_ext = {d.conta_id_externo: d for d in abertas if d.conta_id_externo and d.modalidade in vencimentos_dom.MODALIDADES_CARTAO}
+
+    def inst(inst_id: int | None):
+        return repo_c.obter_instituicao(s, inst_id)
+
+    faturas: list[vencimentos_dom.FaturaVenc] = []
+    logos: dict[tuple[str, int], str | None] = {}
+    for c in repo_pfm.contas(s, u.id):
+        if c.tipo is not TipoConta.CARTAO_CREDITO or c.id is None:
+            continue
+        i = inst(c.instituicao_id)
+        logos[("c", c.id)] = (i.icone_url or i.logo_url) if i else None
+        ligada = por_conta_ext.get(c.id_externo)
+        for f in repo_pfm.faturas(s, c.id):
+            if f.vencimento is None or f.id is None:
+                continue
+            faturas.append(
+                vencimentos_dom.FaturaVenc(
+                    id=f.id, conta_id=c.id, credor=i.nome if i else "", descricao=c.nome or "Cartão",
+                    vencimento=f.vencimento, total=f.total, minimo=f.minimo, pago=f.pago,
+                    divida_id=ligada.id if ligada else None,
+                )
+            )
+    dividas_v = []
+    for d in abertas:
+        if d.id is None:
+            continue
+        i = inst(d.instituicao_id)
+        logos[("d", d.id)] = (i.icone_url or i.logo_url) if i else None
+        dividas_v.append(
+            vencimentos_dom.DividaVenc(
+                id=d.id, credor=i.nome if i else "", descricao=d.descricao, modalidade=d.modalidade,
+                dia_vencimento=d.dia_vencimento, parcela=d.parcela_minima, em_atraso_dias=d.em_atraso_dias,
+                saldo=d.saldo_devedor,
+            )
+        )
+    lista = vencimentos_dom.montar(hoje=hoje, dias=dias, faturas=faturas, dividas=dividas_v)
+
+    # Valor do plano: o que a projeção atual manda pagar neste mês, por dívida.
+    plano = plano_ativo(s, u)
+    do_plano = {int(i.divida_id): i.valor_mensal for i in plano.projecao.itens} if plano else {}
+    out = []
+    for v in lista:
+        logo = logos.get(("c", v.conta_id)) if v.conta_id else logos.get(("d", v.divida_id or 0))
+        valor_plano = do_plano.get(v.divida_id) if (plano and v.divida_id and v.dias <= 31) else None
+        out.append((v, valor_plano, logo))
+    return hoje, out
 
 
 _MESES_BELVO = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]

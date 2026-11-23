@@ -24,6 +24,8 @@ from app.schemas import (
     TodasTransacoesOut,
     TransacaoOut,
     TransacaoUnificadaOut,
+    VencimentoOut,
+    VencimentosOut,
     VisaoGeralOut,
 )
 from app.services.contexto import hoje_do_usuario
@@ -239,6 +241,26 @@ def todas_transacoes(
         total_entradas=entradas,
         total_saidas=saidas,
         resultado=entradas - saidas,
+    )
+
+
+@router.get("/vencimentos", response_model=VencimentosOut)
+def vencimentos(u: UsuarioDep, s: SessionDep, dias: Annotated[int, Query(ge=1, le=60)] = 30) -> VencimentosOut:
+    """Próximos vencimentos (N3, F-5): faturas e parcelas na janela, e os atrasados."""
+    from app.services import analise
+
+    hoje, itens = analise.vencimentos(s, u, dias)
+    return VencimentosOut(
+        hoje=hoje,
+        dias=dias,
+        itens=[
+            VencimentoOut(
+                data=v.data, tipo=v.tipo, credor=v.credor, descricao=v.descricao, valor=v.valor,  # type: ignore[arg-type]
+                valor_total=v.valor_total, valor_plano=plano, status=v.status.value, dias=v.dias,  # type: ignore[arg-type]
+                divida_id=v.divida_id, conta_id=v.conta_id, banco_logo=logo,
+            )
+            for v, plano, logo in itens
+        ],
     )
 
 
