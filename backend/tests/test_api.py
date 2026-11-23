@@ -1,5 +1,6 @@
 """Jornada via API: conta demo (Juliana, fixture) e conta real (Belvo)."""
 
+import os
 import re
 import time
 from decimal import Decimal as D
@@ -57,7 +58,27 @@ def test_login_errado_e_bloqueio(api):
 
 def test_config(api):
     cfg = api.get("/config").json()
-    assert cfg == {"demo_disponivel": True, "belvo_configurada": False, "webhooks": False}
+    banco = "oracle" if os.environ["DATABASE_URL"].startswith("oracle") else "sqlite"
+    assert {k: cfg[k] for k in ("demo_disponivel", "belvo_configurada", "webhooks", "banco")} == {
+        "demo_disponivel": True, "belvo_configurada": False, "webhooks": False, "banco": banco,
+    }
+
+
+def test_health_consulta_o_banco(api):
+    h = api.get("/health")
+    assert h.status_code == 200
+    corpo = h.json()
+    assert corpo["status"] == "ok" and corpo["versao"]
+    assert corpo["banco"] == ("oracle" if os.environ["DATABASE_URL"].startswith("oracle") else "sqlite")
+    assert set(corpo) == {"status", "banco", "versao", "regiao"}  # nada de usuário, dsn ou caminho
+
+
+def test_conferencia_oracle_so_existe_no_oracle(api):
+    if os.environ["DATABASE_URL"].startswith("oracle"):
+        pytest.skip("no Oracle, coberto por test_motor_coincide_no_oracle")
+    api.cookies.clear()
+    api.post("/auth/entrar", json=DEMO, headers=H)
+    assert api.get("/plano/conferencia-oracle").status_code == 404
 
 
 def test_jornada_juliana(api):

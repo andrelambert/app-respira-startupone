@@ -21,6 +21,8 @@ from app.db import engine
 from app.models import Licao, Usuario
 from app.repositories import consentimentos as repo_c
 from app.repositories import eventos as repo_e
+from app.repositories import oracle as repo_oracle
+from app.repositories import sistema as repo_sistema
 from app.routers import analise, belvo_webhook, consentimentos, demo, eventos, pfm, usuarios
 from app.services import coleta, instituicoes
 from app.services.contexto import fixture
@@ -51,8 +53,15 @@ def _migrar() -> None:
         SQLModel.metadata.create_all(engine)
         command.stamp(cfg, "head")
         log.info("oracle_bootstrap esquema criado a partir dos modelos")
-        return
-    command.upgrade(cfg, "head")
+    else:
+        command.upgrade(cfg, "head")
+    if settings.banco == "oracle":
+        # M3: o motor em PL/SQL fica instalado no banco (CREATE OR REPLACE, idempotente).
+        erros = repo_oracle.instalar_pacote(engine)
+        if erros:
+            log.warning("pkg_plano_app_com_erros %s", erros[:5])
+        else:
+            log.info("pkg_plano_app instalado")
 
 
 def _preparar() -> None:
@@ -115,6 +124,21 @@ app.include_router(demo.router)  # cada rota exige conta demo logada
 
 
 @app.get("/health", tags=["sistema"])
-def health() -> dict[str, str]:
-    return {"status": "ok"}
+def health() -> JSONResponse:
+    """Público e sem dados de usuário. Consulta o banco de verdade — é o que o
+    keep-alive (§7.6) usa para manter o Oracle ativo. Banco fora: 503."""
+    try:
+        with Session(engine) as s:
+            versao = repo_sistema.versao_do_banco(s, settings.banco)
+    except Exception as e:  # noqa: BLE001 — qualquer falha de conexão vira 503
+        log.warning("health_banco_indisponivel erro=%s", type(e).__name__)
+        return JSONResponse({"status": "banco_indisponivel", "banco": settings.banco}, status_code=503)
+    return JSONResponse(
+        {
+            "status": "ok",
+            "banco": settings.banco,
+            "versao": versao,
+            "regiao": settings.oracle_regiao if settings.banco == "oracle" else None,
+        }
+    )
 

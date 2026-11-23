@@ -1,10 +1,13 @@
 """Raio-X (F2), dívidas, plano (F3) e acompanhamento (F4)."""
 
+import logging
 from decimal import Decimal
 from typing import Annotated
 
 from fastapi import APIRouter, HTTPException, Query, status
+from sqlalchemy.exc import DBAPIError
 
+from app.config import get_settings
 from app.domain.planner import Metodo, arredondar
 from app.models import (
     Divida,
@@ -20,6 +23,7 @@ from app.routers.comum import SessionDep, UsuarioDep, divida_out, projecao_out
 from app.schemas import (
     AcompanhamentoOut,
     CapacidadeOut,
+    ConferenciaOracleOut,
     DividaAtualizar,
     DividaCriar,
     DividaOut,
@@ -29,11 +33,14 @@ from app.schemas import (
     PlanoAtivar,
     PlanoAtivoOut,
     RaioXOut,
+    ResultadoMotorOut,
     SimulacoesOut,
     SoMinimoOut,
 )
 from app.services import analise
 from app.services.analise import Capacidade
+
+log = logging.getLogger("respira.plano")
 
 router = APIRouter(tags=["diagnóstico e plano"])
 
@@ -167,6 +174,31 @@ def apagar_divida(divida_id: int, u: UsuarioDep, s: SessionDep) -> None:
 
 
 # --- F3 -------------------------------------------------------------------------------
+
+
+@router.get("/plano/conferencia-oracle", response_model=ConferenciaOracleOut)
+def conferencia_oracle(
+    u: UsuarioDep,
+    s: SessionDep,
+    metodo: Metodo = Metodo.AVALANCHE,
+    capacidade: Annotated[Decimal | None, Query(gt=0, le=Decimal("1000000"))] = None,
+) -> ConferenciaOracleOut:
+    """M3: o plano pelo planner.py e pelo PKG_PLANO_APP. Só existe no Oracle."""
+    if get_settings().banco != "oracle":
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "so_no_oracle")
+    try:
+        c = analise.conferir_no_oracle(s, u, metodo, capacidade)
+    except DBAPIError as e:
+        # Pacote PL/SQL ausente ou com erro de compilação: sem selo, sem 500.
+        log.warning("conferencia_oracle_indisponivel erro=%s", type(e.orig).__name__)
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "conferencia_indisponivel") from None
+    return ConferenciaOracleOut(
+        metodo=c.metodo,
+        capacidade=c.capacidade,
+        python=ResultadoMotorOut(**c.python),  # type: ignore[arg-type]
+        oracle=ResultadoMotorOut(**c.oracle),  # type: ignore[arg-type]
+        coincide=c.coincide,
+    )
 
 
 @router.get("/plano/simulacoes", response_model=SimulacoesOut)

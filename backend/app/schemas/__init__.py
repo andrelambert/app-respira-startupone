@@ -57,6 +57,8 @@ class ConfigOut(BaseModel):
     demo_disponivel: bool  # existe a conta da Juliana para entrar
     belvo_configurada: bool  # há chaves da Belvo no backend/.env
     webhooks: bool
+    banco: Literal["oracle", "sqlite"]  # card "Onde ficam os seus dados" (M3)
+    regiao: str | None  # região do Oracle, ex.: sa-saopaulo-1
 
 
 # --- autenticação e usuário ------------------------------------------------------
@@ -372,6 +374,23 @@ class EventoOut(BaseModel):
     detectado_em: datetime
     notificado_em: datetime | None
     licao: str | None
+
+
+class ResultadoMotorOut(BaseModel):
+    meses: int
+    juros: Dinheiro
+    primeira_quitacao_mes: int | None
+    converge: bool
+
+
+class ConferenciaOracleOut(BaseModel):
+    """M3: o mesmo plano calculado pelo planner.py e pelo PKG_PLANO_APP (PL/SQL)."""
+
+    metodo: Metodo
+    capacidade: Dinheiro
+    python: ResultadoMotorOut
+    oracle: ResultadoMotorOut
+    coincide: bool
 
 
 class LicaoOut(BaseModel):

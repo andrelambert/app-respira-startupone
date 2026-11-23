@@ -54,6 +54,8 @@ def config(s: SessionDep) -> ConfigOut:
         demo_disponivel=demo,
         belvo_configurada=cfg.belvo_configurada(),
         webhooks=cfg.belvo_webhooks_enabled,
+        banco=cfg.banco,  # type: ignore[arg-type]
+        regiao=cfg.oracle_regiao if cfg.banco == "oracle" else None,
     )
 
 

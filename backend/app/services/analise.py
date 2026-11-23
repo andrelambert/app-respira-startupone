@@ -6,6 +6,7 @@ estão em ``domain/`` (planner, xray, events).
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
@@ -46,6 +47,8 @@ from app.repositories import planos as repo_p
 from app.repositories import pfm as repo_pfm
 from app.services.coleta import detectar_e_registrar, snapshot
 from app.services.contexto import hoje_do_usuario
+
+log = logging.getLogger("respira.plano")
 
 # Fração do plano que deixa de entrar num "mês difícil" da demonstração. Precisa
 # passar de 20% para cruzar a regra de DESVIO_PLANO (< 80%, §8.3) — proporcional
@@ -398,6 +401,43 @@ def avancar_mes_demo(s: Session, u: Usuario, mes_dificil: bool) -> Acompanhament
     a = _registrar_mes(s, u, plano, mes, realizado, data_anterior)
     detectar_e_registrar(s, u, hoje_do_usuario(u), anteriores)
     return a
+
+
+@dataclass
+class Conferencia:
+    metodo: Metodo
+    capacidade: Decimal
+    python: dict[str, object]
+    oracle: dict[str, object]
+    coincide: bool
+
+
+def conferir_no_oracle(s: Session, u: Usuario, metodo: Metodo, capacidade: Decimal | None) -> Conferencia:
+    """M3 — "dupla execução": o mesmo plano pelo planner.py e pelo PKG_PLANO_APP,
+    sobre as mesmas linhas da tabela DIVIDA. Divergência não é escondida: o selo
+    some e fica um aviso no log."""
+    from app.repositories import oracle as repo_oracle
+
+    assert u.id is not None
+    r = simular(s, u, capacidade)
+    sim = r.simulacoes[metodo]
+    py = {
+        "meses": sim.meses,
+        "juros": arredondar(sim.juros_totais),
+        "primeira_quitacao_mes": sim.primeira_quitacao_mes,
+        "converge": sim.converge,
+    }
+    bruto = repo_oracle.simular(s, u.id, metodo.value, sim.capacidade)
+    ora = {
+        "meses": int(bruto["meses"]),
+        "juros": arredondar(Decimal(str(bruto["juros"]))),
+        "primeira_quitacao_mes": bruto.get("primeira"),
+        "converge": bool(bruto.get("converge")),
+    }
+    coincide = py == ora
+    if not coincide:
+        log.warning("conferencia_oracle_divergiu metodo=%s python=%s oracle=%s", metodo.value, py, ora)
+    return Conferencia(metodo, sim.capacidade, py, ora, coincide)
 
 
 _MESES_BELVO = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
