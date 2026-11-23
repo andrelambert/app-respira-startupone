@@ -344,6 +344,31 @@ export const dividas = {
     titulo: 'Nenhuma dívida por aqui',
     texto: 'Conecte um banco ou inclua uma dívida que não aparece no Open Finance.',
   },
+  // N4 (Fase 7): filtrar e ordenar
+  ordenar: 'Ordenar',
+  ordens: {
+    plano: 'Ordem do plano',
+    banco: 'Por banco',
+    taxa: 'Maior taxa',
+    saldo: 'Maior saldo',
+    vencimento: 'Próximo vencimento',
+  } as Record<string, string>,
+  filtrar: 'Filtrar',
+  banco: 'Banco ou credor',
+  tipo: 'Tipo',
+  tipos: {
+    cartao: 'Cartão',
+    emprestimo: 'Empréstimo',
+    financiamento: 'Financiamento',
+    cheque: 'Cheque especial',
+    manual: 'Incluída à mão',
+  } as Record<string, string>,
+  situacao: 'Situação',
+  situacoes: { atraso: 'Em atraso', estimada: 'Com valor estimado', quitadas: 'Quitadas' } as Record<string, string>,
+  limpar: 'Limpar filtros',
+  mostrando: (n: number, de: number, total: Centavos) =>
+    `Mostrando ${n} de ${de} ${plural(de, 'dívida', 'dívidas')} · ${r$(total)}`,
+  nenhumaNoFiltro: 'Nenhuma dívida com esses filtros.',
 };
 
 // --- plano (F3) ------------------------------------------------------------------------------------

@@ -13,7 +13,7 @@ import { deEntradaUsuario, paraDecimal } from '@/lib/money';
 /** Corrige o que o banco não entrega (parcela/taxa estimadas). */
 export default function ConferirDivida() {
   const { id } = useParams();
-  const dividas = useQuery({ queryKey: chaves.dividas, queryFn: api.dividas });
+  const dividas = useQuery({ queryKey: chaves.dividas, queryFn: () => api.dividas() });
   const d = dividas.data?.find((x) => String(x.id) === id);
   const [parcela, setParcela] = useState('');
   const [taxa, setTaxa] = useState('');

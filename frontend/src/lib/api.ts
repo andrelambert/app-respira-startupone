@@ -520,7 +520,7 @@ export const api = {
     chamar(`/pfm/categorias${mes ? `?mes=${mes}` : ''}`, gastosCategoriaSchema),
   vencimentos: (dias: number) => chamar(`/vencimentos?dias=${dias}`, vencimentosSchema),
   categoriasTransacoes: () => chamar('/transacoes/categorias', z.array(z.string().max(80)).max(200)),
-  dividas: () => chamar('/dividas', z.array(dividaSchema)),
+  dividas: (quitadas = false) => chamar(`/dividas${quitadas ? '?quitadas=true' : ''}`, z.array(dividaSchema)),
   criarDivida: (dados: {
     credor: string;
     modalidade: string;
