@@ -223,14 +223,18 @@ function Simulador({
       )}
 
       <p className="text-xs text-slate">{copy.projecaoAviso}</p>
-      {ativar.isError && (
-        <p role="alert" className="text-sm text-amber-ink">
-          {erroConexao(ativar.error instanceof ApiError ? ativar.error.codigo : null)}
-        </p>
-      )}
-      <Button largo onClick={() => ativar.mutate()} disabled={!converge || ativar.isPending}>
-        {ativar.isPending ? copy.ativando : copy.ativar}
-      </Button>
+      {/* A8: o botão fica fixo no rodapé, logo acima da barra de navegação (56 px + borda),
+          em vez de no fim de uma página de ~3 telas. */}
+      <div className="sticky bottom-[calc(3.5rem+1px)] z-10 -mx-4 flex flex-col gap-2 border-t border-line bg-light/95 px-4 py-3 backdrop-blur">
+        {ativar.isError && (
+          <p role="alert" className="text-sm text-amber-ink">
+            {erroConexao(ativar.error instanceof ApiError ? ativar.error.codigo : null)}
+          </p>
+        )}
+        <Button largo onClick={() => ativar.mutate()} disabled={!converge || ativar.isPending}>
+          {ativar.isPending ? copy.ativando : copy.ativar}
+        </Button>
+      </div>
     </div>
   );
 }
