@@ -1,0 +1,37 @@
+# Blueprint do Render (opcional — o serviço também pode ser criado pelo painel).
+# Segredos com sync: false: o Render pede o valor no painel e ele nunca fica no Git.
+# A wallet (tnsnames.ora e ewallet.pem) sobe como Secret Files e aparece em /etc/secrets.
+services:
+  - type: web
+    name: respira-api
+    runtime: docker
+    rootDir: backend
+    dockerfilePath: ./Dockerfile
+    plan: free
+    region: virginia # o mais perto de São Paulo entre as regiões do plano gratuito
+    healthCheckPath: /health
+    envVars:
+      - key: MODO_PUBLICO
+        value: "true"
+      - key: DEMO_POR_VISITANTE
+        value: "true"
+      - key: FIXTURE_COLETA_SEGUNDOS
+        value: "0.5"
+      - key: DATABASE_URL
+        value: oracle+oracledb://@
+      - key: ORACLE_USER
+        value: RESPIRA_APP
+      - key: ORACLE_DSN
+        value: respira_tp
+      - key: ORACLE_CONFIG_DIR
+        value: /etc/secrets
+      - key: ORACLE_REGIAO
+        value: sa-saopaulo-1
+      - key: ORACLE_POOL_SIZE
+        value: "3"
+      - key: ORACLE_PASSWORD
+        sync: false
+      - key: ORACLE_WALLET_PASSWORD
+        sync: false
+      - key: APP_PUBLIC_URL
+        sync: false # a URL da Vercel, depois do primeiro deploy do frontend

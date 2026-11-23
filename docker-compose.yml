@@ -1,0 +1,30 @@
+# Respira local com um comando:  docker compose up --build
+# Backend em http://localhost:8000 e frontend em http://localhost:5173.
+#
+# Configuração do backend vem de backend/.env (nunca na imagem). Para usar o
+# Oracle, a wallet entra por volume somente leitura:
+#   ORACLE_CONFIG_DIR=/wallet  (no backend/.env)  e  ORACLE_WALLET_DIR=~/.oracle/respira/wallet  (no shell)
+services:
+  backend:
+    build: ./backend
+    env_file: backend/.env
+    environment:
+      APP_PUBLIC_URL: http://localhost:5173
+    ports:
+      - "8000:8000"
+    volumes:
+      - ${ORACLE_WALLET_DIR:-./backend/.sem-wallet}:/wallet:ro
+
+  frontend:
+    image: node:22-alpine
+    working_dir: /app
+    command: sh -c "npm ci && npm run dev -- --host 0.0.0.0 --port 5173"
+    environment:
+      VITE_API_URL: http://localhost:8000
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    depends_on:
+      - backend
