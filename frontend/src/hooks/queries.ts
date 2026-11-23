@@ -12,6 +12,7 @@ export const chaves = {
   eventos: ['eventos'] as const,
   licao: (slug: string) => ['licao', slug] as const,
   dividas: ['dividas'] as const,
+  vencimentos: (dias: number) => ['vencimentos', dias] as const,
   visaoGeral: ['pfm', 'visao-geral'] as const,
   conta: (id: number) => ['pfm', 'conta', id] as const,
   extrato: (id: number, filtro: object) => ['pfm', 'extrato', id, filtro] as const,
@@ -26,6 +27,8 @@ export const chavesFinanceiras = [
   chaves.dividas,
   chaves.consentimentos,
   ['pfm'],
+  ['vencimentos'],
+  ['transacoes'],
 ];
 
 export function useConfig() {

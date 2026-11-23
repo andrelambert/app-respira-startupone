@@ -817,6 +817,23 @@ export const transacoes = {
   chipDatas: (de: string | null, ate: string | null) => [de, ate].filter(Boolean).join(' a ') || 'Datas',
 };
 
+// N3 (Fase 7): próximos vencimentos — organiza o que existe, sem alerta novo.
+export const vencimentos = {
+  titulo: 'Próximos vencimentos',
+  verTodos: 'Ver todos os vencimentos',
+  janela: (dias: number) => `${dias} dias`,
+  janelas: [7, 15, 30],
+  vazio: (dias: number) => `Nada vence nos próximos ${dias} dias.`,
+  status: { PAGO: 'Pago', PENDENTE: 'Pendente', ATRASADO: 'Atrasado' } as Record<string, string>,
+  quando: (dias: number) =>
+    dias < 0 ? `venceu há ${-dias} ${dias === -1 ? 'dia' : 'dias'}` : dias === 0 ? 'vence hoje' : dias === 1 ? 'vence amanhã' : `em ${dias} dias`,
+  minimo: 'mínimo',
+  parcela: 'parcela',
+  daFatura: (total: string) => `de ${total} da fatura`,
+  noPlano: (valor: string) => `no plano: ${valor}`,
+  ajuda: 'Faturas de cartão e parcelas dos seus contratos. Para parcelas, o banco não informa se a do mês já foi paga.',
+};
+
 export const pfm = {
   titulo: 'Suas contas',
   todos: 'Todos',

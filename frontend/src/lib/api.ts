@@ -367,6 +367,24 @@ const todasTransacoesSchema = extratoSchema.extend({
 });
 export type TodasTransacoes = z.infer<typeof todasTransacoesSchema>;
 
+// N3: próximos vencimentos (faturas e parcelas).
+const vencimentoSchema = z.object({
+  data,
+  tipo: z.enum(['FATURA', 'PARCELA']),
+  credor: z.string(),
+  descricao: z.string(),
+  valor: dinheiro,
+  valor_total: dinheiro.nullable(),
+  valor_plano: dinheiro.nullable(),
+  status: z.enum(['PAGO', 'PENDENTE', 'ATRASADO']),
+  dias: z.number().int(),
+  divida_id: z.number().int().nullable(),
+  conta_id: z.number().int().nullable(),
+  banco_logo: z.string().url().nullable(),
+});
+export type Vencimento = z.infer<typeof vencimentoSchema>;
+const vencimentosSchema = z.object({ hoje: data, dias: z.number().int(), itens: z.array(vencimentoSchema) });
+
 export type FiltroExtrato = {
   pagina: number;
   direcao?: 'ENTRADA' | 'SAIDA';
@@ -472,6 +490,7 @@ export const api = {
     const q = new URLSearchParams({ ...params, pagina: String(pagina), por_pagina: '30' });
     return chamar(`/transacoes?${q.toString()}`, todasTransacoesSchema, { signal: sinal });
   },
+  vencimentos: (dias: number) => chamar(`/vencimentos?dias=${dias}`, vencimentosSchema),
   categoriasTransacoes: () => chamar('/transacoes/categorias', z.array(z.string().max(80)).max(200)),
   dividas: () => chamar('/dividas', z.array(dividaSchema)),
   criarDivida: (dados: {
