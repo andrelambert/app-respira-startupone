@@ -367,6 +367,32 @@ const todasTransacoesSchema = extratoSchema.extend({
 });
 export type TodasTransacoes = z.infer<typeof todasTransacoesSchema>;
 
+// N2: para onde foi o dinheiro, ligado ao plano.
+const gastosCategoriaSchema = z.object({
+  mes: data,
+  meses_disponiveis: z.array(data).max(24),
+  categorias: z.array(
+    z.object({
+      categoria: z.string().max(80),
+      total: dinheiro,
+      media_3m: dinheiro.nullable(),
+      variacao: z.string().nullable(), // fração decimal: "0.88" = 88% acima da média
+      essencial: z.boolean(),
+    }),
+  ),
+  total: dinheiro,
+  impacto_plano: z
+    .object({
+      categoria: z.string(),
+      valor_mensal: dinheiro,
+      meses_antecipados: z.number().int(),
+      data_atual: data,
+      data_nova: data,
+    })
+    .nullable(),
+});
+export type GastosCategoria = z.infer<typeof gastosCategoriaSchema>;
+
 // N3: próximos vencimentos (faturas e parcelas).
 const vencimentoSchema = z.object({
   data,
@@ -490,6 +516,8 @@ export const api = {
     const q = new URLSearchParams({ ...params, pagina: String(pagina), por_pagina: '30' });
     return chamar(`/transacoes?${q.toString()}`, todasTransacoesSchema, { signal: sinal });
   },
+  gastosCategoria: (mes?: string) =>
+    chamar(`/pfm/categorias${mes ? `?mes=${mes}` : ''}`, gastosCategoriaSchema),
   vencimentos: (dias: number) => chamar(`/vencimentos?dias=${dias}`, vencimentosSchema),
   categoriasTransacoes: () => chamar('/transacoes/categorias', z.array(z.string().max(80)).max(200)),
   dividas: () => chamar('/dividas', z.array(dividaSchema)),

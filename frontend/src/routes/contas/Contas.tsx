@@ -15,6 +15,7 @@ import {
   cx,
 } from '@/components/ui';
 import { LogoBanco } from '@/components/respira';
+import { GastosCategoria } from '@/components/respira/GastosCategoria';
 import { chavesFinanceiras, useHoje, useVisaoGeral } from '@/hooks/queries';
 import { api, type Banco, type ContaBancaria } from '@/lib/api';
 import { coleta as copyColeta, pfm as copy, tipoBelvo, transacoes as copyTransacoes } from '@/lib/copy';
@@ -91,6 +92,9 @@ export default function Contas() {
       <LinkBotao to="/transacoes" variante="secundario">
         {copyTransacoes.verTodas}
       </LinkBotao>
+
+      {/* N2: para onde foi o dinheiro, ligado ao plano. */}
+      <GastosCategoria />
 
       {bancos.map((b) => (
         <SecaoBanco key={b.consentimento_id} banco={b} />

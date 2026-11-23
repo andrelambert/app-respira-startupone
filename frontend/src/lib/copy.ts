@@ -817,6 +817,23 @@ export const transacoes = {
   chipDatas: (de: string | null, ate: string | null) => [de, ate].filter(Boolean).join(' a ') || 'Datas',
 };
 
+// N2 (Fase 7): para onde foi o dinheiro — existe para liberar capacidade para o plano.
+export const gastos = {
+  titulo: 'Para onde foi o dinheiro',
+  subtitulo: (mes: string) => `Gastos de ${mes}, comparados com a sua média dos 3 meses anteriores.`,
+  mes: 'Mês',
+  media: (valor: string) => `média ${valor}`,
+  acimaDaMedia: (pct: number) => `+${pct}% que a sua média`,
+  abaixoDaMedia: (pct: number) => `${pct}% abaixo da média`,
+  essencial: 'essencial',
+  semDados: 'Ainda não há gastos para mostrar neste mês.',
+  verTransacoes: (cat: string) => `Ver as transações de ${cat}`,
+  foraDaConta: 'Fora da conta: pagamentos de dívida e transferências.',
+  impacto: (cat: string, valor: string, meses: number, nova: string, atual: string) =>
+    `Se ${cat} voltasse à sua média, sobrariam ${valor} por mês — sua data de saída chegaria ${meses} ${meses === 1 ? 'mês' : 'meses'} antes: ${nova} em vez de ${atual}.`,
+  impactoAviso: 'Projeção com o valor que você coloca por mês nas dívidas. O app organiza e projeta; a escolha é sua.',
+};
+
 // N3 (Fase 7): próximos vencimentos — organiza o que existe, sem alerta novo.
 export const vencimentos = {
   titulo: 'Próximos vencimentos',
