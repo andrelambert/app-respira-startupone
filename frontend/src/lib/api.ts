@@ -26,6 +26,8 @@ export const configSchema = z.object({
   demo_disponivel: z.boolean(),
   belvo_configurada: z.boolean(),
   webhooks: z.boolean(),
+  banco: z.enum(['oracle', 'sqlite']),
+  regiao: z.string().nullable(),
 });
 export type Config = z.infer<typeof configSchema>;
 
@@ -105,6 +107,23 @@ const projecaoSchema = z.object({
   primeira_quitacao_qualquer_mes: z.number().int().nullable(),
 });
 export type Projecao = z.infer<typeof projecaoSchema>;
+
+const resultadoMotorSchema = z.object({
+  meses: z.number().int(),
+  juros: dinheiro,
+  primeira_quitacao_mes: z.number().int().nullable(),
+  converge: z.boolean(),
+});
+
+// M3: o mesmo plano pelo planner.py e pelo PL/SQL dentro do Oracle.
+const conferenciaOracleSchema = z.object({
+  metodo,
+  capacidade: dinheiro,
+  python: resultadoMotorSchema,
+  oracle: resultadoMotorSchema,
+  coincide: z.boolean(),
+});
+export type ConferenciaOracle = z.infer<typeof conferenciaOracleSchema>;
 
 const capacidadeSchema = z.object({
   valor: dinheiro,
@@ -457,6 +476,12 @@ export const api = {
   ativarPlano: (metodoEscolhido: Metodo, capacidade: string) =>
     chamar('/plano', planoAtivoSchema, json({ metodo: metodoEscolhido, capacidade })),
   planoAtivo: () => chamar('/plano/ativo', planoAtivoSchema),
+  conferenciaOracle: (metodoEscolhido: Metodo, capacidade: string, sinal?: AbortSignal) =>
+    chamar(
+      `/plano/conferencia-oracle?metodo=${metodoEscolhido}&capacidade=${encodeURIComponent(capacidade)}`,
+      conferenciaOracleSchema,
+      { signal: sinal },
+    ),
   recalcular: () => chamar('/plano/recalcular', planoAtivoSchema, { method: 'POST' }),
 
   eventos: (naoNotificados = false) =>

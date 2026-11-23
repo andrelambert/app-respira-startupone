@@ -4,7 +4,7 @@ import { Navigate, useNavigate } from 'react-router';
 
 import { JurosEvitados } from '@/components/respira';
 import { Badge, Button, Card, Carregando, EstadoErro, EstadoVazio, Icone, LinkBotao, Money, cx } from '@/components/ui';
-import { chaves, chavesFinanceiras, usePlanoAtivo, useUsuario } from '@/hooks/queries';
+import { chaves, chavesFinanceiras, useConfig, usePlanoAtivo, useUsuario } from '@/hooks/queries';
 import { useDebounced } from '@/hooks/useDebounced';
 import { api, ApiError, type Estrategia, type Metodo, type Simulacoes } from '@/lib/api';
 import { COR_METODO } from '@/lib/cores';
@@ -171,6 +171,8 @@ function Simulador({
         </p>
       </fieldset>
 
+      {converge && <SeloOracle metodo={metodo} capacidade={debounced} />}
+
       {converge && (
         <Card className="flex flex-col gap-3">
           <h2 className="font-semibold text-navy">{copy.trajetoria}</h2>
@@ -236,6 +238,33 @@ function Simulador({
         </Button>
       </div>
     </div>
+  );
+}
+
+/**
+ * M3: selo "Conferido no Oracle" quando o planner.py e o PL/SQL dão o mesmo
+ * resultado. Só no Oracle; se divergir ou falhar, simplesmente não aparece
+ * (a divergência fica no log do backend — não é escondida, mas também não vira
+ * selo falso).
+ */
+function SeloOracle({ metodo, capacidade }: { metodo: Metodo; capacidade: number }) {
+  const config = useConfig();
+  const oracle = config.data?.banco === 'oracle';
+  const conf = useQuery({
+    queryKey: ['conferencia-oracle', metodo, capacidade],
+    queryFn: ({ signal }) => api.conferenciaOracle(metodo, `${capacidade}.00`, signal),
+    enabled: oracle,
+    retry: false,
+    staleTime: 60_000,
+  });
+  if (!oracle || !conf.data?.coincide) return null;
+  return (
+    <details className="text-sm">
+      <summary className="inline-flex min-h-toque cursor-pointer items-center gap-1 font-semibold text-green-ink">
+        <span aria-hidden="true">✓</span> {copy.conferidoOracle}
+      </summary>
+      <p className="mt-1 text-slate">{copy.conferidoOracleExplica}</p>
+    </details>
   );
 }
 

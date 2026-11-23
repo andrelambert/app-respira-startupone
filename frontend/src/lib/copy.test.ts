@@ -11,6 +11,7 @@ import {
   mensagemEvento,
   nomeFatura,
   pfm,
+  regiaoNome,
   subcategoriaNome,
   tipoBelvo,
 } from './copy';
@@ -184,5 +185,13 @@ describe('vencimento de fatura (A14)', () => {
     expect(pfm.vencimento('2026-12-12', '2026-11-23', '12 de dezembro')).toBe('vence em 12 de dezembro');
     expect(pfm.vencimento('2026-11-23', '2026-11-23', '23 de novembro')).toBe('vence em 23 de novembro');
     expect(pfm.vencimento('2026-12-12', '2026-11-23', '12 de dezembro', true)).toBe('venceu em 12 de dezembro');
+  });
+});
+
+describe('onde ficam os dados (M3)', () => {
+  it('região da Oracle em português', () => {
+    expect(regiaoNome('sa-saopaulo-1')).toBe('São Paulo (Brasil)');
+    expect(regiaoNome('us-ashburn-1')).toBe('us-ashburn-1');
+    expect(regiaoNome(null)).toBe('Brasil');
   });
 });

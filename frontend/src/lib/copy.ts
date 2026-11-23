@@ -360,6 +360,9 @@ export const plano = {
   juros: 'Juros no total',
   primeiraQuitada: '1ª dívida quitada',
   recomendado: 'Sugerido para você',
+  conferidoOracle: 'Conferido no Oracle',
+  conferidoOracleExplica:
+    'Este plano foi calculado duas vezes — aqui e por um motor separado dentro do banco de dados Oracle — e os dois deram o mesmo resultado, centavo por centavo.',
   motivo: {
     PADRAO: 'Sugerimos o mais econômico porque ele custa menos juros no total.',
     JA_DESISTIU:
@@ -547,6 +550,16 @@ const MESES_EN: Record<string, string> = {
 };
 
 /** "Food & Groceries" → "Mercado"; desconhecida → "Outros". */
+const REGIOES: Record<string, string> = {
+  'sa-saopaulo-1': 'São Paulo (Brasil)',
+  'sa-vinhedo-1': 'Vinhedo (Brasil)',
+};
+
+/** "sa-saopaulo-1" → "São Paulo (Brasil)". */
+export function regiaoNome(regiao: string | null): string {
+  return (regiao && REGIOES[regiao]) || regiao || 'Brasil';
+}
+
 export function categoriaNome(categoria: string | null | undefined): string {
   return (categoria && CATEGORIAS[categoria]) || 'Outros';
 }
@@ -653,6 +666,10 @@ export const alerta = {
 export const privacidade = {
   titulo: 'Configurações',
   seusDados: 'Seus dados',
+  // M3: só aparece quando o backend usa o Oracle.
+  ondeFicam: 'Onde ficam os seus dados',
+  ondeFicamTexto: (regiao: string) =>
+    `Oracle Autonomous AI Database · ${regiao} · criptografado em repouso pela Oracle.`,
   nome: 'Nome completo',
   email: 'E-mail',
   cpf: 'CPF',
