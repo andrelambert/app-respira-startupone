@@ -6,7 +6,7 @@ import { Link, Navigate } from 'react-router';
 import { z } from 'zod';
 
 import { BotaoVerSenha, Button, Campo, Carregando, Icone, type EstadoCampo } from '@/components/ui';
-import { chaves, useUsuario } from '@/hooks/queries';
+import { chaves, useConfig, useUsuario } from '@/hooks/queries';
 import { api, ApiError } from '@/lib/api';
 import { cadastro, erroConexao } from '@/lib/copy';
 import {
@@ -21,14 +21,19 @@ import {
   somenteDigitos,
 } from '@/lib/entrada';
 
-const esquema = z.object({
-  email: z.string().max(254).regex(EMAIL_RE, cadastro.erros.email),
-  senha: z.string().min(SENHA_MINIMO, cadastro.erros.senha).max(128),
-  nome_completo: z.string().max(120).refine(nomeCompletoValido, cadastro.erros.nome),
-  cpf: z.string().refine(cpfValido, cadastro.erros.cpf),
-  tentativa: z.enum(['sim', 'nao', 'pular']),
-});
-type Dados = z.infer<typeof esquema>;
+/**
+ * ``pedeCpf``: o CPF só serve para o banco confirmar a identidade na conexão
+ * (§7.2). Sem a Belvo (versão pública), ele não é pedido — minimização (LGPD).
+ */
+const esquemaCadastro = (pedeCpf: boolean) =>
+  z.object({
+    email: z.string().max(254).regex(EMAIL_RE, cadastro.erros.email),
+    senha: z.string().min(SENHA_MINIMO, cadastro.erros.senha).max(128),
+    nome_completo: z.string().max(120).refine(nomeCompletoValido, cadastro.erros.nome),
+    cpf: pedeCpf ? z.string().refine(cpfValido, cadastro.erros.cpf) : z.string().max(14),
+    tentativa: z.enum(['sim', 'nao', 'pular']),
+  });
+type Dados = z.infer<ReturnType<typeof esquemaCadastro>>;
 type CampoTexto = Exclude<keyof Dados, 'tentativa'>;
 
 /**
@@ -37,6 +42,9 @@ type CampoTexto = Exclude<keyof Dados, 'tentativa'>;
  */
 export default function Cadastro() {
   const { data: usuario, isLoading } = useUsuario();
+  const config = useConfig();
+  // Enquanto a configuração carrega, pede (o lado seguro); o backend decide no fim.
+  const pedeCpf = config.data?.belvo_configurada ?? true;
   const qc = useQueryClient();
   const [foco, setFoco] = useState<CampoTexto | null>(null);
   const [verSenha, setVerSenha] = useState(false);
@@ -46,7 +54,7 @@ export default function Cadastro() {
     watch,
     formState: { errors, isSubmitted },
   } = useForm<Dados>({
-    resolver: zodResolver(esquema),
+    resolver: zodResolver(esquemaCadastro(pedeCpf)),
     mode: 'onChange', // valida a cada tecla
     defaultValues: { email: '', senha: '', nome_completo: '', cpf: '', tentativa: 'pular' },
   });
@@ -56,7 +64,7 @@ export default function Cadastro() {
         email: d.email,
         senha: d.senha,
         nome_completo: d.nome_completo.trim(),
-        cpf: somenteDigitos(d.cpf),
+        ...(pedeCpf ? { cpf: somenteDigitos(d.cpf) } : {}),
         ja_desistiu_de_plano: d.tentativa === 'pular' ? null : d.tentativa === 'sim',
       }),
     onSuccess: (u) => {
@@ -145,18 +153,20 @@ export default function Cadastro() {
         mensagem={mensagens.nome_completo}
         {...campo('nome_completo', sanitizarNome)}
       />
-      <Campo
-        rotulo={cadastro.cpf}
-        ajuda={cadastro.cpfAjuda}
-        inputMode="numeric"
-        autoComplete="off"
-        placeholder="000.000.000-00"
-        // Sem maxLength: o navegador cortaria o texto ANTES da máscara (colar
-        // " 529.982.247-25 " perderia o último dígito). A máscara já limita a 11.
-        estado={estado('cpf')}
-        mensagem={mensagens.cpf}
-        {...campo('cpf', formatarCpf)}
-      />
+      {pedeCpf && (
+        <Campo
+          rotulo={cadastro.cpf}
+          ajuda={cadastro.cpfAjuda}
+          inputMode="numeric"
+          autoComplete="off"
+          placeholder="000.000.000-00"
+          // Sem maxLength: o navegador cortaria o texto ANTES da máscara (colar
+          // " 529.982.247-25 " perderia o último dígito). A máscara já limita a 11.
+          estado={estado('cpf')}
+          mensagem={mensagens.cpf}
+          {...campo('cpf', formatarCpf)}
+        />
+      )}
       <fieldset className="flex flex-col gap-2">
         <legend className="text-sm font-semibold text-navy">{cadastro.pergunta}</legend>
         <p className="text-sm text-slate">{cadastro.perguntaAjuda}</p>

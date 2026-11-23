@@ -26,6 +26,7 @@ export const configSchema = z.object({
   demo_disponivel: z.boolean(),
   belvo_configurada: z.boolean(),
   webhooks: z.boolean(),
+  modo_publico: z.boolean(),
   banco: z.enum(['oracle', 'sqlite']),
   regiao: z.string().nullable(),
 });
@@ -501,7 +502,7 @@ export const api = {
     email: string;
     senha: string;
     nome_completo: string;
-    cpf: string;
+    cpf?: string;
     ja_desistiu_de_plano: boolean | null;
   }) => chamar('/auth/registrar', usuarioSchema, json(dados)),
   entrar: (email: string, senha: string) => chamar('/auth/entrar', usuarioSchema, json({ email, senha })),

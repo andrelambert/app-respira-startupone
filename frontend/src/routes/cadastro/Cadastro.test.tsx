@@ -92,3 +92,29 @@ describe('cadastro — validação inline', () => {
     expect(vermelho(campo(/nome completo/i))).toBe(true);
   });
 });
+
+describe('cadastro — versão pública (M5)', () => {
+  it('sem Belvo configurada, o CPF não é pedido', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) =>
+        String(url).endsWith('/config')
+          ? new Response(
+              JSON.stringify({
+                demo_disponivel: true,
+                belvo_configurada: false,
+                webhooks: false,
+                modo_publico: true,
+                banco: 'oracle',
+                regiao: 'sa-saopaulo-1',
+              }),
+              { status: 200 },
+            )
+          : new Response(JSON.stringify({ detail: 'nao_autenticado' }), { status: 401 }),
+      ),
+    );
+    montar();
+    await waitFor(() => campo(/e-mail/i));
+    await waitFor(() => expect(screen.queryByLabelText(/^cpf/i)).not.toBeInTheDocument());
+  });
+});

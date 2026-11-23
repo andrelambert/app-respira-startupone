@@ -209,6 +209,8 @@ export const errosConexao: Record<string, string> = {
   link_nao_encontrado: 'Não encontramos essa autorização. Comece a conexão de novo por aqui.',
   cadastro_incompleto: 'Precisamos do seu nome completo e CPF para o banco confirmar que é você.',
   token_falhou: 'Não conseguimos abrir a conexão segura agora. Tente de novo em instantes.',
+  modo_publico:
+    'Na versão pública, a conexão com bancos reais fica desligada por segurança. Use a demonstração ou inclua dívidas à mão.',
   belvo_nao_configurada:
     'A conexão com bancos ainda não está configurada: faltam as chaves da Belvo no backend/.env.',
   popup: 'Seu navegador bloqueou a nova aba.',
@@ -779,6 +781,9 @@ export const erroRota = {
   recarregar: 'Recarregar',
   inicio: 'Ir para o Início',
 };
+
+// M5: faixa da versão pública.
+export const versaoPublica = 'Versão de demonstração acadêmica — não informe dados reais.';
 
 export const estados = {
   carregando: 'Carregando…',
