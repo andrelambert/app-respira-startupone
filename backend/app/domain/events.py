@@ -227,6 +227,68 @@ def _picos(hoje: date, gastos: Sequence[GastoCategoria]) -> list[EventoDetectado
     return eventos
 
 
+# --- ciclo de vida dos alertas (A1, Fase 7) ------------------------------------------
+#
+# A ``chave`` de cada evento inclui o mês ou o vencimento, para que o mesmo fato
+# volte a ser avisado num ciclo novo. Sem uma regra de saída, os avisos de ciclos
+# anteriores ficavam pendentes para sempre. Duas regras resolvem isso:
+#   1. substituição — só o aviso mais recente de cada ``grupo`` fica pendente;
+#   2. resolução — o aviso sai quando o fato que o gerou deixa de valer.
+
+
+@dataclass(frozen=True)
+class EventoPendente:
+    id: int
+    tipo: str
+    divida_id: int | None
+    contexto: dict[str, Any]
+
+
+def grupo(tipo: str, divida_id: int | None, contexto: dict[str, Any]) -> str:
+    """No máximo um alerta pendente por grupo: (tipo, dívida) ou (pico, categoria)."""
+    if tipo == "PICO_CATEGORIA":
+        return f"{tipo}:{contexto.get('categoria')}"
+    return f"{tipo}:{divida_id}"
+
+
+def resolvidos(
+    *,
+    hoje: date,
+    pendentes: Sequence[EventoPendente],
+    dividas: Sequence[DividaEstado],
+    detectados: Sequence[EventoDetectado],
+    usado_cheque_especial: Decimal,
+) -> list[int]:
+    """Ids dos alertas pendentes cujo fato deixou de valer em ``hoje``."""
+    por_id = {d.id: d for d in dividas}
+    iminentes_agora = {e.divida_id for e in detectados if e.tipo == "ATRASO_IMINENTE"}
+    ultimo_mes_completo = adicionar_meses(hoje.replace(day=1), -1)
+    fora = []
+    for p in pendentes:
+        d = por_id.get(p.divida_id) if p.divida_id is not None else None
+        quitada = p.divida_id is not None and (d is None or d.saldo <= 0)
+        if p.tipo == "ATRASO_IMINENTE":
+            # Venceu, foi paga, ou o dinheiro em conta já cobre a parcela.
+            venc = p.contexto.get("vencimento")
+            passou = venc is not None and date.fromisoformat(venc) < hoje
+            sai = quitada or passou or p.divida_id not in iminentes_agora
+        elif p.tipo == "ATRASO_CONFIRMADO":
+            sai = quitada or (d is not None and d.em_atraso_dias == 0)
+        elif p.tipo == "ENTRADA_ROTATIVO":
+            sai = quitada or (d is not None and d.modalidade != "CARTAO_ROTATIVO")
+        elif p.tipo == "CHEQUE_ESPECIAL":
+            sai = usado_cheque_especial <= 0
+        elif p.tipo == "PICO_CATEGORIA":
+            # O pico é de um mês fechado; quando outro mês fecha, ele perde o sentido.
+            mes = p.contexto.get("mes")
+            sai = mes is not None and date.fromisoformat(mes) < ultimo_mes_completo
+        else:
+            sai = False  # DIVIDA_QUITADA é marco; DESVIO_PLANO sai por substituição
+        if sai:
+            fora.append(p.id)
+    return fora
+
+
 def desvio_plano(previsto: Decimal, realizado: Decimal) -> bool:
     """DESVIO_PLANO: pago no mês < 80% do previsto."""
     return previsto > 0 and realizado < previsto * DESVIO_LIMIAR

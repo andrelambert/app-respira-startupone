@@ -394,6 +394,9 @@ class Evento(SQLModel, table=True):
     chave: str = Field(max_length=160)  # deduplicação entre sincronizações
     detectado_em: datetime = Field(default_factory=agora)
     notificado_em: datetime | None = None
+    # Substituído por um aviso mais recente do mesmo grupo, ou o fato deixou de
+    # valer (vencimento passou, atraso pago). Resolvido não aparece como pendente.
+    resolvido_em: datetime | None = None
 
 
 class Licao(SQLModel, table=True):

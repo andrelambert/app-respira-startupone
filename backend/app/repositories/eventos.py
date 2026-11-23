@@ -1,6 +1,6 @@
 from sqlmodel import Session, col, select
 
-from app.domain.events import EventoDetectado
+from app.domain.events import EventoDetectado, EventoPendente, grupo
 from app.models import Evento, Licao, TipoEvento, WebhookLog, agora
 
 
@@ -20,15 +20,46 @@ def registrar_se_novo(session: Session, usuario_id: int, e: EventoDetectado) -> 
         chave=e.chave,
     )
     session.add(ev)
+    # Substituição (A1): só o aviso mais recente de cada grupo fica pendente.
+    g = grupo(e.tipo, e.divida_id, e.contexto)
+    for antigo in _nao_resolvidos(session, usuario_id, TipoEvento(e.tipo), e.divida_id):
+        if antigo is not ev and grupo(antigo.tipo, antigo.divida_id, antigo.contexto) == g:
+            antigo.resolvido_em = agora()
+            session.add(antigo)
     session.commit()
     session.refresh(ev)
     return ev
 
 
+def _nao_resolvidos(
+    session: Session, usuario_id: int, tipo: TipoEvento | None = None, divida_id: int | None = None
+) -> list[Evento]:
+    q = select(Evento).where(Evento.usuario_id == usuario_id, col(Evento.resolvido_em).is_(None))
+    if tipo is not None:
+        q = q.where(Evento.tipo == tipo, Evento.divida_id == divida_id)
+    return list(session.exec(q))
+
+
+def pendentes(session: Session, usuario_id: int) -> list[EventoPendente]:
+    return [
+        EventoPendente(e.id, e.tipo, e.divida_id, e.contexto)  # type: ignore[arg-type]
+        for e in _nao_resolvidos(session, usuario_id)
+    ]
+
+
+def resolver(session: Session, usuario_id: int, ids: list[int]) -> None:
+    if not ids:
+        return
+    for e in session.exec(select(Evento).where(Evento.usuario_id == usuario_id, col(Evento.id).in_(ids))):
+        e.resolvido_em = e.resolvido_em or agora()
+        session.add(e)
+    session.commit()
+
+
 def listar(
     session: Session, usuario_id: int, *, nao_notificados: bool = False, tipo: TipoEvento | None = None
 ) -> list[Evento]:
-    q = select(Evento).where(Evento.usuario_id == usuario_id)
+    q = select(Evento).where(Evento.usuario_id == usuario_id, col(Evento.resolvido_em).is_(None))
     if nao_notificados:
         q = q.where(col(Evento.notificado_em).is_(None))
     if tipo is not None:

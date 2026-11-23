@@ -21,7 +21,7 @@ from sqlmodel import Session
 
 from app.config import get_settings
 from app.db import engine
-from app.domain.events import DividaEstado, GastoCategoria, detectar
+from app.domain.events import DividaEstado, GastoCategoria, detectar, resolvidos
 from app.domain.planner import adicionar_meses
 from app.models import (
     RECURSOS_ESSENCIAIS,
@@ -107,17 +107,26 @@ def detectar_e_registrar(
         for t in repo_f.transacoes(s, usuario.id, desde)
         if t.valor < 0 and t.categoria and not t.pagamento_divida
     ]
-    novos = 0
-    for e in detectar(
+    detectados = detectar(
         hoje=hoje,
         dividas=atuais,
         anteriores=anteriores,
         saldo_em_conta=saldo_em_conta,
         usado_cheque_especial=usado_cheque,
         gastos=gastos,
-    ):
-        if repo_e.registrar_se_novo(s, usuario.id, e):
-            novos += 1
+    )
+    novos = sum(1 for e in detectados if repo_e.registrar_se_novo(s, usuario.id, e))
+    repo_e.resolver(
+        s,
+        usuario.id,
+        resolvidos(
+            hoje=hoje,
+            pendentes=repo_e.pendentes(s, usuario.id),
+            dividas=atuais,
+            detectados=detectados,
+            usado_cheque_especial=usado_cheque,
+        ),
+    )
     return novos
 
 
