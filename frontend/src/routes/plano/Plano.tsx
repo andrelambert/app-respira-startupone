@@ -149,8 +149,8 @@ function Simulador({
       {converge && economica.converge && (
         <p className="text-lg leading-snug text-ink">
           {fraseComparacao(
-            { metodo, meses: escolhida.meses, juros: escolhida.juros_totais, primeira: escolhida.primeira_quitacao_mes },
-            { meses: economica.meses, juros: economica.juros_totais, primeira: economica.primeira_quitacao_mes },
+            { metodo, meses: escolhida.meses, juros: escolhida.juros_totais, primeira: escolhida.primeira_quitacao_qualquer_mes },
+            { meses: economica.meses, juros: economica.juros_totais, primeira: economica.primeira_quitacao_qualquer_mes },
           )}
         </p>
       )}
@@ -284,8 +284,10 @@ function StrategyCard({
             </dd>
           </div>
           <div>
-            <dt className="text-slate">1ª vitória</dt>
-            <dd className="font-semibold text-ink">{e.primeira_quitacao_mes ? ordinalMes(e.primeira_quitacao_mes) : '—'}</dd>
+            <dt className="text-slate">{copy.primeiraQuitada}</dt>
+            <dd className="font-semibold text-ink">
+              {e.primeira_quitacao_qualquer_mes ? ordinalMes(e.primeira_quitacao_qualquer_mes) : '—'}
+            </dd>
           </div>
         </dl>
       ) : (

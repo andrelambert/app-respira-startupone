@@ -246,7 +246,8 @@ class ProjecaoOut(BaseModel):
     meses: int
     data_quitacao: date | None
     juros_totais: Dinheiro
-    primeira_quitacao_mes: int | None
+    primeira_quitacao_mes: int | None  # só pela sobra (referência PL/SQL)
+    primeira_quitacao_qualquer_mes: int | None  # por qualquer meio — o que a interface mostra
 
 
 class CapacidadeOut(BaseModel):

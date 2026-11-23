@@ -358,7 +358,7 @@ export const plano = {
   voltarCalculado: 'Voltar ao valor calculado',
   livreEm: 'Livre em',
   juros: 'Juros no total',
-  primeiraVitoria: 'Primeira dívida some no',
+  primeiraQuitada: '1ª dívida quitada',
   recomendado: 'Sugerido para você',
   motivo: {
     PADRAO: 'Sugerimos o mais econômico porque ele custa menos juros no total.',

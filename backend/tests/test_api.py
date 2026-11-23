@@ -98,11 +98,21 @@ def test_jornada_juliana(api):
     assert (por["EQUILIBRADO"]["meses"], por["EQUILIBRADO"]["juros_totais"], por["EQUILIBRADO"]["primeira_quitacao_mes"]) == (17, "7940.64", 1)
     assert (por["SNOWBALL"]["meses"], por["SNOWBALL"]["juros_totais"], por["SNOWBALL"]["primeira_quitacao_mes"]) == (17, "9257.67", 1)
     assert sim["capacidade_minima"] == "1395.00"
+    # A2: a "1ª dívida quitada" da interface conta a quitação por qualquer meio
+    # (o carnê zera no 5º mês só com a parcela); o campo da referência PL/SQL
+    # continua contando só a sobra.
+    assert [por[m]["primeira_quitacao_qualquer_mes"] for m in ("AVALANCHE", "EQUILIBRADO", "SNOWBALL")] == [5, 1, 1]
+    for e in sim["estrategias"]:
+        meses_quitacao = [i["mes_quitacao"] for i in e["itens"] if i["mes_quitacao"] is not None]
+        assert e["primeira_quitacao_qualquer_mes"] == min(meses_quitacao)
 
     # --- ativar + eventos ----------------------------------------------------------
     assert api.post("/plano", json={"metodo": "AVALANCHE", "capacidade": "1000.00"}, headers=H).status_code == 422
     plano = api.post("/plano", json={"metodo": "AVALANCHE", "capacidade": "1755.00"}, headers=H).json()
     assert sum(D(p["valor"]) for p in plano["este_mes"]) == D("1755.00")
+    assert plano["projecao_atual"]["primeira_quitacao_qualquer_mes"] == min(
+        i["mes_quitacao"] for i in plano["cronograma"] if i["mes_quitacao"] is not None
+    )
     tipos = {e["tipo"] for e in api.get("/eventos").json()}
     assert {"ENTRADA_ROTATIVO", "ATRASO_CONFIRMADO", "CHEQUE_ESPECIAL", "PICO_CATEGORIA"} <= tipos
 

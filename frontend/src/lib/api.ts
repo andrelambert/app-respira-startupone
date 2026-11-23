@@ -101,6 +101,8 @@ const projecaoSchema = z.object({
   data_quitacao: data.nullable(),
   juros_totais: dinheiro,
   primeira_quitacao_mes: z.number().int().nullable(),
+  // A2: 1ª dívida quitada por qualquer meio — é o que a interface mostra.
+  primeira_quitacao_qualquer_mes: z.number().int().nullable(),
 });
 export type Projecao = z.infer<typeof projecaoSchema>;
 

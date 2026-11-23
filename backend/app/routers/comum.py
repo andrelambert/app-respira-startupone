@@ -93,6 +93,7 @@ def projecao_out(sim: Simulacao) -> ProjecaoOut:
         data_quitacao=sim.data_quitacao,
         juros_totais=arredondar(sim.juros_totais),
         primeira_quitacao_mes=sim.primeira_quitacao_mes,
+        primeira_quitacao_qualquer_mes=sim.primeira_quitacao_qualquer_mes,
     )
 
 

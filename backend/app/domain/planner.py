@@ -76,10 +76,21 @@ class Simulacao:
     meses: int
     juros_totais: Decimal
     data_quitacao: date | None
+    # Fiel ao PKG_PLANO: só conta a quitação feita com a sobra (passo 2 do §5.3).
+    # É o número validado na Fase 5 — mantido para a conferência com o PL/SQL.
     primeira_quitacao_mes: int | None
     itens: list[ItemPlano] = field(default_factory=list)
     # saldo total ao fim de cada mês (índice 0 = saldo inicial)
     trajetoria: list[Decimal] = field(default_factory=list)
+
+    @property
+    def primeira_quitacao_qualquer_mes(self) -> int | None:
+        """Mês em que a primeira dívida zera por qualquer meio (mínimo ou sobra).
+
+        É o que a pessoa vê na ordem de pagamento, então é o que a interface
+        mostra como "1ª dívida quitada" (A2, Fase 7).
+        """
+        return min((i.mes_quitacao for i in self.itens if i.mes_quitacao is not None), default=None)
 
 
 def ordenar(dividas: Sequence[DividaEntrada], metodo: Metodo) -> list[DividaEntrada]:
