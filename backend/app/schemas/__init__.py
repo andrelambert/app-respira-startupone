@@ -488,6 +488,27 @@ class TransacaoOut(BaseModel):
     direcao: Literal["ENTRADA", "SAIDA"]
 
 
+class TransacaoUnificadaOut(TransacaoOut):
+    """N1: transação de qualquer conta, com o banco e a conta de origem."""
+
+    conta_id: int | None  # None: pagamento registrado pela demonstração
+    banco: str | None
+    banco_logo: str | None
+    conta_nome: str | None
+    pagamento_divida: bool
+
+
+class TodasTransacoesOut(BaseModel):
+    itens: list[TransacaoUnificadaOut]
+    pagina: int
+    por_pagina: int
+    total: int
+    paginas: int
+    total_entradas: Dinheiro
+    total_saidas: Dinheiro
+    resultado: Dinheiro  # entradas - saídas do período filtrado
+
+
 class ExtratoOut(BaseModel):
     itens: list[TransacaoOut]
     pagina: int

@@ -1,7 +1,9 @@
 """Consultas do PFM: contas, faturas e extrato paginado."""
 
+from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
+from typing import Any
 
 from sqlalchemy import func
 from sqlmodel import Session, col, select
@@ -98,3 +100,80 @@ def transacoes_paginadas(
     entradas = sum((v for v in valores if v > 0), Decimal("0.00"))
     saidas = sum((-v for v in valores if v < 0), Decimal("0.00"))
     return itens, int(total), entradas, saidas
+
+
+# --- N1 (Fase 7): todas as transações, com filtros -----------------------------------
+
+
+@dataclass(frozen=True)
+class FiltroTransacoes:
+    desde: date | None = None
+    ate: date | None = None
+    contas: tuple[int, ...] = ()
+    direcao: Direcao | None = None
+    categorias: tuple[str, ...] = ()
+    busca: str | None = None
+    valor_min: Decimal | None = None  # sobre o valor absoluto
+    valor_max: Decimal | None = None
+    so_divida: bool = False
+    ordem: str = "recentes"  # "recentes" | "maior_valor"
+
+
+def _condicoes(usuario_id: int, f: FiltroTransacoes) -> list[Any]:
+    cond: list[Any] = [Transacao.usuario_id == usuario_id]
+    if f.contas:
+        cond.append(col(Transacao.conta_id).in_(f.contas))
+    if f.direcao is not None:
+        cond.append(Transacao.direcao == f.direcao)
+    if f.categorias:
+        cond.append(col(Transacao.categoria).in_(f.categorias))
+    if f.so_divida:
+        cond.append(Transacao.pagamento_divida == True)
+    if f.desde is not None:
+        cond.append(col(Transacao.data_mov) >= f.desde)
+    if f.ate is not None:
+        cond.append(col(Transacao.data_mov) <= f.ate)
+    if f.busca:
+        termo = f.busca.lower().replace("!", "!!").replace("%", "!%").replace("_", "!_")
+        padrao = f"%{termo}%"
+        cond.append(
+            func.lower(func.coalesce(Transacao.descricao, "")).like(padrao, escape="!")
+            | func.lower(func.coalesce(Transacao.estabelecimento, "")).like(padrao, escape="!")
+        )
+    return cond
+
+
+def transacoes_filtradas(
+    session: Session, usuario_id: int, f: FiltroTransacoes, *, pagina: int, por_pagina: int
+) -> tuple[list[Transacao], int, Decimal, Decimal]:
+    """(itens da página, total, soma das entradas, soma das saídas) do filtro.
+
+    Faixa de valor e ordem por valor são aplicadas em Python: no SQLite o valor é
+    texto (Decimal exato), então comparar em SQL daria ordem alfabética. Os demais
+    filtros rodam no banco. O resultado é o mesmo no SQLite e no Oracle.
+    """
+    ordem_data = (
+        col(Transacao.data_mov).desc(),
+        col(Transacao.transacionado_em).desc().nulls_last(),
+        col(Transacao.id).desc(),
+    )
+    todos = list(session.exec(select(Transacao).where(*_condicoes(usuario_id, f)).order_by(*ordem_data)))
+    if f.valor_min is not None:
+        todos = [t for t in todos if abs(t.valor) >= f.valor_min]
+    if f.valor_max is not None:
+        todos = [t for t in todos if abs(t.valor) <= f.valor_max]
+    if f.ordem == "maior_valor":
+        todos.sort(key=lambda t: abs(t.valor), reverse=True)  # estável: empate fica por data
+    entradas = sum((t.valor for t in todos if t.valor > 0), Decimal("0.00"))
+    saidas = sum((-t.valor for t in todos if t.valor < 0), Decimal("0.00"))
+    inicio = (pagina - 1) * por_pagina
+    return todos[inicio : inicio + por_pagina], len(todos), entradas, saidas
+
+
+def categorias_usadas(session: Session, usuario_id: int) -> list[str]:
+    q = (
+        select(Transacao.categoria)
+        .where(Transacao.usuario_id == usuario_id, col(Transacao.categoria).is_not(None))
+        .distinct()
+    )
+    return sorted(c for c in session.exec(q) if c)

@@ -21,7 +21,9 @@ from app.schemas import (
     ExtratoOut,
     FaturaOut,
     PagamentoFaturaOut,
+    TodasTransacoesOut,
     TransacaoOut,
+    TransacaoUnificadaOut,
     VisaoGeralOut,
 )
 from app.services.contexto import hoje_do_usuario
@@ -136,6 +138,115 @@ def detalhe(conta_id: int, u: UsuarioDep, s: SessionDep) -> ContaDetalheOut:
     hoje = hoje_do_usuario(u)
     assert c.id is not None
     return ContaDetalheOut(conta=_conta_out(s, c, hoje), faturas=[_fatura_out(f, hoje) for f in repo.faturas(s, c.id)])
+
+
+# --- N1 (Fase 7): todas as transações -------------------------------------------------
+
+MAX_ITENS_LISTA = 20
+
+
+def _lista_ints(valor: str | None, nome: str) -> tuple[int, ...]:
+    if not valor:
+        return ()
+    partes = [p.strip() for p in valor.split(",") if p.strip()]
+    if len(partes) > MAX_ITENS_LISTA or not all(p.isdigit() and len(p) <= 9 for p in partes):
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, f"{nome}_invalido")
+    return tuple(int(p) for p in partes)
+
+
+def _lista_textos(valor: str | None, nome: str) -> tuple[str, ...]:
+    if not valor:
+        return ()
+    partes = [p.strip() for p in valor.split(",") if p.strip()]
+    if len(partes) > MAX_ITENS_LISTA or any(len(p) > 80 for p in partes):
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, f"{nome}_invalido")
+    return tuple(partes)
+
+
+@router.get("/transacoes", response_model=TodasTransacoesOut)
+def todas_transacoes(
+    u: UsuarioDep,
+    s: SessionDep,
+    pagina: Annotated[int, Query(ge=1, le=10_000)] = 1,
+    por_pagina: Annotated[int, Query(ge=5, le=100)] = 30,
+    desde: date | None = None,
+    ate: date | None = None,
+    contas: Annotated[str | None, Query(max_length=200, description="ids separados por vírgula")] = None,
+    direcao: Literal["ENTRADA", "SAIDA"] | None = None,
+    categorias: Annotated[str | None, Query(max_length=1700, description="nomes separados por vírgula")] = None,
+    busca: Annotated[str | None, Query(max_length=60)] = None,
+    valor_min: Annotated[Decimal | None, Query(ge=0, le=Decimal("1000000000"))] = None,
+    valor_max: Annotated[Decimal | None, Query(ge=0, le=Decimal("1000000000"))] = None,
+    so_divida: bool = False,
+    ordem: Literal["recentes", "maior_valor"] = "recentes",
+) -> TodasTransacoesOut:
+    """Extrato unificado de todas as contas e cartões, com filtros (N1, F-1/F-2)."""
+    assert u.id is not None
+    if desde and ate and desde > ate:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "periodo_invalido")
+    if desde and ate and (ate - desde).days > 3660:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "periodo_longo_demais")
+    if valor_min is not None and valor_max is not None and valor_min > valor_max:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "faixa_de_valor_invalida")
+    filtro = repo.FiltroTransacoes(
+        desde=desde,
+        ate=ate,
+        contas=_lista_ints(contas, "contas"),
+        direcao=Direcao(direcao) if direcao else None,
+        categorias=_lista_textos(categorias, "categorias"),
+        busca=(busca or "").strip() or None,
+        valor_min=valor_min,
+        valor_max=valor_max,
+        so_divida=so_divida,
+        ordem=ordem,
+    )
+    itens, total, entradas, saidas = repo.transacoes_filtradas(s, u.id, filtro, pagina=pagina, por_pagina=por_pagina)
+
+    # Banco e nome da conta de cada transação (só as contas do próprio usuário).
+    origem: dict[int, tuple[str | None, str | None, str | None]] = {}
+    for c in repo.contas(s, u.id):
+        inst = repo_c.obter_instituicao(s, c.instituicao_id)
+        nome = c.nome or None
+        origem[c.id or 0] = (inst.nome if inst else None, logo(inst), nome)
+    return TodasTransacoesOut(
+        itens=[
+            TransacaoUnificadaOut(
+                id=t.id or 0,
+                data=t.data_mov,
+                transacionado_em=horario_brasil(t.transacionado_em) if t.transacionado_em else None,
+                tipo_operacao=t.tipo_operacao,
+                final_cartao=t.final_cartao,
+                fatura=t.fatura_nome,
+                descricao=t.descricao,
+                estabelecimento=t.estabelecimento,
+                estabelecimento_site=t.estabelecimento_site,
+                categoria=t.categoria,
+                subcategoria=t.subcategoria,
+                valor=t.valor,
+                direcao=t.direcao.value,
+                conta_id=t.conta_id,
+                banco=origem.get(t.conta_id or -1, (None, None, None))[0],
+                banco_logo=origem.get(t.conta_id or -1, (None, None, None))[1],
+                conta_nome=origem.get(t.conta_id or -1, (None, None, None))[2],
+                pagamento_divida=t.pagamento_divida,
+            )
+            for t in itens
+        ],
+        pagina=pagina,
+        por_pagina=por_pagina,
+        total=total,
+        paginas=max(1, -(-total // por_pagina)),
+        total_entradas=entradas,
+        total_saidas=saidas,
+        resultado=entradas - saidas,
+    )
+
+
+@router.get("/transacoes/categorias", response_model=list[str])
+def categorias_das_transacoes(u: UsuarioDep, s: SessionDep) -> list[str]:
+    """Categorias que existem nas transações do usuário (nomes da Belvo; a tela traduz)."""
+    assert u.id is not None
+    return repo.categorias_usadas(s, u.id)
 
 
 @router.get("/contas/{conta_id}/transacoes", response_model=ExtratoOut)
