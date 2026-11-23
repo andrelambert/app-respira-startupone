@@ -20,6 +20,7 @@ v1.223.0, ``AccountOpenFinanceBrazil``, ``TransactionOpenFinanceBrazil``,
 from __future__ import annotations
 
 import logging
+import re
 from dataclasses import dataclass, field
 from datetime import date, datetime, timezone
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
@@ -260,6 +261,18 @@ class InstituicaoCatalogo:
     icone_url: str | None  # ``icon_logo``
 
 
+# A12 (Fase 7): o display_name da Belvo traz o segmento ("Itaú - Pessoa Física").
+# O Respira é só para pessoa física, então esse sufixo não informa nada e ocupa a
+# linha inteira no celular. "Pessoa Jurídica" fica, para não confundir os dois.
+_SUFIXO_PF = re.compile(r"\s*(?:[-–]\s*)?Pessoa\s+F[ií]sica\s*$", re.IGNORECASE)
+
+
+def nome_curto(display_name: str) -> str:
+    """"Itaú - Pessoa Física" → "Itaú"; "Bradesco Pessoa Fisica" → "Bradesco"."""
+    curto = _SUFIXO_PF.sub("", display_name).strip()
+    return curto or display_name
+
+
 def _url_https(valor: Any) -> str | None:
     """Só aceita URL https: nada de http (conteúdo misto) nem javascript:/data:."""
     url = str(valor or "").strip()
@@ -275,7 +288,7 @@ def mapear_instituicoes(itens: Iterable[Json]) -> list[InstituicaoCatalogo]:
         if not codigo or len(codigo) > 120:
             continue
         # A Belvo manda espaço não separável (\xa0) em alguns nomes.
-        nome = " ".join(str(i.get("display_name") or codigo).replace("\xa0", " ").split())[:120]
+        nome = nome_curto(" ".join(str(i.get("display_name") or codigo).replace("\xa0", " ").split()))[:120]
         saida.append(
             InstituicaoCatalogo(
                 codigo=codigo,
