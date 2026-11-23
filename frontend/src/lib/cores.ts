@@ -10,3 +10,13 @@ export const COR_METODO: Record<Metodo, string> = {
   EQUILIBRADO: '#eb6834',
   SNOWBALL: '#1baf7a',
 };
+
+// Cores do design system (§10): verde = entrada, azul = gasto essencial,
+// cinza = outros gastos, roxo = dívida/plano, navy = a linha da sobra.
+export const COR_FLUXO = {
+  entradas: '#059669',
+  essenciais: '#2563EB',
+  outros: '#94A3B8',
+  divida: '#7C3AED',
+  sobra: '#12314F',
+} as const;

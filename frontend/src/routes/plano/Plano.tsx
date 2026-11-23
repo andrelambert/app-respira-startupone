@@ -3,12 +3,21 @@ import { lazy, Suspense, useState } from 'react';
 import { Navigate, useNavigate } from 'react-router';
 
 import { JurosEvitados } from '@/components/respira';
+import { FluxoMensal } from '@/components/respira/FluxoMensal';
 import { Badge, Button, Card, Carregando, EstadoErro, EstadoVazio, Icone, LinkBotao, Money, cx } from '@/components/ui';
 import { chaves, chavesFinanceiras, useConfig, usePlanoAtivo, useUsuario } from '@/hooks/queries';
 import { useDebounced } from '@/hooks/useDebounced';
 import { api, ApiError, type Estrategia, type Metodo, type Simulacoes } from '@/lib/api';
 import { COR_METODO } from '@/lib/cores';
-import { conectar, erroConexao, fraseComparacao, metodoNome, plano as copy, raiox as copyRaioX } from '@/lib/copy';
+import {
+  conectar,
+  erroConexao,
+  fluxo as copyFluxo,
+  fraseComparacao,
+  metodoNome,
+  plano as copy,
+  raiox as copyRaioX,
+} from '@/lib/copy';
 import { mesAno, meses, ordinalMes } from '@/lib/datas';
 import { brl, centavos, paraDecimal, reaisInteiros, type Centavos } from '@/lib/money';
 
@@ -69,6 +78,7 @@ function Simulador({
     capacidadeAtiva !== null ? reaisInteiros(capacidadeAtiva) : capacidadeInicial(base),
   );
   const [metodo, setMetodo] = useState<Metodo>(metodoAtivo ?? base.pre_selecionado);
+  const [verOrigem, setVerOrigem] = useState(false);
   const debounced = useDebounced(reais, 200);
   const navigate = useNavigate();
   const qc = useQueryClient();
@@ -127,6 +137,18 @@ function Simulador({
         <p className="text-sm text-slate">
           {calculada > 0 ? copy.sliderAjuda(base.capacidade_calculada.valor) : copy.sliderSemHistorico}
         </p>
+        {/* N5 (F-7): de onde veio o valor calculado — o gráfico abre aqui mesmo. */}
+        {calculada > 0 && (
+          <Button
+            variante="fantasma"
+            className="self-start px-0"
+            aria-expanded={verOrigem}
+            onClick={() => setVerOrigem((v) => !v)}
+          >
+            {verOrigem ? copyFluxo.esconder : copyFluxo.verDeOndeVeio}
+          </Button>
+        )}
+        {verOrigem && <FluxoMensal />}
         {calculada > 0 && reais !== calculada && (
           <Button variante="fantasma" className="self-start px-0" onClick={() => setReais(calculada)}>
             {copy.voltarCalculado}

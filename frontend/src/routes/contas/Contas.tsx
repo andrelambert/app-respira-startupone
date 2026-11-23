@@ -15,6 +15,7 @@ import {
   cx,
 } from '@/components/ui';
 import { LogoBanco } from '@/components/respira';
+import { FluxoMensal } from '@/components/respira/FluxoMensal';
 import { GastosCategoria } from '@/components/respira/GastosCategoria';
 import { chavesFinanceiras, useHoje, useVisaoGeral } from '@/hooks/queries';
 import { api, type Banco, type ContaBancaria } from '@/lib/api';
@@ -95,6 +96,9 @@ export default function Contas() {
 
       {/* N2: para onde foi o dinheiro, ligado ao plano. */}
       <GastosCategoria />
+
+      {/* N5: de onde vem o valor do plano. */}
+      <FluxoMensal id="fluxo-mensal" />
 
       {bancos.map((b) => (
         <SecaoBanco key={b.consentimento_id} banco={b} />

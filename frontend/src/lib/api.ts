@@ -393,6 +393,28 @@ const gastosCategoriaSchema = z.object({
 });
 export type GastosCategoria = z.infer<typeof gastosCategoriaSchema>;
 
+// N5: de onde vem a capacidade do plano.
+const fluxoMensalSchema = z.object({
+  meses: z
+    .array(
+      z.object({
+        mes: data,
+        entradas: dinheiro,
+        essenciais: dinheiro,
+        outros_gastos: dinheiro,
+        pagamentos_divida: dinheiro,
+        sobra: dinheiro,
+      }),
+    )
+    .max(12),
+  capacidade: dinheiro,
+  capacidade_origem: z.string(),
+  entradas_mediana: dinheiro.nullable(),
+  essenciais_mediana: dinheiro.nullable(),
+  reserva_pct: z.number().int(),
+});
+export type FluxoMensal = z.infer<typeof fluxoMensalSchema>;
+
 // N3: próximos vencimentos (faturas e parcelas).
 const vencimentoSchema = z.object({
   data,
@@ -518,6 +540,7 @@ export const api = {
   },
   gastosCategoria: (mes?: string) =>
     chamar(`/pfm/categorias${mes ? `?mes=${mes}` : ''}`, gastosCategoriaSchema),
+  fluxoMensal: () => chamar('/pfm/fluxo-mensal?meses=6', fluxoMensalSchema),
   vencimentos: (dias: number) => chamar(`/vencimentos?dias=${dias}`, vencimentosSchema),
   categoriasTransacoes: () => chamar('/transacoes/categorias', z.array(z.string().max(80)).max(200)),
   dividas: (quitadas = false) => chamar(`/dividas${quitadas ? '?quitadas=true' : ''}`, z.array(dividaSchema)),

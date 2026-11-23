@@ -859,6 +859,22 @@ export const gastos = {
   impactoAviso: 'Projeção com o valor que você coloca por mês nas dívidas. O app organiza e projeta; a escolha é sua.',
 };
 
+// N5 (Fase 7): de onde vem o valor do plano — F-7.
+export const fluxo = {
+  titulo: 'Entradas, gastos e dívida, mês a mês',
+  verDeOndeVeio: 'Ver de onde veio',
+  esconder: 'Esconder',
+  conta: (entradas: string, essenciais: string, reserva: number, capacidade: string) =>
+    `Nos últimos 6 meses, num mês típico entraram ${entradas} e os gastos essenciais foram ${essenciais}. ` +
+    `A diferença, menos ${reserva}% de reserva para imprevistos, dá ${capacidade} por mês para as dívidas.`,
+  mediana:
+    'Usamos o mês típico (a mediana), não a média: um mês fora da curva — um bônus, uma despesa rara — não puxa o valor para cima nem para baixo.',
+  cartao: 'Compras no cartão contam como gasto; o pagamento da fatura aparece em dívida.',
+  semHistorico: 'Ainda não há meses completos suficientes para mostrar.',
+  series: { entradas: 'Entradas', essenciais: 'Gastos essenciais', outros: 'Outros gastos', divida: 'Pagamentos de dívida', sobra: 'Sobra (entradas − essenciais)' },
+  tabela: 'Ver em tabela',
+};
+
 // N3 (Fase 7): próximos vencimentos — organiza o que existe, sem alerta novo.
 export const vencimentos = {
   titulo: 'Próximos vencimentos',
