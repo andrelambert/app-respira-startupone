@@ -31,16 +31,19 @@ from app.models import (
     CapacidadeOrigem,
     Direcao,
     Divida,
+    Fatura,
     MetodoPlano,
     Plano,
     PlanoItem,
     StatusPlano,
+    TipoConta,
     Transacao,
     Usuario,
 )
 from app.repositories import eventos as repo_e
 from app.repositories import financeiro as repo_f
 from app.repositories import planos as repo_p
+from app.repositories import pfm as repo_pfm
 from app.services.coleta import detectar_e_registrar, snapshot
 from app.services.contexto import hoje_do_usuario
 
@@ -351,15 +354,22 @@ def avancar_mes_demo(s: Session, u: Usuario, mes_dificil: bool) -> Acompanhament
     um_mes = planner.simular(_entradas(abertas), pago_no_mes, Metodo(plano.metodo), hoje)
     pagamentos = {int(i.divida_id): i.valor_mensal for i in um_mes.itens}
     realizado = Decimal("0.00")
+    pagos_reais: dict[int, Decimal] = {}
     for d in abertas:
         assert d.id is not None
         juros = arredondar(d.saldo_devedor * d.taxa_juros_mes)
         pago = min(pagamentos.get(d.id, Decimal(0)), d.saldo_devedor + juros)
+        pagos_reais[d.id] = pago
         d.saldo_devedor = max(d.saldo_devedor + juros - pago, Decimal("0.00"))
         if d.saldo_devedor <= planner.SALDO_RESIDUAL:
             d.saldo_devedor = Decimal("0.00")
             d.quitada_em = hoje
         d.em_atraso_dias = 0 if pago >= d.parcela_minima or d.saldo_devedor == 0 else d.em_atraso_dias
+        # A16: o contrato também anda — uma parcela a mais paga.
+        if pago >= d.parcela_minima and d.parcelas_total and d.parcelas_pagas is not None:
+            d.parcelas_pagas = min(d.parcelas_pagas + 1, d.parcelas_total)
+            if d.parcelas_restantes is not None:
+                d.parcelas_restantes = max(d.parcelas_restantes - 1, 0)
         repo_f.salvar_divida(s, d)
         realizado += pago
         if pago > 0:
@@ -383,10 +393,70 @@ def avancar_mes_demo(s: Session, u: Usuario, mes_dificil: bool) -> Acompanhament
     s.add(u)
     s.commit()
     s.refresh(u)
+    _avancar_contas_demo(s, u, abertas, pagos_reais, hoje_do_usuario(u))
 
     a = _registrar_mes(s, u, plano, mes, realizado, data_anterior)
     detectar_e_registrar(s, u, hoje_do_usuario(u), anteriores)
     return a
+
+
+_MESES_BELVO = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+
+
+def _avancar_contas_demo(
+    s: Session, u: Usuario, dividas: Sequence[Divida], pagos: dict[int, Decimal], hoje: date
+) -> None:
+    """A16 (Fase 7): na demo, contas e faturas acompanham o mês simulado.
+
+    Sem isto, o relógio da demo andava e as faturas não: a do cartão aparecia
+    "atrasada" e os saldos de cartão e empréstimo ficavam nos valores iniciais.
+    Para cada dívida ligada a uma conta (``conta_id_externo``):
+    - o saldo da conta (cartão, empréstimo, financiamento) ou o uso do cheque
+      especial (conta corrente) passa a ser o saldo da dívida;
+    - no cartão, o pagamento do mês entra na fatura aberta e, quando o
+      vencimento dela já passou, nasce a do mês seguinte com o saldo atual.
+    """
+    assert u.id is not None
+    for d in dividas:
+        if not d.conta_id_externo or d.id is None:
+            continue
+        conta = repo_f.conta_por_externo(s, u.id, d.conta_id_externo)
+        if conta is None or conta.id is None:
+            continue
+        if conta.tipo in (TipoConta.CORRENTE, TipoConta.PAGAMENTO):
+            conta.usado_cheque_especial = d.saldo_devedor
+            repo_pfm.salvar(s, conta)
+            continue
+        conta.saldo = d.saldo_devedor
+        repo_pfm.salvar(s, conta)
+        if conta.tipo is not TipoConta.CARTAO_CREDITO:
+            continue
+        faturas = repo_pfm.faturas(s, conta.id)  # mais recente primeiro
+        if not faturas or faturas[0].vencimento is None:
+            continue
+        atual = faturas[0]
+        pago = pagos.get(d.id, Decimal(0))
+        if pago > 0:
+            data_pgto = min(atual.vencimento, hoje)
+            atual.pago += pago
+            atual.pagamentos = [*atual.pagamentos, {"data": data_pgto.isoformat(), "valor": str(pago)}]
+            repo_pfm.salvar(s, atual)
+        n = 0
+        while atual.vencimento is not None and atual.vencimento < hoje and d.saldo_devedor > 0:
+            n += 1
+            venc = adicionar_meses(atual.vencimento.replace(day=1), 1).replace(day=atual.vencimento.day)
+            atual = Fatura(
+                usuario_id=u.id,
+                consentimento_id=atual.consentimento_id,
+                conta_id=conta.id,
+                id_externo=f"{atual.id_externo[:48]}-sim{u.meses_simulados}-{n}",
+                nome=f"{_MESES_BELVO[venc.month - 1]}-{venc.year}",
+                vencimento=venc,
+                total=d.saldo_devedor,
+                minimo=min(d.parcela_minima, d.saldo_devedor),
+                parcelada=atual.parcelada,
+            )
+            repo_pfm.salvar(s, atual)
 
 
 def taxa_anual_de(d: Divida) -> Decimal:

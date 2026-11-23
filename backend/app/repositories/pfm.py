@@ -33,6 +33,12 @@ def faturas(session: Session, conta_id: int) -> list[Fatura]:
     )
 
 
+def salvar(session: Session, *objetos: Conta | Fatura) -> None:
+    for o in objetos:
+        session.add(o)
+    session.commit()
+
+
 def _filtros(
     usuario_id: int,
     conta_id: int,
