@@ -3,6 +3,7 @@
     uv run uvicorn app.main:app --reload --port 8000
 """
 
+import asyncio
 import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -25,6 +26,7 @@ from app.repositories import oracle as repo_oracle
 from app.repositories import sistema as repo_sistema
 from app.routers import analise, belvo_webhook, consentimentos, demo, eventos, pfm, usuarios
 from app.services import coleta, instituicoes
+from app.services import demo as demo_svc
 from app.services.contexto import fixture
 from app.services.demo import garantir_juliana
 
@@ -78,14 +80,33 @@ def _preparar() -> None:
                 coleta.iniciar(c.id)
 
 
+async def _limpar_demos_periodicamente() -> None:
+    """M5: demos por visitante vencidas saem com todos os dados, a cada hora."""
+    while True:
+        await asyncio.sleep(3600)
+        try:
+            await asyncio.to_thread(demo_svc.apagar_demos_expiradas)
+        except Exception:  # a limpeza nunca derruba o servidor
+            log.exception("limpeza_demos_falhou")
+
+
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     _migrar()
     _preparar()
     await garantir_juliana()
+    limpeza = None
+    if settings.demo_por_visitante:
+        demo_svc.apagar_demos_expiradas()
+        limpeza = asyncio.create_task(_limpar_demos_periodicamente())
     instituicoes.agendar()  # catálogo de bancos da Belvo, em segundo plano
-    log.info("respira_pronto belvo_configurada=%s", settings.belvo_configurada())
+    log.info(
+        "respira_pronto banco=%s belvo_configurada=%s modo_publico=%s demo_por_visitante=%s",
+        settings.banco, settings.belvo_configurada(), settings.modo_publico, settings.demo_por_visitante,
+    )
     yield
+    if limpeza:
+        limpeza.cancel()
 
 
 app = FastAPI(title="Respira API", version="0.1.0", lifespan=lifespan)
@@ -97,6 +118,15 @@ app.add_middleware(
     allow_methods=["GET", "POST", "PATCH", "DELETE"],
     allow_headers=["Content-Type", "X-Respira"],
 )
+
+
+@app.middleware("http")
+async def sem_indexacao_no_modo_publico(request: Request, call_next):
+    """Versão pública é vitrine acadêmica: nada de buscador indexando (M5)."""
+    resposta = await call_next(request)
+    if settings.modo_publico:
+        resposta.headers["X-Robots-Tag"] = "noindex, nofollow"
+    return resposta
 
 
 @app.middleware("http")

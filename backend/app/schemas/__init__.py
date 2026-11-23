@@ -57,6 +57,7 @@ class ConfigOut(BaseModel):
     demo_disponivel: bool  # existe a conta da Juliana para entrar
     belvo_configurada: bool  # há chaves da Belvo no backend/.env
     webhooks: bool
+    modo_publico: bool  # versão pública: sem banco real, cadastro sem CPF, faixa de aviso
     banco: Literal["oracle", "sqlite"]  # card "Onde ficam os seus dados" (M3)
     regiao: str | None  # região do Oracle, ex.: sa-saopaulo-1
 
@@ -81,7 +82,7 @@ class RegistroEntrada(Entrada):
     senha: Senha
     # Nome completo e CPF são exigidos pelo token da Belvo (identification_info, §7.2).
     nome_completo: Nome
-    cpf: Cpf
+    cpf: Cpf | None = None  # obrigatório só quando a Belvo está configurada
     ja_desistiu_de_plano: bool | None = None
 
 

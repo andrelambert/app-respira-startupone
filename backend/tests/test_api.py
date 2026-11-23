@@ -160,7 +160,9 @@ def test_conta_real_registro_isolamento_e_belvo(api):
     assert r.status_code == 201, r.text
     u = r.json()
     assert u["email"] == "pessoa.real@exemplo.com" and u["demo"] is False and u["apelido"] == "Pessoa"
-    assert u["cpf_mascarado"] == "529.***.***-25"
+    # Sem Belvo configurada, o CPF não é guardado (minimização, M5); com Belvo, ver
+    # test_cpf_guardado_mascarado_quando_ha_belvo.
+    assert u["cpf_mascarado"] is None
     assert u["nome_completo"] == "Pessoa de Teste"
     assert api.post("/auth/registrar", json=REAL, headers=H).json()["detail"] == "email_em_uso"
 
@@ -285,3 +287,19 @@ def test_pfm_contas_faturas_e_extrato(api):
     assert api.get(f"/contas/{corrente['id']}").status_code == 404
     assert api.get(url).status_code == 404
     assert api.get("/pfm/visao-geral").json()["bancos"] == []
+
+
+def test_cpf_guardado_mascarado_quando_ha_belvo(api, monkeypatch):
+    """O CPF só existe para o consentimento da Belvo: com ela, é obrigatório e
+    volta mascarado; sem ela (versão pública), nem é pedido."""
+    from app.config import Settings
+
+    monkeypatch.setattr(Settings, "belvo_configurada", lambda self: True)
+    api.cookies.clear()
+    dados = {**REAL, "email": "com.belvo@exemplo.com", "cpf": "390.533.447-05"}
+    sem_cpf = {k: v for k, v in dados.items() if k != "cpf"}
+    r = api.post("/auth/registrar", json=sem_cpf, headers=H)
+    assert r.status_code == 422 and r.json()["detail"] == "cpf_obrigatorio"
+    r = api.post("/auth/registrar", json=dados, headers=H)
+    assert r.status_code == 201, r.text
+    assert r.json()["cpf_mascarado"] == "390.***.***-05"

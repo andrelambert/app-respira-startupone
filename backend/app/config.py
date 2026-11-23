@@ -52,6 +52,17 @@ class Settings(BaseSettings):
     # Atraso entre os webhooks simulados da fixture.
     fixture_coleta_segundos: float = Field(default=2.0, ge=0)
 
+    # --- Publicação (M5, Fase 7) ------------------------------------------------
+    # Versão pública: vitrine acadêmica. Belvo desligada mesmo que haja chaves,
+    # cadastro sem CPF, faixa "não informe dados reais", noindex.
+    modo_publico: bool = False
+    # "Entrar como Juliana" cria uma Juliana só sua (efêmera), para dois
+    # avaliadores não reiniciarem a demo um do outro.
+    demo_por_visitante: bool = False
+    demo_validade_horas: int = Field(default=24, ge=1, le=168)
+    demo_max_ativas: int = Field(default=200, ge=1, le=5000)  # Always Free: espaço e sessões limitados
+    demo_por_ip_hora: int = Field(default=10, ge=1, le=1000)
+
     @property
     def banco(self) -> str:
         """"oracle" ou "sqlite" — o nome do dialeto, nunca a URL."""
@@ -66,6 +77,8 @@ class Settings(BaseSettings):
         return self.app_public_url.startswith("https://")
 
     def belvo_configurada(self) -> bool:
+        if self.modo_publico:
+            return False  # na versão pública, conexão com banco real fica desligada
         return bool(
             self.belvo_secret_id
             and self.belvo_secret_id.get_secret_value()
@@ -74,6 +87,8 @@ class Settings(BaseSettings):
         )
 
     def demo_configurada(self) -> bool:
+        if self.demo_por_visitante:
+            return self.demo_habilitada  # não precisa de e-mail/senha fixos
         return bool(self.demo_habilitada and self.demo_email and self.demo_senha)
 
 

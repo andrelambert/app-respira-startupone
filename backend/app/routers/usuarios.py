@@ -2,7 +2,7 @@ import logging
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Cookie, HTTPException, Response, status
+from fastapi import APIRouter, Cookie, HTTPException, Request, Response, status
 
 from app.config import get_settings
 from app.models import Usuario
@@ -10,7 +10,7 @@ from app.repositories import consentimentos as repo_c
 from app.repositories import usuarios as repo_u
 from app.routers.comum import SessionDep, UsuarioDep
 from app.schemas import ConfigOut, LoginEntrada, RegistroEntrada, UsuarioAtualizar, UsuarioOut
-from app.services import auth, conexao
+from app.services import auth, conexao, demo
 from app.services.contexto import hoje_do_usuario
 
 log = logging.getLogger("respira.auth")
@@ -54,16 +54,29 @@ def config(s: SessionDep) -> ConfigOut:
         demo_disponivel=demo,
         belvo_configurada=cfg.belvo_configurada(),
         webhooks=cfg.belvo_webhooks_enabled,
+        modo_publico=cfg.modo_publico,
         banco=cfg.banco,  # type: ignore[arg-type]
         regiao=cfg.oracle_regiao if cfg.banco == "oracle" else None,
     )
 
 
+# Limite de cadastros por IP (M6): sem ele, a versão pública vira fábrica de contas.
+CADASTROS_POR_IP_HORA = 10
+
+
 @router.post("/auth/registrar", response_model=UsuarioOut, status_code=status.HTTP_201_CREATED)
-def registrar(dados: RegistroEntrada, s: SessionDep, resposta: Response) -> UsuarioOut:
+def registrar(dados: RegistroEntrada, request: Request, s: SessionDep, resposta: Response) -> UsuarioOut:
+    ip = request.client.host if request.client else "?"
+    if not auth.dentro_do_limite(f"registro:{ip}", CADASTROS_POR_IP_HORA, 3600):
+        raise HTTPException(status.HTTP_429_TOO_MANY_REQUESTS, detail="muitas_tentativas")
+    # O CPF só serve para o consentimento da Belvo. Sem Belvo (versão pública),
+    # não é pedido nem guardado — minimização de dados (LGPD, §12.7).
+    cpf = dados.cpf if get_settings().belvo_configurada() else None
+    if get_settings().belvo_configurada() and not cpf:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, detail="cpf_obrigatorio")
     if repo_u.por_email(s, dados.email) is not None:
         raise HTTPException(status.HTTP_409_CONFLICT, detail="email_em_uso")
-    if repo_u.por_cpf(s, dados.cpf) is not None:
+    if cpf and repo_u.por_cpf(s, cpf) is not None:
         raise HTTPException(status.HTTP_409_CONFLICT, detail="cpf_em_uso")
     u = repo_u.criar(
         s,
@@ -73,7 +86,7 @@ def registrar(dados: RegistroEntrada, s: SessionDep, resposta: Response) -> Usua
             senha_hash=auth.hash_senha(dados.senha),
             apelido=dados.nome_completo.split()[0][:60],
             nome_completo=dados.nome_completo,
-            cpf=dados.cpf,
+            cpf=cpf,
             ja_desistiu_de_plano=dados.ja_desistiu_de_plano,
         ),
     )
@@ -93,9 +106,20 @@ def entrar(dados: LoginEntrada, s: SessionDep, resposta: Response) -> UsuarioOut
 
 
 @router.post("/auth/demo", response_model=UsuarioOut)
-def entrar_demo(s: SessionDep, resposta: Response) -> UsuarioOut:
-    """Atalho da apresentação: entra na conta fictícia da Juliana."""
+async def entrar_demo(request: Request, s: SessionDep, resposta: Response) -> UsuarioOut:
+    """Atalho da apresentação: entra na conta fictícia da Juliana.
+
+    Com ``DEMO_POR_VISITANTE``, cada visitante ganha uma Juliana só sua (M5)."""
     cfg = get_settings()
+    if cfg.demo_por_visitante and cfg.demo_habilitada:
+        ip = request.client.host if request.client else "?"
+        if not auth.dentro_do_limite(f"demo:{ip}", cfg.demo_por_ip_hora, 3600):
+            raise HTTPException(status.HTTP_429_TOO_MANY_REQUESTS, detail="muitas_demos")
+        try:
+            u = await demo.criar_demo_visitante(s)
+        except demo.DemosEsgotadas:
+            raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, detail="demos_esgotadas") from None
+        return _logar(s, u, resposta)
     u = repo_u.por_email(s, cfg.demo_email or "") if cfg.demo_configurada() else None
     if u is None or not u.demo:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="demo_indisponivel")

@@ -173,6 +173,9 @@ class Usuario(SQLModel, table=True):
     ja_desistiu_de_plano: bool | None = None  # alimenta a pré-seleção da §5.4
     # Relógio de demonstração (só na conta demo): meses simulados à frente.
     meses_simulados: int = 0
+    # Demo por visitante (M5): conta efêmera, apagada com todos os dados depois disto.
+    # None = conta permanente (inclusive a Juliana fixa do uso local).
+    expira_em: datetime | None = Field(default=None, index=True)
     criado_em: datetime = Field(default_factory=agora)
     excluido_em: datetime | None = None
 

@@ -1,5 +1,6 @@
 from datetime import datetime, timezone
 
+from sqlalchemy import func
 from sqlmodel import Session, col, delete, select
 
 from app.models import (
@@ -97,6 +98,25 @@ def apagar_dados_financeiros(session: Session, usuario_id: int) -> None:
     ):
         session.exec(stmt)  # type: ignore[call-overload]
     session.commit()
+
+
+def demos_ativas(session: Session, agora: datetime) -> int:
+    """Demos efêmeras ainda válidas (M5)."""
+    q = select(func.count()).select_from(Usuario).where(
+        Usuario.demo == True,
+        col(Usuario.expira_em).is_not(None),
+        col(Usuario.expira_em) > agora,
+    )
+    return int(session.exec(q).one())
+
+
+def demos_expiradas(session: Session, agora: datetime) -> list[int]:
+    q = select(Usuario.id).where(
+        Usuario.demo == True,
+        col(Usuario.expira_em).is_not(None),
+        col(Usuario.expira_em) <= agora,
+    )
+    return [i for i in session.exec(q) if i is not None]
 
 
 def apagar_tudo(session: Session, usuario_id: int) -> None:
