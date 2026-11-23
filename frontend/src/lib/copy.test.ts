@@ -101,7 +101,7 @@ describe('frases canônicas do docs/contexto-produto.md §11', () => {
       notificado_em: null,
       licao: 'rotativo',
     };
-    const m = mensagemEvento(e);
+    const m = mensagemEvento(e, { temPlano: true });
     expect(nbsp(m.texto)).toContain('R$ 312 de juros por mês');
     expect(m.texto).toContain('436% ao ano');
     expect(m.tom).toBe('fato');
@@ -124,11 +124,23 @@ describe('frases canônicas do docs/contexto-produto.md §11', () => {
       detectado_em: '2026-11-01T00:00:00Z',
       notificado_em: null,
       licao: 'plano-dobra',
-    });
+    }, { temPlano: true });
     expect(m.tom).toBe('atencao');
     expect(nbsp(m.texto)).toBe(
       'Sua data nova é maio de 2028. Colocando R$ 80 a mais nos próximos 3 meses, você repõe o que faltou.',
     );
+  });
+});
+
+describe('alertas: plano e conta nomeada (A4, A5)', () => {
+  const base = { severidade: 3, divida_id: 7, detectado_em: '2026-11-01T00:00:00Z', notificado_em: null, licao: null };
+
+  it('sem plano ativo, não diz que a parcela "já está no seu plano"', () => {
+    const atraso: Evento = { ...base, id: 3, tipo: 'ATRASO_CONFIRMADO', contexto: { descricao: 'Carnê', dias: 12, parcela: '95.00' } };
+    expect(mensagemEvento(atraso, { temPlano: false }).texto).not.toContain('já está no seu plano');
+    expect(mensagemEvento(atraso, { temPlano: true }).texto).toContain('já está no seu plano');
+    const cheque: Evento = { ...base, id: 4, tipo: 'CHEQUE_ESPECIAL', contexto: { usado: '500.00', taxa_anual: '138.0', juros_mes: '37.45' } };
+    expect(mensagemEvento(cheque, { temPlano: false }).texto).not.toContain('No plano');
   });
 });
 

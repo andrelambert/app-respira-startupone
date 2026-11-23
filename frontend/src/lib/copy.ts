@@ -573,7 +573,8 @@ export function nomeFatura(nome: string | null | undefined): string | null {
 
 export type Tom = 'fato' | 'atencao' | 'conquista' | 'info';
 
-export function mensagemEvento(e: Evento): { titulo: string; texto: string; tom: Tom } {
+/** ``temPlano``: só diz que algo "já está no seu plano" quando existe um plano ativo (A4). */
+export function mensagemEvento(e: Evento, { temPlano }: { temPlano: boolean }): { titulo: string; texto: string; tom: Tom } {
   const c = e.contexto;
   const s = (k: string) => (typeof c[k] === 'string' ? (c[k] as string) : '');
   const n = (k: string) => (typeof c[k] === 'number' ? (c[k] as number) : 0);
@@ -594,15 +595,17 @@ export function mensagemEvento(e: Evento): { titulo: string; texto: string; tom:
       return {
         tom: 'fato',
         titulo: `${s('descricao')} está com ${n('dias')} ${plural(n('dias'), 'dia', 'dias')} de atraso`,
-        texto: `Pagar a parcela de ${r$s(c.parcela)} interrompe a multa e os juros de atraso. Ela já está no seu plano.`,
+        texto: `Pagar a parcela de ${r$s(c.parcela)} interrompe a multa e os juros de atraso. ${temPlano ? 'Ela já está no seu plano.' : 'Ao montar seu plano, ela entra na conta.'}`,
       };
     case 'CHEQUE_ESPECIAL':
       return {
         tom: 'fato',
         titulo: `Você está usando ${r$s(c.usado)} do cheque especial`,
         texto: c.juros_mes
-          ? `Ele custa ${pctAno(c.taxa_anual)}: ${r$s(c.juros_mes)} de juros por mês. No plano, ele tem data para acabar.`
-          : 'No plano, ele tem data para acabar.',
+          ? `Ele custa ${pctAno(c.taxa_anual)}: ${r$s(c.juros_mes)} de juros por mês. ${temPlano ? 'No plano, ele tem data para acabar.' : 'Um plano dá a ele uma data para acabar.'}`
+          : temPlano
+            ? 'No plano, ele tem data para acabar.'
+            : 'Um plano dá a ele uma data para acabar.',
       };
     case 'PICO_CATEGORIA': {
       const cat = categoriaNome(s('categoria')).toLowerCase();

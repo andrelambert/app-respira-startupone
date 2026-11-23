@@ -178,13 +178,13 @@ const tomCor: Record<Tom, string> = {
   info: 'text-blue',
 };
 
-export function AlertBanner({ evento }: { evento: Evento }) {
+export function AlertBanner({ evento, temPlano }: { evento: Evento; temPlano: boolean }) {
   const qc = useQueryClient();
   const visto = useMutation({
     mutationFn: () => api.eventoVisto(evento.id),
     onSuccess: () => qc.invalidateQueries({ queryKey: chaves.eventos }),
   });
-  const m = mensagemEvento(evento);
+  const m = mensagemEvento(evento, { temPlano });
   return (
     <Card as="li" tom={tomCard[m.tom]} className="flex flex-col gap-2">
       <h3 className={cx('flex items-start gap-2 font-semibold', tomCor[m.tom])}>

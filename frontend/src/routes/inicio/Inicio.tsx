@@ -91,7 +91,7 @@ export default function Inicio() {
           <h2 className="font-semibold text-navy">{copy.alertas}</h2>
           <ul className="flex flex-col gap-2">
             {pendentes.map((e) => (
-              <AlertBanner key={e.id} evento={e} />
+              <AlertBanner key={e.id} evento={e} temPlano={Boolean(plano.data)} />
             ))}
           </ul>
         </section>
