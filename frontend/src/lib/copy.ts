@@ -418,7 +418,8 @@ export const inicio = {
   faltam: (n: number) => `faltam ${meses(n)}`,
   abatido: (abatido: Centavos, inicial: Centavos) => `${r$(abatido)} de ${r$(inicial)} já pagos`,
   esteMes: 'O que fazer este mês',
-  esteMesAjuda: 'Nesta ordem. Se sobrar, vai para a primeira da lista.',
+  // A7: a soma do mês costuma passar do saldo em conta; o pagamento acompanha o salário.
+  esteMesAjuda: 'Valores para pagar ao longo do mês, conforme o salário entrar. Nesta ordem; se sobrar, vai para a primeira da lista.',
   minimo: 'só o mínimo',
   principal: 'prioridade',
   alertas: 'Precisa da sua atenção',
