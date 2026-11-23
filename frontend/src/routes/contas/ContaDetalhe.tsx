@@ -7,7 +7,7 @@ import { Button, Card, Carregando, EstadoErro, EstadoVazio, Money, cx } from '@/
 import { chaves } from '@/hooks/queries';
 import { useDebounced } from '@/hooks/useDebounced';
 import { api, type ContaBancaria, type Fatura, type FiltroExtrato, type Transacao } from '@/lib/api';
-import { pfm as copy, tipoBelvo } from '@/lib/copy';
+import { categoriaNome, nomeFatura, pfm as copy, subcategoriaNome, tipoBelvo } from '@/lib/copy';
 import { dataCompleta, dataHoraLocal, diaMes } from '@/lib/datas';
 import { brl } from '@/lib/money';
 import { SituacaoFatura, identificacaoConta } from './Contas';
@@ -228,7 +228,7 @@ function Faturas({ faturas }: { faturas: Fatura[] }) {
               <li key={f.id} className="flex flex-col gap-2 px-4 py-3 text-sm">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <p className="font-bold text-navy">{f.nome || (f.vencimento ? diaMes(f.vencimento) : '—')}</p>
+                    <p className="font-bold text-navy">{nomeFatura(f.nome) || (f.vencimento ? diaMes(f.vencimento) : '—')}</p>
                     {f.vencimento && <p className="text-xs text-slate">{copy.vence(dataCompleta(f.vencimento))}</p>}
                   </div>
                   <Money valor={f.total} className="shrink-0 font-semibold text-navy" />
@@ -410,7 +410,7 @@ function LinhaTransacao({ t, cartao }: { t: Transacao; cartao: boolean }) {
         <div className="min-w-0">
           <p className="truncate font-medium text-ink">{(cartao && t.estabelecimento) || t.descricao || '—'}</p>
           <p className="truncate text-xs text-slate">
-            {diaMes(t.data)} · {t.categoria ?? copy.semCategoria}
+            {diaMes(t.data)} · {t.categoria ? categoriaNome(t.categoria) : copy.semCategoria}
           </p>
         </div>
         {/* Sinal + cor: a direção nunca depende só da cor (§10). */}
@@ -425,13 +425,13 @@ function LinhaTransacao({ t, cartao }: { t: Transacao; cartao: boolean }) {
             <Detalhe rotulo={copy.detalhe.data} valor={dataCompleta(t.data)} />
           )}
           <Detalhe rotulo={copy.detalhe.valor} valor={valor} />
-          {/* Categoria, subcategoria e tipo de operação: exatamente como a Belvo manda. */}
-          <Detalhe rotulo={copy.detalhe.categoria} valor={t.categoria} />
-          <Detalhe rotulo={copy.detalhe.subcategoria} valor={t.subcategoria} />
+          {/* Categoria e subcategoria da Belvo, traduzidas (A6). */}
+          <Detalhe rotulo={copy.detalhe.categoria} valor={t.categoria && categoriaNome(t.categoria)} />
+          <Detalhe rotulo={copy.detalhe.subcategoria} valor={subcategoriaNome(t.subcategoria)} />
           <Detalhe rotulo={copy.detalhe.tipoOperacao} valor={t.tipo_operacao} />
           {/* Estabelecimento e final do cartão só existem em transação de cartão. */}
           {cartao && <Detalhe rotulo={copy.detalhe.finalCartao} valor={t.final_cartao} />}
-          {cartao && <Detalhe rotulo={copy.detalhe.fatura} valor={t.fatura} />}
+          {cartao && <Detalhe rotulo={copy.detalhe.fatura} valor={nomeFatura(t.fatura)} />}
           {cartao && <Detalhe rotulo={copy.detalhe.estabelecimento} valor={t.estabelecimento} />}
           {cartao && t.estabelecimento_site && (
             <div>

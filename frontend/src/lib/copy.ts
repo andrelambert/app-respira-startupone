@@ -473,24 +473,103 @@ export function fraseAcompanhamento(a: {
 // --- alertas (§8.3) — sempre ação concreta + valor em reais ----------------------------------------
 
 /** Categorias da Belvo (enum de TransactionOpenFinanceBrazil.category) em português. */
-const categoriaNome: Record<string, string> = {
-  'Online Platforms & Leisure': 'delivery, streaming e lazer',
-  'Food & Groceries': 'mercado',
-  'Personal Shopping': 'compras pessoais',
-  'Transport & Travel': 'transporte',
-  'Bills & Utilities': 'contas da casa',
-  'Home & Life': 'casa e saúde',
-  'Fees & Charges': 'tarifas',
-  'Credits & Loans': 'crédito e empréstimos',
-  'Income & Payments': 'renda e recebimentos',
-  'Investments & Savings': 'investimentos',
-  Deposits: 'depósitos',
-  Transfers: 'transferências',
-  Taxes: 'impostos',
-  Insurance: 'seguros',
-  'Withdrawal & ATM': 'saques',
-  Unknown: 'outros',
+// --- Rótulos vindos da Belvo, em pt-BR (A6, Fase 7) ---------------------------------
+// Único lugar que traduz categorias, subcategorias, tipos de produto e nomes de
+// fatura. O que não estiver no dicionário cai em "Outros" — nunca em inglês na tela.
+
+const CATEGORIAS: Record<string, string> = {
+  'Online Platforms & Leisure': 'Delivery, streaming e lazer',
+  'Food & Groceries': 'Mercado',
+  'Personal Shopping': 'Compras pessoais',
+  'Transport & Travel': 'Transporte',
+  'Bills & Utilities': 'Contas da casa',
+  'Home & Life': 'Casa e saúde',
+  'Fees & Charges': 'Tarifas',
+  'Credits & Loans': 'Crédito e empréstimos',
+  'Income & Payments': 'Renda e recebimentos',
+  'Investments & Savings': 'Investimentos',
+  'Business Services': 'Serviços',
+  Deposits: 'Depósitos',
+  Transfers: 'Transferências',
+  Taxes: 'Impostos',
+  Insurance: 'Seguros',
+  'Withdrawal & ATM': 'Saques',
+  Unknown: 'Outros',
 };
+
+const SUBCATEGORIAS: Record<string, string> = {
+  Clothing: 'Roupas',
+  'Credit card payment': 'Pagamento de fatura',
+  Electricity: 'Luz',
+  'Food delivery': 'Delivery de comida',
+  Fuel: 'Combustível',
+  Groceries: 'Mercado',
+  Interest: 'Juros',
+  'Loan payment': 'Parcela de empréstimo',
+  Pharmacy: 'Farmácia',
+  Pix: 'Pix',
+  'Public transport': 'Transporte público',
+  Rent: 'Aluguel',
+  'Ride sharing': 'Transporte por app',
+  Salary: 'Salário',
+  Savings: 'Poupança',
+  Streaming: 'Streaming',
+  Telecommunications: 'Internet e telefone',
+  Water: 'Água',
+};
+
+// product_type do Open Finance Brasil (contas, cartões e operações de crédito).
+const TIPOS_PRODUTO: Record<string, string> = {
+  CONTA_DEPOSITO_A_VISTA: 'Conta corrente',
+  CONTA_POUPANCA: 'Poupança',
+  CONTA_PAGAMENTO_PRE_PAGA: 'Conta de pagamento',
+  EMPRESTIMOS: 'Empréstimo',
+  FINANCIAMENTOS: 'Financiamento',
+  FINANCIAMENTOS_RURAIS: 'Financiamento rural',
+  FINANCIAMENTOS_IMOBILIARIOS: 'Financiamento imobiliário',
+  ADIANTAMENTO_A_DEPOSITANTES: 'Cheque especial',
+  DIREITOS_CREDITORIOS_DESCONTADOS: 'Antecipação de recebíveis',
+  STANDARD: 'Standard',
+  GOLD: 'Gold',
+  PLATINUM: 'Platinum',
+  INFINITE: 'Infinite',
+  BLACK: 'Black',
+  ELECTRON: 'Electron',
+  INTERNACIONAL: 'Internacional',
+  NACIONAL: 'Nacional',
+  OUTROS: 'Outros',
+};
+
+const MESES_EN: Record<string, string> = {
+  Jan: 'jan', Feb: 'fev', Mar: 'mar', Apr: 'abr', May: 'mai', Jun: 'jun',
+  Jul: 'jul', Aug: 'ago', Sep: 'set', Oct: 'out', Nov: 'nov', Dec: 'dez',
+};
+
+/** "Food & Groceries" → "Mercado"; desconhecida → "Outros". */
+export function categoriaNome(categoria: string | null | undefined): string {
+  return (categoria && CATEGORIAS[categoria]) || 'Outros';
+}
+
+export function subcategoriaNome(sub: string | null | undefined): string | null {
+  if (!sub) return null;
+  return SUBCATEGORIAS[sub] ?? 'Outros';
+}
+
+/** "EMPRESTIMOS" → "Empréstimo". Fora do dicionário: o código, legível, sem inglês. */
+export function tipoBelvo(tipo: string | null): string | null {
+  if (!tipo) return null;
+  if (TIPOS_PRODUTO[tipo]) return TIPOS_PRODUTO[tipo];
+  const t = tipo.replace(/_/g, ' ').toLowerCase().trim();
+  return t.charAt(0).toUpperCase() + t.slice(1);
+}
+
+/** bill_name da Belvo "Oct-2026" → "out/2026". Outros formatos passam como vieram. */
+export function nomeFatura(nome: string | null | undefined): string | null {
+  if (!nome) return null;
+  const [, mes, ano] = /^([A-Z][a-z]{2})-(\d{4})$/.exec(nome) ?? [];
+  const pt = mes ? MESES_EN[mes] : undefined;
+  return pt ? `${pt}/${ano}` : nome;
+}
 
 export type Tom = 'fato' | 'atencao' | 'conquista' | 'info';
 
@@ -526,7 +605,7 @@ export function mensagemEvento(e: Evento): { titulo: string; texto: string; tom:
           : 'No plano, ele tem data para acabar.',
       };
     case 'PICO_CATEGORIA': {
-      const cat = categoriaNome[s('categoria')] ?? s('categoria').toLowerCase();
+      const cat = categoriaNome(s('categoria')).toLowerCase();
       return {
         tom: 'atencao',
         titulo: `Em ${nomeMes(s('mes'))}, ${cat} somou ${r$s(c.gasto)}`,
@@ -672,12 +751,6 @@ export const licao = {
 // --- PFM: contas, faturas e extrato ------------------------------------------------------
 
 /** ``type`` da Belvo (ex.: CONTA_DEPOSITO_A_VISTA) em texto legível. */
-export function tipoBelvo(tipo: string | null): string | null {
-  if (!tipo) return null;
-  const t = tipo.replace(/_/g, ' ').toLowerCase().trim();
-  return t.charAt(0).toUpperCase() + t.slice(1);
-}
-
 export const pfm = {
   titulo: 'Suas contas',
   todos: 'Todos',

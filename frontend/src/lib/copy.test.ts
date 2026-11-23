@@ -1,7 +1,18 @@
 import { describe, expect, it } from 'vitest';
 
 import type { Evento } from './api';
-import { alertaMinimo, erroConexao, fraseAcompanhamento, fraseComparacao, fraseRaioX, mensagemEvento } from './copy';
+import {
+  alertaMinimo,
+  categoriaNome,
+  erroConexao,
+  fraseAcompanhamento,
+  fraseComparacao,
+  fraseRaioX,
+  mensagemEvento,
+  nomeFatura,
+  subcategoriaNome,
+  tipoBelvo,
+} from './copy';
 import { centavos } from './money';
 
 const nbsp = (s: string) => s.replace(/ /g, ' ');
@@ -118,5 +129,30 @@ describe('frases canônicas do docs/contexto-produto.md §11', () => {
     expect(nbsp(m.texto)).toBe(
       'Sua data nova é maio de 2028. Colocando R$ 80 a mais nos próximos 3 meses, você repõe o que faltou.',
     );
+  });
+});
+
+describe('rótulos da Belvo em pt-BR (A6)', () => {
+  it('traduz todas as categorias que a demo devolve, e o resto vira "Outros"', () => {
+    const daDemo = [
+      'Bills & Utilities', 'Credits & Loans', 'Food & Groceries', 'Home & Life', 'Income & Payments',
+      'Investments & Savings', 'Online Platforms & Leisure', 'Personal Shopping', 'Transfers', 'Transport & Travel',
+    ];
+    for (const c of daDemo) expect(categoriaNome(c)).not.toMatch(/[&]|^Outros$/);
+    expect(categoriaNome('Food & Groceries')).toBe('Mercado');
+    expect(categoriaNome('Categoria Nova Da Belvo')).toBe('Outros');
+    expect(categoriaNome(null)).toBe('Outros');
+    expect(subcategoriaNome('Credit card payment')).toBe('Pagamento de fatura');
+    expect(subcategoriaNome('Something new')).toBe('Outros');
+  });
+
+  it('tipos de produto e nome de fatura', () => {
+    expect(tipoBelvo('EMPRESTIMOS')).toBe('Empréstimo');
+    expect(tipoBelvo('CONTA_PAGAMENTO_PRE_PAGA')).toBe('Conta de pagamento');
+    expect(tipoBelvo('CONTA_DEPOSITO_A_VISTA')).toBe('Conta corrente');
+    expect(nomeFatura('Oct-2026')).toBe('out/2026');
+    expect(nomeFatura('Feb-2027')).toBe('fev/2027');
+    expect(nomeFatura('Fatura de outubro')).toBe('Fatura de outubro');
+    expect(nomeFatura(null)).toBeNull();
   });
 });
