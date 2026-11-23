@@ -111,3 +111,23 @@ def test_grupo_separa_picos_por_categoria():
     assert grupo("PICO_CATEGORIA", None, {"categoria": "A"}) != grupo("PICO_CATEGORIA", None, {"categoria": "B"})
     assert grupo("ATRASO_IMINENTE", 1, {}) != grupo("ATRASO_IMINENTE", 2, {})
 
+
+
+def test_atraso_iminente_usa_a_conta_do_mesmo_banco_e_diz_o_nome():
+    """A5: com R$ 563 somando todas as contas, mas só R$ 63,40 no Nubank, a fatura
+    do Nubank está em risco — e o alerta diz de qual conta está falando."""
+    eventos = detectar(
+        hoje=date(2026, 11, 10), dividas=[_divida()], anteriores={},
+        saldo_em_conta=D("563.40"), usado_cheque_especial=D(0), gastos=[],
+        saldo_por_banco={"Nubank": D("63.40"), "Caixa": D("500.00")},
+    )
+    ai = next(e for e in eventos if e.tipo == "ATRASO_IMINENTE")
+    assert (ai.contexto["conta"], ai.contexto["saldo_conta"], ai.contexto["falta"]) == ("Nubank", "63.40", "144.60")
+
+    # Sem conta no banco da dívida: compara com a soma e não inventa um nome.
+    sem_conta = detectar(
+        hoje=date(2026, 11, 10), dividas=[_divida(instituicao="Loja D")], anteriores={},
+        saldo_em_conta=D("100.00"), usado_cheque_especial=D(0), gastos=[],
+        saldo_por_banco={"Nubank": D("100.00")},
+    )
+    assert next(e for e in sem_conta if e.tipo == "ATRASO_IMINENTE").contexto["conta"] is None

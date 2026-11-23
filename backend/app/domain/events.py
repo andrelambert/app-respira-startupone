@@ -11,7 +11,7 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import date, timedelta
 from decimal import Decimal
-from typing import Any, Sequence
+from typing import Any, Mapping, Sequence
 
 from app.domain.planner import adicionar_meses, arredondar
 from app.domain.xray import taxa_anual
@@ -74,7 +74,12 @@ def detectar(
     saldo_em_conta: Decimal | None,  # None = sem conta conectada: não há como avaliar
     usado_cheque_especial: Decimal,
     gastos: Sequence[GastoCategoria],
+    saldo_por_banco: Mapping[str, Decimal] | None = None,
 ) -> list[EventoDetectado]:
+    """``saldo_por_banco``: saldo das contas de cada instituição. Quando a dívida é
+    de um banco onde a pessoa tem conta, o atraso iminente compara com o saldo
+    dessa conta e diz o nome dela (A5, Fase 7); senão, com a soma das contas."""
+    saldo_por_banco = saldo_por_banco or {}
     eventos: list[EventoDetectado] = []
     mes = hoje.strftime("%Y-%m")
 
@@ -104,10 +109,12 @@ def detectar(
         if d.dia_vencimento and d.saldo > 0 and d.minima > 0:
             venc = _proximo_vencimento(hoje, d.dia_vencimento)
             dias = (venc - hoje).days
+            conta = d.instituicao if d.instituicao in saldo_por_banco else None
+            disponivel = saldo_por_banco[conta] if conta else saldo_em_conta
             if (
-                saldo_em_conta is not None
+                disponivel is not None
                 and dias <= DIAS_ATRASO_IMINENTE
-                and saldo_em_conta < d.minima
+                and disponivel < d.minima
             ):
                 eventos.append(
                     EventoDetectado(
@@ -119,8 +126,9 @@ def detectar(
                             "descricao": d.descricao,
                             "instituicao": d.instituicao,
                             "parcela": _s(d.minima),
-                            "saldo_conta": _s(max(saldo_em_conta, Decimal(0))),
-                            "falta": _s(d.minima - max(saldo_em_conta, Decimal(0))),
+                            "conta": conta,  # None = soma de todas as contas
+                            "saldo_conta": _s(max(disponivel, Decimal(0))),
+                            "falta": _s(d.minima - max(disponivel, Decimal(0))),
                             "vencimento": venc.isoformat(),
                             "dias": dias,
                         },

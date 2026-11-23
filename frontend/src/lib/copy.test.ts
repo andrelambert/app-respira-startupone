@@ -142,6 +142,14 @@ describe('alertas: plano e conta nomeada (A4, A5)', () => {
     const cheque: Evento = { ...base, id: 4, tipo: 'CHEQUE_ESPECIAL', contexto: { usado: '500.00', taxa_anual: '138.0', juros_mes: '37.45' } };
     expect(mensagemEvento(cheque, { temPlano: false }).texto).not.toContain('No plano');
   });
+
+  it('atraso iminente diz de qual conta é o saldo', () => {
+    const contexto = { descricao: 'Rotativo', parcela: '208.00', saldo_conta: '63.40', falta: '144.60', vencimento: '2026-11-12', dias: 2 };
+    const ai: Evento = { ...base, id: 5, tipo: 'ATRASO_IMINENTE', contexto: { ...contexto, conta: 'Nubank' } };
+    expect(nbsp(mensagemEvento(ai, { temPlano: true }).texto)).toContain('sua conta Nubank tem R$ 63');
+    const soma: Evento = { ...ai, contexto: { ...contexto, conta: null } };
+    expect(nbsp(mensagemEvento(soma, { temPlano: true }).texto)).toContain('suas contas somam R$ 63');
+  });
 });
 
 describe('rótulos da Belvo em pt-BR (A6)', () => {

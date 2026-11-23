@@ -98,6 +98,11 @@ def detectar_e_registrar(
     # Só conta corrente/poupança/pagamento: "dinheiro na conta" para pagar a parcela.
     contas = [c for c in repo_f.contas(s, usuario.id) if c.tipo in TIPOS_CONTA_DEPOSITO]
     saldo_em_conta = sum((c.saldo for c in contas), Decimal(0)) if contas else None
+    saldo_por_banco: dict[str, Decimal] = {}
+    for c in contas:
+        inst = repo_c.obter_instituicao(s, c.instituicao_id)
+        if inst is not None:
+            saldo_por_banco[inst.nome] = saldo_por_banco.get(inst.nome, Decimal(0)) + c.saldo
     usado_cheque = sum(
         (d.saldo for d in atuais if d.modalidade == "CHEQUE_ESPECIAL" and d.saldo > 0), Decimal(0)
     )
@@ -114,6 +119,7 @@ def detectar_e_registrar(
         saldo_em_conta=saldo_em_conta,
         usado_cheque_especial=usado_cheque,
         gastos=gastos,
+        saldo_por_banco=saldo_por_banco,
     )
     novos = sum(1 for e in detectados if repo_e.registrar_se_novo(s, usuario.id, e))
     repo_e.resolver(

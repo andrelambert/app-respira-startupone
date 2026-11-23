@@ -589,7 +589,8 @@ export function mensagemEvento(e: Evento, { temPlano }: { temPlano: boolean }): 
       return {
         tom: 'atencao',
         titulo: `${s('descricao')} vence ${n('dias') === 0 ? 'hoje' : `em ${n('dias')} ${plural(n('dias'), 'dia', 'dias')}`}`,
-        texto: `A parcela é de ${r$s(c.parcela)} e sua conta tem ${r$s(c.saldo_conta)}. Faltam ${r$s(c.falta)} até ${diaMes(s('vencimento'))} para não atrasar.`,
+        // A5: nomeia a conta, para não parecer contradizer o saldo total da tela.
+        texto: `A parcela é de ${r$s(c.parcela)} e ${s('conta') ? `sua conta ${s('conta')} tem` : 'suas contas somam'} ${r$s(c.saldo_conta)}. Faltam ${r$s(c.falta)} até ${diaMes(s('vencimento'))} para não atrasar.`,
       };
     case 'ATRASO_CONFIRMADO':
       return {
