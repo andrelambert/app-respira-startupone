@@ -15,7 +15,7 @@ import {
   cx,
 } from '@/components/ui';
 import { LogoBanco } from '@/components/respira';
-import { chavesFinanceiras, useVisaoGeral } from '@/hooks/queries';
+import { chavesFinanceiras, useHoje, useVisaoGeral } from '@/hooks/queries';
 import { api, type Banco, type ContaBancaria } from '@/lib/api';
 import { coleta as copyColeta, pfm as copy, tipoBelvo } from '@/lib/copy';
 import { carimbo, diaMes } from '@/lib/datas';
@@ -219,6 +219,7 @@ function ResumoValor({ c }: { c: ContaBancaria }) {
 }
 
 function ResumoCartao({ c }: { c: ContaBancaria }) {
+  const hoje = useHoje();
   const f = c.fatura_atual;
   const pct = c.limite_credito && c.limite_credito > 0 ? Math.min(100, (c.saldo / c.limite_credito) * 100) : null;
   return (
@@ -226,7 +227,7 @@ function ResumoCartao({ c }: { c: ContaBancaria }) {
       {f ? (
         <p className="flex flex-wrap items-center gap-2 text-sm text-slate">
           <SituacaoFatura situacao={f.situacao} />
-          {f.vencimento && (f.situacao === 'ATRASADA' ? copy.venceu(diaMes(f.vencimento)) : copy.vence(diaMes(f.vencimento)))}
+          {f.vencimento && copy.vencimento(f.vencimento, hoje, diaMes(f.vencimento), f.situacao === 'ATRASADA')}
         </p>
       ) : (
         <p className="text-sm text-slate">{copy.semFatura}</p>

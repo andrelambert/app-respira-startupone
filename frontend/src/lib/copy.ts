@@ -789,6 +789,9 @@ export const pfm = {
   semFatura: 'Nenhuma fatura recebida ainda.',
   vence: (data: string) => `vence em ${data}`,
   venceu: (data: string) => `venceu em ${data}`,
+  /** A14: "venceu em" quando a data já passou (ou a fatura está atrasada). Datas ISO comparam como texto. */
+  vencimento: (iso: string, hoje: string, formatada: string, atrasada = false) =>
+    atrasada || iso < hoje ? `venceu em ${formatada}` : `vence em ${formatada}`,
   minimo: 'Mínimo',
   pago: 'Pago',
   faltaPagar: 'Falta pagar',

@@ -4,7 +4,7 @@ import { Link, useParams, useSearchParams } from 'react-router';
 
 import { LogoBanco } from '@/components/respira';
 import { Button, Card, Carregando, EstadoErro, EstadoVazio, Money, cx } from '@/components/ui';
-import { chaves } from '@/hooks/queries';
+import { chaves, useHoje } from '@/hooks/queries';
 import { useDebounced } from '@/hooks/useDebounced';
 import { api, type ContaBancaria, type Fatura, type FiltroExtrato, type Transacao } from '@/lib/api';
 import { categoriaNome, nomeFatura, pfm as copy, subcategoriaNome, tipoBelvo } from '@/lib/copy';
@@ -169,6 +169,7 @@ function Valor({ rotulo, valor }: { rotulo: string; valor: Parameters<typeof brl
 }
 
 function Faturas({ faturas }: { faturas: Fatura[] }) {
+  const hoje = useHoje();
   const [atual, ...anteriores] = faturas;
   if (!atual) {
     return (
@@ -184,15 +185,15 @@ function Faturas({ faturas }: { faturas: Fatura[] }) {
         <div className="flex items-start justify-between gap-2">
           <div>
             <p className="text-sm text-slate">{copy.faturaAtual}</p>
-            {/* Título: bill_name, como a Belvo manda (ex.: Sep-2026). */}
-            <h2 className="text-lg font-bold text-navy">{atual.nome || copy.faturaAtual}</h2>
+            {/* Título: bill_name da Belvo traduzido (Sep-2026 → set/2026, A6). */}
+            <h2 className="text-lg font-bold text-navy">{nomeFatura(atual.nome) || copy.faturaAtual}</h2>
           </div>
           <SituacaoFatura situacao={atual.situacao} />
         </div>
         <Money valor={aberta ? atual.em_aberto : atual.total} className="text-4xl font-bold text-navy" />
         {atual.vencimento && (
           <p className="text-sm text-slate">
-            {atual.situacao === 'ATRASADA' ? copy.venceu(dataCompleta(atual.vencimento)) : copy.vence(dataCompleta(atual.vencimento))}
+            {copy.vencimento(atual.vencimento, hoje, dataCompleta(atual.vencimento), atual.situacao === 'ATRASADA')}
           </p>
         )}
         <dl className="grid grid-cols-3 gap-2 text-sm">
@@ -229,7 +230,7 @@ function Faturas({ faturas }: { faturas: Fatura[] }) {
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <p className="font-bold text-navy">{nomeFatura(f.nome) || (f.vencimento ? diaMes(f.vencimento) : '—')}</p>
-                    {f.vencimento && <p className="text-xs text-slate">{copy.vence(dataCompleta(f.vencimento))}</p>}
+                    {f.vencimento && <p className="text-xs text-slate">{copy.vencimento(f.vencimento, hoje, dataCompleta(f.vencimento))}</p>}
                   </div>
                   <Money valor={f.total} className="shrink-0 font-semibold text-navy" />
                 </div>

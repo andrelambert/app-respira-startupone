@@ -10,6 +10,7 @@ import {
   fraseRaioX,
   mensagemEvento,
   nomeFatura,
+  pfm,
   subcategoriaNome,
   tipoBelvo,
 } from './copy';
@@ -174,5 +175,14 @@ describe('rótulos da Belvo em pt-BR (A6)', () => {
     expect(nomeFatura('Feb-2027')).toBe('fev/2027');
     expect(nomeFatura('Fatura de outubro')).toBe('Fatura de outubro');
     expect(nomeFatura(null)).toBeNull();
+  });
+});
+
+describe('vencimento de fatura (A14)', () => {
+  it('data passada vira "venceu em"; futura e hoje, "vence em"', () => {
+    expect(pfm.vencimento('2026-10-12', '2026-11-23', '12 de outubro')).toBe('venceu em 12 de outubro');
+    expect(pfm.vencimento('2026-12-12', '2026-11-23', '12 de dezembro')).toBe('vence em 12 de dezembro');
+    expect(pfm.vencimento('2026-11-23', '2026-11-23', '23 de novembro')).toBe('vence em 23 de novembro');
+    expect(pfm.vencimento('2026-12-12', '2026-11-23', '12 de dezembro', true)).toBe('venceu em 12 de dezembro');
   });
 });

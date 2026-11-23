@@ -46,6 +46,14 @@ export function useUsuario() {
   });
 }
 
+/** "Hoje" do usuário (a demo pode estar meses à frente); sem usuário, a data local. */
+export function useHoje(): string {
+  const { data } = useUsuario();
+  if (data?.hoje) return data.hoje;
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
 export function useConsentimentos(polling = false) {
   return useQuery({
     queryKey: chaves.consentimentos,
