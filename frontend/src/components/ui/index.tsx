@@ -286,10 +286,13 @@ export function EstadoErro({
   titulo = estados.erroTitulo,
   texto = estados.erroTexto,
   onTentar,
+  tentando = false,
 }: {
   titulo?: string;
   texto?: string;
   onTentar?: () => void;
+  /** Enquanto a nova tentativa não responde: o botão diz "Tentando…" em vez de parecer travado. */
+  tentando?: boolean;
 }) {
   return (
     <div role="alert" className="flex flex-col items-start gap-3 rounded-2xl border border-line bg-white p-6">
@@ -299,8 +302,8 @@ export function EstadoErro({
       </h2>
       <p className="text-slate">{texto}</p>
       {onTentar && (
-        <Button variante="secundario" onClick={onTentar}>
-          {estados.tentar}
+        <Button variante="secundario" onClick={onTentar} disabled={tentando} aria-busy={tentando}>
+          {tentando ? estados.tentando : estados.tentar}
         </Button>
       )}
     </div>

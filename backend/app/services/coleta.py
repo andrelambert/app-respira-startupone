@@ -49,7 +49,7 @@ log = logging.getLogger("respira.coleta")
 _trava = asyncio.Lock()
 _tarefas: dict[int, asyncio.Task[Any]] = {}
 
-POLLING_INTERVALO_S = 10
+POLLING_INTERVALO_S = 5  # enquanto não há webhook: a Belvo leva de ~30 s a 2 min
 # Banco real pode levar alguns minutos para a coleta histórica (12 meses).
 POLLING_LIMITE = timedelta(minutes=10)
 MESES_DE_TRANSACOES = 12

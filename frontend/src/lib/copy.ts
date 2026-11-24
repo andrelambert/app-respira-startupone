@@ -787,6 +787,9 @@ export const estados = {
   erroTitulo: 'Não conseguimos carregar agora',
   erroTexto: 'Tente de novo em instantes. Seus dados estão seguros.',
   tentar: 'Tentar de novo',
+  tentando: 'Tentando…',
+  // A conexão caiu no meio da espera: a tela continua, e as consultas seguem sozinhas.
+  reconectando: 'A conexão oscilou. Continuamos tentando — não precisa fazer nada.',
   offline: 'Você está sem internet. Mostrando os últimos dados carregados.',
   atualizadoEm: (quando: string) => `Atualizado em ${quando}`,
   voltar: 'Voltar',

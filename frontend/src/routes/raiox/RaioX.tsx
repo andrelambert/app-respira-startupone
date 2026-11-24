@@ -31,6 +31,7 @@ import {
   coleta as copyColeta,
   conectar,
   divida as copyDivida,
+  estados,
   fraseRaioX,
   metodoNome,
   pfm,
@@ -58,15 +59,19 @@ export default function RaioX() {
   if (carregandoUsuario) return <Carregando />;
   if (!usuario) return <Navigate to="/entrar" replace />;
   if (raiox.isLoading) return <Carregando />;
-  if (raiox.isError || !raiox.data) return <EstadoErro onTentar={() => void raiox.refetch()} />;
+  // Erro só vira tela de erro quando não há nada para mostrar. Se uma consulta
+  // falhar no meio da coleta (servidor reiniciando, rede oscilando), a tela de
+  // espera — ou os dados — continuam, e as consultas seguem a cada 5 s.
+  if (!raiox.data) return <EstadoErro onTentar={() => void raiox.refetch()} tentando={raiox.isFetching} />;
 
   const r = raiox.data;
+  const oscilou = raiox.isError;
   const lista = consentimentos.data ?? [];
   const algumaConcluida = lista.some((c) => c.status === 'ATIVO' && c.coleta_concluida);
 
   // Nunca "R$ 0,00" no lugar de "ainda buscando" (§7.5).
   if (r.coleta_em_andamento && (!algumaConcluida || r.qtd_dividas === 0)) {
-    return <EsperaColeta consentimentos={lista} />;
+    return <EsperaColeta consentimentos={lista} oscilou={oscilou} />;
   }
   if (r.qtd_dividas === 0) {
     return lista.some((c) => c.status === 'ATIVO') ? (
@@ -250,7 +255,7 @@ function LinhaDivida({ d, cor }: { d: Divida; cor: string }) {
   );
 }
 
-function EsperaColeta({ consentimentos }: { consentimentos: Consentimento[] }) {
+function EsperaColeta({ consentimentos, oscilou = false }: { consentimentos: Consentimento[]; oscilou?: boolean }) {
   const [inicio] = useState(() => Date.now());
   const [agora, setAgora] = useState(() => Date.now());
   const qc = useQueryClient();
@@ -280,6 +285,11 @@ function EsperaColeta({ consentimentos }: { consentimentos: Consentimento[] }) {
           <h1 className="text-2xl font-bold leading-tight text-navy">{copyColeta.titulo}</h1>
           <p className="text-ink">{copyColeta.texto}</p>
           <BarraIndeterminada rotulo={copyColeta.titulo} />
+          {oscilou && (
+            <p role="status" className="text-sm text-amber-ink">
+              {estados.reconectando}
+            </p>
+          )}
         </>
       )}
       {emColeta.map((c) => (
