@@ -7,6 +7,7 @@ widget → callback → coleta → mapeamento), só que servidos pelo FixturePro
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import uuid
 from datetime import timedelta
@@ -167,9 +168,35 @@ async def criar_demo_visitante(s: Session) -> Usuario:
             expira_em=agora() + timedelta(hours=cfg.demo_validade_horas),
         ),
     )
-    await semear(s, u, coletar_em_segundo_plano=True)
+    assert u.id is not None
+    # A semeadura (3 bancos, carnê, ~400 comandos no banco) vai para segundo
+    # plano: do Render ao Oracle em São Paulo ela leva dezenas de segundos, e o
+    # visitante esperava isso no clique — a Vercel desistia antes (502). Agora
+    # o login volta na hora e o Raio-X mostra a espera com o progresso.
+    preparando.add(u.id)
+    tarefa = asyncio.create_task(asyncio.to_thread(_semear_em_thread, u.id))
+    _tarefas.add(tarefa)
+    tarefa.add_done_callback(_tarefas.discard)
     log.info("demo_visitante_criada")
     return u
+
+
+# Demos sendo preparadas agora (uma instância só no Render): o Raio-X mostra a
+# espera da coleta enquanto o usuário estiver aqui, mesmo antes dos bancos existirem.
+preparando: set[int] = set()
+_tarefas: set[asyncio.Task] = set()
+
+
+def _semear_em_thread(usuario_id: int) -> None:
+    try:
+        with Session(engine) as s:
+            u = s.get(Usuario, usuario_id)
+            if u is not None:
+                asyncio.run(semear(s, u))
+    except Exception:  # falha numa demo não derruba o servidor
+        log.exception("demo_visitante_semeadura_falhou")
+    finally:
+        preparando.discard(usuario_id)
 
 
 def apagar_demos_expiradas() -> int:
