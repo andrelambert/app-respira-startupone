@@ -11,8 +11,11 @@ services:
     region: virginia # o mais perto de São Paulo entre as regiões do plano gratuito
     healthCheckPath: /health
     envVars:
+      # Decisão do André (24/11/2026): a versão publicada aceita conexão real pela
+      # Belvo, para demonstração. Contraria a regra 3 do briefing — registrado no
+      # relatório. Com isto, cadastro pede CPF (gravado cifrado com CPF_CHAVE).
       - key: MODO_PUBLICO
-        value: "true"
+        value: "false"
       - key: DEMO_POR_VISITANTE
         value: "true"
       - key: FIXTURE_COLETA_SEGUNDOS
@@ -34,4 +37,10 @@ services:
       - key: ORACLE_WALLET_PASSWORD
         sync: false
       - key: APP_PUBLIC_URL
-        sync: false # a URL da Vercel, depois do primeiro deploy do frontend
+        sync: false # a URL da Vercel (callbacks do widget da Belvo e CORS)
+      - key: CPF_CHAVE
+        sync: false # chave Fernet; sem ela, cadastro com CPF é recusado
+      - key: BELVO_SECRET_ID
+        sync: false
+      - key: BELVO_SECRET_PASSWORD
+        sync: false
