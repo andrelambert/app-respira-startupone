@@ -508,45 +508,165 @@ export function fraseAcompanhamento(a: {
 // Único lugar que traduz categorias, subcategorias, tipos de produto e nomes de
 // fatura. O que não estiver no dicionário cai em "Outros" — nunca em inglês na tela.
 
-const CATEGORIAS: Record<string, string> = {
-  'Online Platforms & Leisure': 'Delivery, streaming e lazer',
-  'Food & Groceries': 'Mercado',
-  'Personal Shopping': 'Compras pessoais',
-  'Transport & Travel': 'Transporte',
-  'Bills & Utilities': 'Contas da casa',
-  'Home & Life': 'Casa e saúde',
-  'Fees & Charges': 'Tarifas',
-  'Credits & Loans': 'Crédito e empréstimos',
-  'Income & Payments': 'Renda e recebimentos',
-  'Investments & Savings': 'Investimentos',
-  'Business Services': 'Serviços',
-  Deposits: 'Depósitos',
-  Transfers: 'Transferências',
-  Taxes: 'Impostos',
-  Insurance: 'Seguros',
-  'Withdrawal & ATM': 'Saques',
-  Unknown: 'Outros',
-};
-
-const SUBCATEGORIAS: Record<string, string> = {
-  Clothing: 'Roupas',
-  'Credit card payment': 'Pagamento de fatura',
-  Electricity: 'Luz',
-  'Food delivery': 'Delivery de comida',
-  Fuel: 'Combustível',
-  Groceries: 'Mercado',
-  Interest: 'Juros',
-  'Loan payment': 'Parcela de empréstimo',
-  Pharmacy: 'Farmácia',
-  Pix: 'Pix',
-  'Public transport': 'Transporte público',
-  Rent: 'Aluguel',
-  'Ride sharing': 'Transporte por app',
-  Salary: 'Salário',
-  Savings: 'Poupança',
-  Streaming: 'Streaming',
-  Telecommunications: 'Internet e telefone',
-  Water: 'Água',
+// Taxonomia V2 da Belvo (Fase 7): categoria → nome, e subcategoria → nome.
+// A tela mostra a subcategoria quando existe ("Restaurantes e lanchonetes"),
+// que diz muito mais do que a categoria ("Alimentação").
+type Taxonomia = Record<string, { nome: string; subs: Record<string, string> }>;
+const TAXONOMIA: Taxonomia = {
+  Transfers: { nome: 'Transferências', subs: {} },
+  'Income & Payments': {
+    nome: 'Renda e recebimentos',
+    subs: {
+      Freelance: 'Trabalho autônomo',
+      Interest: 'Rendimentos',
+      Retirement: 'Aposentadoria',
+      Salary: 'Salário',
+      Government: 'Benefícios do governo',
+      Rent: 'Aluguel recebido',
+      Other: 'Outras entradas',
+    },
+  },
+  'Bills & Utilities': {
+    nome: 'Contas da casa',
+    subs: {
+      'Electricity & Energy': 'Luz e gás',
+      Rent: 'Aluguel',
+      Telecommunications: 'Internet e telefone',
+      Water: 'Água',
+      Other: 'Outras contas da casa',
+    },
+  },
+  'Credits & Loans': {
+    nome: 'Crédito e empréstimos',
+    subs: {
+      Personal: 'Empréstimo pessoal',
+      Auto: 'Financiamento de veículo',
+      Mortgage: 'Financiamento imobiliário',
+      'Pay Advance': 'Consignado e antecipação',
+      'Credit Card': 'Fatura do cartão',
+      Instalment: 'Parcelamentos',
+      'Interest & Charges': 'Juros e encargos',
+      Other: 'Outros créditos',
+    },
+  },
+  'Fees & Charges': {
+    nome: 'Tarifas e ajustes',
+    subs: {
+      Adjustments: 'Ajustes',
+      'Bank Fees': 'Tarifas bancárias',
+      Chargeback: 'Contestação de compra',
+      Refund: 'Estornos',
+      'Blocked Balances': 'Saldo bloqueado',
+      Alimony: 'Pensão alimentícia',
+      Other: 'Outras tarifas',
+    },
+  },
+  'Investments & Savings': {
+    nome: 'Investimentos e poupança',
+    subs: {
+      Savings: 'Poupança',
+      'Fixed Income': 'Renda fixa',
+      Equity: 'Ações',
+      'Investment Funds': 'Fundos de investimento',
+      Derivatives: 'Derivativos',
+      Cryptocurrencies: 'Criptomoedas',
+      Other: 'Outros investimentos',
+    },
+  },
+  Taxes: {
+    nome: 'Impostos e taxas',
+    subs: {
+      'Income Tax': 'Imposto de renda',
+      'Auto Tax & Fees': 'IPVA e taxas do veículo',
+      'Real Estate Tax & Fees': 'IPTU e taxas do imóvel',
+      'Government Fees': 'Taxas do governo',
+      Donation: 'Doações',
+      'Tax Return': 'Restituição',
+      Other: 'Outros impostos',
+    },
+  },
+  Deposits: { nome: 'Depósitos', subs: {} },
+  'Withdrawal & ATM': { nome: 'Saques', subs: {} },
+  'Personal Shopping': {
+    nome: 'Compras',
+    subs: {
+      'Books & News': 'Livros e revistas',
+      'Clothing & Accessories': 'Roupas e acessórios',
+      Electronics: 'Eletrônicos',
+      'E-commerce': 'Compras online',
+      Gifts: 'Presentes',
+      'Office Supplies': 'Papelaria e escritório',
+      'Pet Supplies': 'Pet shop',
+      'Department Store': 'Lojas de departamento',
+      Other: 'Outras compras',
+    },
+  },
+  'Transport & Travel': {
+    nome: 'Transporte e viagens',
+    subs: {
+      'Auto Expenses': 'Manutenção do veículo',
+      'Auto Rental': 'Aluguel de veículo',
+      Flights: 'Passagens aéreas',
+      Gas: 'Combustível',
+      Accommodation: 'Hospedagem',
+      'Parking & Tolls': 'Estacionamento e pedágio',
+      'Public Transit': 'Transporte público',
+      'Taxis & Rideshares': 'Táxi e app de transporte',
+      'Mileage Programs': 'Programas de milhas',
+      Other: 'Outras despesas de viagem',
+    },
+  },
+  'Online Platforms & Leisure': {
+    nome: 'Lazer e assinaturas',
+    subs: {
+      Gambling: 'Apostas',
+      'Music & Audio': 'Música e áudio',
+      'Events, Parks and Museums': 'Eventos, parques e museus',
+      'Movie & Video': 'Filmes e streaming',
+      Gaming: 'Jogos',
+      Lottery: 'Loteria',
+      'Apps, Software and Cloud Services': 'Apps e serviços digitais',
+      Other: 'Outros lazeres',
+    },
+  },
+  'Food & Groceries': {
+    nome: 'Alimentação',
+    subs: {
+      'Alcohol & Tobacco': 'Bebidas e tabaco',
+      'Bars & Nightclubs': 'Bares e baladas',
+      'Bakery & Coffee': 'Padaria e café',
+      Delivery: 'Delivery',
+      Restaurants: 'Restaurantes e lanchonetes',
+      Groceries: 'Mercado',
+      'Convenience Store': 'Lojas de conveniência',
+      Other: 'Outros gastos com alimentação',
+    },
+  },
+  'Home & Life': {
+    nome: 'Casa e saúde',
+    subs: {
+      'Home Decor & Appliances': 'Móveis e eletrodomésticos',
+      Health: 'Saúde',
+      'Gyms & Fitness': 'Academia',
+      'Hair & Beauty': 'Beleza',
+      'Laundry & Dry Cleaning': 'Lavanderia',
+      Pharmacies: 'Farmácia',
+      'Veterinary Services': 'Veterinário',
+      Education: 'Educação',
+      'Professional Services': 'Serviços profissionais',
+      Other: 'Outros gastos com casa e saúde',
+    },
+  },
+  Insurance: {
+    nome: 'Seguros',
+    subs: {
+      'Home Insurance': 'Seguro residencial',
+      'Auto Insurance': 'Seguro do veículo',
+      'Health & Life Insurance': 'Seguro saúde e de vida',
+      Other: 'Outros seguros',
+    },
+  },
+  Unknown: { nome: 'Outros', subs: {} },
 };
 
 // product_type do Open Finance Brasil (contas, cartões e operações de crédito).
@@ -576,7 +696,6 @@ const MESES_EN: Record<string, string> = {
   Jul: 'jul', Aug: 'ago', Sep: 'set', Oct: 'out', Nov: 'nov', Dec: 'dez',
 };
 
-/** "Food & Groceries" → "Mercado"; desconhecida → "Outros". */
 const REGIOES: Record<string, string> = {
   'sa-saopaulo-1': 'São Paulo (Brasil)',
   'sa-vinhedo-1': 'Vinhedo (Brasil)',
@@ -587,13 +706,32 @@ export function regiaoNome(regiao: string | null): string {
   return (regiao && REGIOES[regiao]) || regiao || 'Brasil';
 }
 
+/** Categoria da Belvo → nome ("Food & Groceries" → "Alimentação"); desconhecida → "Outros". */
 export function categoriaNome(categoria: string | null | undefined): string {
-  return (categoria && CATEGORIAS[categoria]) || 'Outros';
+  return (categoria && TAXONOMIA[categoria]?.nome) || 'Outros';
 }
 
-export function subcategoriaNome(sub: string | null | undefined): string | null {
+/** Subcategoria V2 → nome ("Restaurants" em Food & Groceries → "Restaurantes e lanchonetes"). */
+export function subcategoriaNome(categoria: string | null | undefined, sub: string | null | undefined): string | null {
   if (!sub) return null;
-  return SUBCATEGORIAS[sub] ?? 'Outros';
+  return (categoria && TAXONOMIA[categoria]?.subs[sub]) || null;
+}
+
+/**
+ * Nome de um grupo de gasto. O backend agrupa por "Categoria::Subcategoria"
+ * (ou só "Categoria" quando não há subcategoria): mostra a subcategoria quando
+ * ela é conhecida, senão a categoria.
+ */
+export function nomeGasto(chave: string | null | undefined): string {
+  if (!chave) return 'Outros';
+  const [cat, sub] = chave.split('::');
+  return subcategoriaNome(cat, sub) ?? categoriaNome(cat);
+}
+
+/** A chave de agrupamento de uma transação (a mesma do backend). */
+export function chaveGasto(categoria: string | null | undefined, sub: string | null | undefined): string {
+  const cat = categoria || 'Unknown';
+  return sub ? `${cat}::${sub}` : cat;
 }
 
 /** "EMPRESTIMOS" → "Empréstimo". Fora do dicionário: o código, legível, sem inglês. */
@@ -650,7 +788,7 @@ export function mensagemEvento(e: Evento, { temPlano }: { temPlano: boolean }): 
             : 'Um plano dá a ele uma data para acabar.',
       };
     case 'PICO_CATEGORIA': {
-      const cat = categoriaNome(s('categoria')).toLowerCase();
+      const cat = nomeGasto(s('categoria')).toLowerCase();
       return {
         tom: 'atencao',
         titulo: `Em ${nomeMes(s('mes'))}, ${cat} somou ${r$s(c.gasto)}`,
@@ -968,7 +1106,13 @@ export const pfm = {
     subcategoria: 'Subcategoria',
     estabelecimento: 'Estabelecimento',
     site: 'Site',
+    // Compra parcelada no cartão (Fase 7)
+    parcela: 'Parcela',
+    parcelaDe: (n: number, total: number) => `${n} de ${total}`,
+    lancadaEm: 'Cai na fatura em',
+    compraEm: 'Compra em',
   },
+  parcelaCurta: (n: number, total: number) => `parcela ${n}/${total}`,
   filtros: { TODAS: 'Todas', ENTRADA: 'Entradas', SAIDA: 'Saídas' },
   buscar: 'Buscar no extrato',
   buscarExemplo: 'ex.: mercado, pix, salário',

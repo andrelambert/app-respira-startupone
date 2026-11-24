@@ -5,7 +5,7 @@ from datetime import date
 from decimal import Decimal
 from typing import Any
 
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from sqlmodel import Session, col, select
 
 from app.models import Consentimento, Conta, Direcao, Fatura, StatusConsentimento, Transacao
@@ -126,7 +126,15 @@ def _condicoes(usuario_id: int, f: FiltroTransacoes) -> list[Any]:
     if f.direcao is not None:
         cond.append(Transacao.direcao == f.direcao)
     if f.categorias:
-        cond.append(col(Transacao.categoria).in_(f.categorias))
+        # Cada item é uma categoria ("Food & Groceries") ou uma subcategoria
+        # ("Food & Groceries::Restaurants" — o toque numa barra de gastos, N2).
+        simples = [c for c in f.categorias if "::" not in c]
+        compostas = [c.split("::", 1) for c in f.categorias if "::" in c]
+        alternativas = [col(Transacao.categoria).in_(simples)] if simples else []
+        alternativas += [
+            (Transacao.categoria == cat) & (Transacao.subcategoria == sub) for cat, sub in compostas
+        ]
+        cond.append(or_(*alternativas))
     if f.so_divida:
         cond.append(Transacao.pagamento_divida == True)
     if f.desde is not None:

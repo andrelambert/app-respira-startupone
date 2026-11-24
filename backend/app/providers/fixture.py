@@ -92,31 +92,40 @@ MERCHANTS = {
     "APP DE TRANSPORTE": {"merchant_name": "Vai de Carro", "website": None, "logo": None},
     "STREAMING": {"merchant_name": "TelaPlay", "website": None, "logo": None},
     "LOJA DE ROUPAS": {"merchant_name": "Moda Centro", "website": None, "logo": None},
+    "LOJA DE ELETRODOMESTICOS": {"merchant_name": "Casa & Lar", "website": None, "logo": None},
 }
+# Compra parcelada no cartão Itaú (Fase 7): uma geladeira em 10x, comprada há
+# 4 meses. Cada parcela vem como na Belvo real: mesma value_date/transacted_at
+# (a compra) e accounting_date no mês em que cai — inclusive as futuras.
+GELADEIRA_PARCELAS = 10
+GELADEIRA_PARCELA = Decimal("189.90")
+GELADEIRA_MESES_ATRAS = 4
+# Subcategorias da taxonomia V2 da Belvo (Fase 7). Os gastos essenciais da
+# Juliana continuam os mesmos — os números do plano não mudam.
 SUBCATEGORIAS = {
     "SUPERMERCADO": "Groceries",
-    "DELIVERY APP": "Food delivery",
+    "DELIVERY APP": "Delivery",
     "PIX ENVIADO - ALUGUEL": "Rent",
-    "CONTA DE LUZ": "Electricity",
+    "CONTA DE LUZ": "Electricity & Energy",
     "CONTA DE AGUA": "Water",
     "INTERNET E CELULAR": "Telecommunications",
-    "RECARGA BILHETE UNICO": "Public transport",
-    "POSTO DE COMBUSTIVEL": "Fuel",
-    "APP DE TRANSPORTE": "Ride sharing",
-    "FARMACIA": "Pharmacy",
-    "STREAMING": "Streaming",
-    "LOJA DE ROUPAS": "Clothing",
+    "RECARGA BILHETE UNICO": "Public Transit",
+    "POSTO DE COMBUSTIVEL": "Gas",
+    "APP DE TRANSPORTE": "Taxis & Rideshares",
+    "FARMACIA": "Pharmacies",
+    "STREAMING": "Movie & Video",
+    "LOJA DE ROUPAS": "Clothing & Accessories",
     "SALARIO - FOLHA DE PAGAMENTO": "Salary",
-    "PIX RECEBIDO - COMPANHEIRO": "Pix",
-    "PARCELA EMPRESTIMO PESSOAL": "Loan payment",
-    "FINANCIAMENTO VEICULO": "Loan payment",
-    "BOLETO CAIXA CREDITO PESSOAL": "Loan payment",
-    "BOLETO CARNE LOJA D": "Loan payment",
-    "JUROS CHEQUE ESPECIAL": "Interest",
-    "PAGAMENTO FATURA NUBANK": "Credit card payment",
-    "PAGAMENTO FATURA ITAU": "Credit card payment",
-    "PAGAMENTO RECEBIDO": "Credit card payment",
+    "PARCELA EMPRESTIMO PESSOAL": "Personal",
+    "FINANCIAMENTO VEICULO": "Auto",
+    "BOLETO CAIXA CREDITO PESSOAL": "Personal",
+    "BOLETO CARNE LOJA D": "Instalment",
+    "JUROS CHEQUE ESPECIAL": "Interest & Charges",
+    "PAGAMENTO FATURA NUBANK": "Credit Card",
+    "PAGAMENTO FATURA ITAU": "Credit Card",
+    "PAGAMENTO RECEBIDO": "Credit Card",
     "RENDIMENTO POUPANCA": "Savings",
+    "LOJA DE ELETRODOMESTICOS": "Home Decor & Appliances",
 }
 # ``operation_type`` no formato do Open Finance Brasil (conferido numa resposta real).
 OPERACOES = {
@@ -498,9 +507,9 @@ def transacoes(link: str, codigo: str, hoje: date) -> list[Json]:
                 ("cartao", 3, "OUTFLOW", q("0.20"), "SUPERMERCADO", "Food & Groceries"),
                 ("cartao", 24, "OUTFLOW", q("0.20"), "SUPERMERCADO", "Food & Groceries"),
                 ("cartao", 7, "OUTFLOW", (delivery / 2).quantize(Decimal("0.01")), "DELIVERY APP",
-                 "Online Platforms & Leisure"),
+                 "Food & Groceries"),
                 ("cartao", 21, "OUTFLOW", delivery - (delivery / 2).quantize(Decimal("0.01")), "DELIVERY APP",
-                 "Online Platforms & Leisure"),
+                 "Food & Groceries"),
                 ("cartao", 14, "OUTFLOW", Decimal("39.90"), "STREAMING", "Online Platforms & Leisure"),
             ]
         elif codigo == ITAU:
@@ -508,7 +517,7 @@ def transacoes(link: str, codigo: str, hoje: date) -> list[Json]:
             pago = pagamentos_fatura.get(fatura_mes, Decimal("1150.00"))
             linhas += [
                 ("corrente", 5, "INFLOW", SALARIO, "SALARIO - FOLHA DE PAGAMENTO", "Income & Payments"),
-                ("corrente", 6, "OUTFLOW", Decimal("1200.00"), "PIX ENVIADO - ALUGUEL", "Home & Life"),
+                ("corrente", 6, "OUTFLOW", Decimal("1200.00"), "PIX ENVIADO - ALUGUEL", "Bills & Utilities"),
                 ("corrente", 8, "OUTFLOW", Decimal("160.00"), "CONTA DE LUZ", "Bills & Utilities"),
                 ("corrente", 9, "OUTFLOW", Decimal("70.00"), "CONTA DE AGUA", "Bills & Utilities"),
                 ("corrente", 15, "OUTFLOW", Decimal("150.00"), "INTERNET E CELULAR", "Bills & Utilities"),
@@ -577,6 +586,47 @@ def transacoes(link: str, codigo: str, hoje: date) -> list[Json]:
                     "reference": None,
                 }
             )
+    if codigo == ITAU:
+        saida += _geladeira_parcelada(link, codigo, por_ident["cartao"], hoje)
+    return saida
+
+
+def _geladeira_parcelada(link: str, codigo: str, cartao: Json, hoje: date) -> list[Json]:
+    compra = adicionar_meses(hoje.replace(day=1), -GELADEIRA_MESES_ATRAS).replace(day=9)
+    saida = []
+    for i in range(GELADEIRA_PARCELAS):
+        lancamento = adicionar_meses(compra.replace(day=1), i).replace(day=compra.day)
+        saida.append(
+            {
+                "id": _id(link, codigo, "txn", "geladeira", i + 1),
+                "account": _resumo(cartao),
+                "internal_identification": None,
+                "collected_at": _agora(),
+                "created_at": _agora(),
+                "value_date": compra.isoformat(),
+                "accounting_date": lancamento.isoformat(),
+                "transacted_at": _transacted_at(compra, 0),
+                "amount": str(GELADEIRA_PARCELA),
+                "currency": "BRL",
+                "description": "LOJA DE ELETRODOMESTICOS",
+                "merchant": MERCHANTS["LOJA DE ELETRODOMESTICOS"],
+                "category": "Home & Life",
+                "subcategory": SUBCATEGORIAS["LOJA DE ELETRODOMESTICOS"],
+                "type": "OUTFLOW",
+                "status": "PROCESSED",
+                "operation_type": "PAGAMENTO",
+                "credit_card_data": {
+                    "card_number": FINAL_CARTAO[codigo],
+                    "bill_name": _fatura_da_compra(codigo, lancamento, hoje),
+                    "installment_identifier": i + 1,
+                    "number_of_installments": GELADEIRA_PARCELAS,
+                    "bill_amount": None, "bill_status": None, "bill_due_date": None,
+                },
+                "balance": None,
+                "observations": None,
+                "reference": None,
+            }
+        )
     return saida
 
 

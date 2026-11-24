@@ -524,7 +524,7 @@ def gastos_por_categoria(
     desde = adicionar_meses(mes, -gastos_dom.MESES_MEDIA)
     ate = adicionar_meses(mes, 1)
     gastos = [
-        gastos_dom.Gasto(t.data_mov, t.categoria, -t.valor, t.essencial)
+        gastos_dom.Gasto(t.data_mov, gastos_dom.chave_gasto(t.categoria, t.subcategoria), -t.valor, t.essencial)
         for t in todas
         if t.valor < 0 and not t.pagamento_divida and desde <= t.data_mov < ate
     ]

@@ -21,7 +21,14 @@ from sqlmodel import Session
 
 from app.config import get_settings
 from app.db import engine
-from app.domain.events import DividaEstado, GastoCategoria, contextos_atualizados, detectar, resolvidos
+from app.domain.events import (
+    DividaEstado,
+    GastoCategoria,
+    contextos_atualizados,
+    detectar,
+    resolvidos,
+)
+from app.domain.gastos import CATEGORIAS_FORA, chave_gasto
 from app.domain.planner import adicionar_meses
 from app.models import (
     RECURSOS_ESSENCIAIS,
@@ -108,9 +115,9 @@ def detectar_e_registrar(
     )
     desde = adicionar_meses(hoje.replace(day=1), -8)
     gastos = [
-        GastoCategoria(t.data_mov, t.categoria, -t.valor)
+        GastoCategoria(t.data_mov, chave_gasto(t.categoria, t.subcategoria), -t.valor)
         for t in repo_f.transacoes(s, usuario.id, desde)
-        if t.valor < 0 and t.categoria and not t.pagamento_divida
+        if t.valor < 0 and t.categoria and not t.pagamento_divida and t.categoria not in CATEGORIAS_FORA
     ]
     detectados = detectar(
         hoje=hoje,

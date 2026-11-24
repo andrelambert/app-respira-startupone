@@ -4,12 +4,14 @@ import type { Evento } from './api';
 import {
   alertaMinimo,
   categoriaNome,
+  chaveGasto,
   erroConexao,
   fraseAcompanhamento,
   fraseComparacao,
   fraseRaioX,
   mensagemEvento,
   nomeFatura,
+  nomeGasto,
   pfm,
   regiaoNome,
   subcategoriaNome,
@@ -155,17 +157,26 @@ describe('alertas: plano e conta nomeada (A4, A5)', () => {
 });
 
 describe('rótulos da Belvo em pt-BR (A6)', () => {
-  it('traduz todas as categorias que a demo devolve, e o resto vira "Outros"', () => {
+  it('taxonomia V2: categoria, subcategoria e o grupo de gasto', () => {
     const daDemo = [
       'Bills & Utilities', 'Credits & Loans', 'Food & Groceries', 'Home & Life', 'Income & Payments',
       'Investments & Savings', 'Online Platforms & Leisure', 'Personal Shopping', 'Transfers', 'Transport & Travel',
     ];
     for (const c of daDemo) expect(categoriaNome(c)).not.toMatch(/[&]|^Outros$/);
-    expect(categoriaNome('Food & Groceries')).toBe('Mercado');
+    expect(categoriaNome('Food & Groceries')).toBe('Alimentação');
     expect(categoriaNome('Categoria Nova Da Belvo')).toBe('Outros');
     expect(categoriaNome(null)).toBe('Outros');
-    expect(subcategoriaNome('Credit card payment')).toBe('Pagamento de fatura');
-    expect(subcategoriaNome('Something new')).toBe('Outros');
+    // O exemplo do André: Evino e Patties não são "Mercado".
+    expect(subcategoriaNome('Food & Groceries', 'Alcohol & Tobacco')).toBe('Bebidas e tabaco');
+    expect(subcategoriaNome('Food & Groceries', 'Restaurants')).toBe('Restaurantes e lanchonetes');
+    expect(subcategoriaNome('Food & Groceries', 'Groceries')).toBe('Mercado');
+    // "Rent" existe em duas categorias com sentidos opostos.
+    expect(subcategoriaNome('Bills & Utilities', 'Rent')).toBe('Aluguel');
+    expect(subcategoriaNome('Income & Payments', 'Rent')).toBe('Aluguel recebido');
+    expect(subcategoriaNome('Food & Groceries', 'Nova')).toBeNull();
+    expect(nomeGasto(chaveGasto('Food & Groceries', 'Delivery'))).toBe('Delivery');
+    expect(nomeGasto(chaveGasto('Food & Groceries', null))).toBe('Alimentação');
+    expect(nomeGasto('Food & Groceries::Desconhecida')).toBe('Alimentação');
   });
 
   it('tipos de produto e nome de fatura', () => {

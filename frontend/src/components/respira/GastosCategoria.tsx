@@ -4,7 +4,7 @@ import { Link } from 'react-router';
 
 import { Card, Carregando, EstadoErro, cx } from '@/components/ui';
 import { api } from '@/lib/api';
-import { categoriaNome, gastos as copy } from '@/lib/copy';
+import { gastos as copy, nomeGasto } from '@/lib/copy';
 import { mesAno } from '@/lib/datas';
 import { escreverFiltros, FILTROS_VAZIOS } from '@/lib/filtrosTransacoes';
 import { brl, type Centavos } from '@/lib/money';
@@ -71,7 +71,7 @@ export function GastosCategoria() {
         <Card tom="plano" className="flex flex-col gap-1">
           <p className="text-ink">
             {copy.impacto(
-              categoriaNome(imp.categoria).toLowerCase(),
+              nomeGasto(imp.categoria).toLowerCase(),
               brl(imp.valor_mensal),
               imp.meses_antecipados,
               mesAno(imp.data_nova),
@@ -89,7 +89,7 @@ export function GastosCategoria() {
           {d.categorias.map((c) => {
             const pct = c.variacao !== null ? Math.round(Number(c.variacao) * 100) : null;
             const acima = pct !== null && pct >= 10;
-            const nome = categoriaNome(c.categoria);
+            const nome = nomeGasto(c.categoria);
             return (
               <li key={c.categoria}>
                 <Link

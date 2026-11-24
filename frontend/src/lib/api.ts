@@ -339,6 +339,10 @@ const transacaoSchema = z.object({
   fatura: z.string().nullable(), // bill_name da fatura em que a compra entrou
   valor: dinheiro,
   direcao: z.enum(['ENTRADA', 'SAIDA']),
+  // Parcela de compra no cartão: ``data`` é quando cai; aqui a compra e "N de M".
+  data_compra: data.nullable().optional(),
+  parcela_numero: z.number().int().nullable().optional(),
+  parcelas_total: z.number().int().nullable().optional(),
 });
 export type Transacao = z.infer<typeof transacaoSchema>;
 

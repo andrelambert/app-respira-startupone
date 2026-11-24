@@ -68,7 +68,7 @@ def test_api_gastos_e_impacto_no_plano(demo_limpa):
     assert "Credits & Loans" not in nomes and "Transfers" not in nomes  # dívida e transferência fora
     assert D(v["total"]) == sum(D(c["total"]) for c in v["categorias"])
     imp = v["impacto_plano"]
-    assert imp["categoria"] == "Online Platforms & Leisure" and imp["meses_antecipados"] >= 1
+    assert imp["categoria"] == "Food & Groceries::Delivery" and imp["meses_antecipados"] >= 1  # subcategoria V2
     assert imp["data_nova"] < imp["data_atual"]
     assert v["meses_disponiveis"] == sorted(v["meses_disponiveis"]) and len(v["meses_disponiveis"]) <= 12
 

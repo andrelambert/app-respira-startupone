@@ -26,6 +26,19 @@ from app.domain.planner import adicionar_meses, arredondar
 
 CATEGORIAS_FORA = {"Transfers"}
 MESES_MEDIA = 3
+SEP = "::"
+
+
+def chave_gasto(categoria: str | None, subcategoria: str | None) -> str:
+    """Onde agrupar um gasto: a subcategoria da taxonomia V2 quando existe
+    ("Food & Groceries::Restaurants"), senão a categoria. Separa delivery de
+    mercado, que na mesma categoria esconderiam um do outro."""
+    cat = categoria or "Unknown"
+    return f"{cat}{SEP}{subcategoria}" if subcategoria else cat
+
+
+def categoria_da_chave(chave: str) -> str:
+    return chave.split(SEP, 1)[0]
 
 
 @dataclass(frozen=True)
@@ -55,7 +68,7 @@ def por_categoria(gastos: Sequence[Gasto], mes: date, meses_com_dado: set[date])
     total_valor: dict[str, Decimal] = defaultdict(Decimal)
     for g in gastos:
         cat = g.categoria or "Unknown"
-        if cat in CATEGORIAS_FORA:
+        if categoria_da_chave(cat) in CATEGORIAS_FORA:
             continue
         m = g.data.replace(day=1)
         soma[cat][m] += g.valor
