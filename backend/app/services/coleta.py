@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import threading
 import uuid
 from datetime import date, datetime, timedelta
 from decimal import Decimal
@@ -53,7 +54,9 @@ log = logging.getLogger("respira.coleta")
 
 # SQLite + tarefas concorrentes: serializar a escrita é simples e suficiente
 # nesta escala (um usuário local).
-_trava = asyncio.Lock()
+# Uma coleta por vez (a de um link mexe nas mesmas tabelas que a seguinte).
+# É um lock de thread: cada coleta roda numa thread própria — ver processar_recurso.
+_trava = threading.Lock()
 _tarefas: dict[int, asyncio.Task[Any]] = {}
 
 POLLING_INTERVALO_S = 5  # enquanto não há webhook: a Belvo leva de ~30 s a 2 min
@@ -154,49 +157,64 @@ def detectar_e_registrar(
 
 
 async def processar_recurso(consentimento_id: int, recurso: Recurso, *, confirmar_vazio: bool) -> int:
+    """Roda a coleta numa thread própria, com o seu próprio laço de eventos.
+
+    O trabalho é quase todo banco (centenas de upserts) e o driver é síncrono.
+    No laço principal, isso travava o servidor inteiro enquanto durasse — com o
+    Oracle a ~120 ms do Render, dezenas de segundos sem responder nem ao health
+    check, e o Render reiniciava a instância no meio da coleta.
+    """
+    return await asyncio.to_thread(_processar_em_thread, consentimento_id, recurso, confirmar_vazio)
+
+
+def _processar_em_thread(consentimento_id: int, recurso: Recurso, confirmar_vazio: bool) -> int:
+    with _trava:
+        return asyncio.run(_processar(consentimento_id, recurso, confirmar_vazio=confirmar_vazio))
+
+
+async def _processar(consentimento_id: int, recurso: Recurso, *, confirmar_vazio: bool) -> int:
     """Busca o recurso, persiste e detecta eventos. Devolve quantos itens vieram.
 
     ``confirmar_vazio``: no caminho do webhook, a Belvo já avisou que a coleta
     terminou — zero itens é resposta válida. No polling, zero pode ser "ainda
     não chegou", então o recurso continua AGUARDANDO.
     """
-    async with _trava:
-        with Session(engine) as s:
-            c = s.get(Consentimento, consentimento_id)
-            if c is None or c.status != StatusConsentimento.ATIVO or not c.link_externo:
-                return 0
-            usuario = s.get(Usuario, c.usuario_id)
-            assert usuario is not None and usuario.id is not None
-            hoje = hoje_do_usuario(usuario)
-            if usuario.demo and usuario.meses_simulados:
-                # Com o relógio de demonstração adiantado, os saldos já foram
-                # movidos pela simulação; recoletar a fixture os voltaria ao início.
-                repo_c.marcar_recurso(s, consentimento_id, recurso, StatusColeta.RECEBIDO)
-                return 0
-            anteriores = snapshot(s, usuario.id)
-            try:
-                if recurso in (Recurso.ACCOUNTS, Recurso.BILLS):
-                    qtd = await _contas_e_faturas(s, c, usuario, hoje, recurso)
-                elif recurso is Recurso.TRANSACTIONS:
-                    qtd = await _transacoes(s, c, usuario, hoje)
-                elif recurso in (Recurso.INCOMES, Recurso.RECURRING_EXPENSES):
-                    qtd = await _enriquecimento(s, c, usuario, recurso)
-                else:
-                    # OWNERS: não lemos nome/CPF/e-mail do titular — minimização (§12.7).
-                    qtd = 1
-            except RecursoIndisponivel:
-                repo_c.marcar_recurso(s, consentimento_id, recurso, StatusColeta.INDISPONIVEL)
-                return 0
-            except ErroProvedor as e:
-                log.warning("coleta_falhou consentimento=%s recurso=%s codigo=%s", c.id, recurso, e.codigo)
-                repo_c.marcar_recurso(s, consentimento_id, recurso, StatusColeta.ERRO)
-                return 0
+    with Session(engine) as s:
+        c = s.get(Consentimento, consentimento_id)
+        if c is None or c.status != StatusConsentimento.ATIVO or not c.link_externo:
+            return 0
+        usuario = s.get(Usuario, c.usuario_id)
+        assert usuario is not None and usuario.id is not None
+        hoje = hoje_do_usuario(usuario)
+        if usuario.demo and usuario.meses_simulados:
+            # Com o relógio de demonstração adiantado, os saldos já foram
+            # movidos pela simulação; recoletar a fixture os voltaria ao início.
+            repo_c.marcar_recurso(s, consentimento_id, recurso, StatusColeta.RECEBIDO)
+            return 0
+        anteriores = snapshot(s, usuario.id)
+        try:
+            if recurso in (Recurso.ACCOUNTS, Recurso.BILLS):
+                qtd = await _contas_e_faturas(s, c, usuario, hoje, recurso)
+            elif recurso is Recurso.TRANSACTIONS:
+                qtd = await _transacoes(s, c, usuario, hoje)
+            elif recurso in (Recurso.INCOMES, Recurso.RECURRING_EXPENSES):
+                qtd = await _enriquecimento(s, c, usuario, recurso)
+            else:
+                # OWNERS: não lemos nome/CPF/e-mail do titular — minimização (§12.7).
+                qtd = 1
+        except RecursoIndisponivel:
+            repo_c.marcar_recurso(s, consentimento_id, recurso, StatusColeta.INDISPONIVEL)
+            return 0
+        except ErroProvedor as e:
+            log.warning("coleta_falhou consentimento=%s recurso=%s codigo=%s", c.id, recurso, e.codigo)
+            repo_c.marcar_recurso(s, consentimento_id, recurso, StatusColeta.ERRO)
+            return 0
 
-            if qtd > 0 or confirmar_vazio:
-                repo_c.marcar_recurso(s, consentimento_id, recurso, StatusColeta.RECEBIDO)
-            repo_c.marcar_sync(s, c)
-            detectar_e_registrar(s, usuario, hoje, anteriores)
-            return qtd
+        if qtd > 0 or confirmar_vazio:
+            repo_c.marcar_recurso(s, consentimento_id, recurso, StatusColeta.RECEBIDO)
+        repo_c.marcar_sync(s, c)
+        detectar_e_registrar(s, usuario, hoje, anteriores)
+        return qtd
 
 
 async def _contas_e_faturas(

@@ -26,11 +26,35 @@ def publico(monkeypatch):
     auth._eventos.clear()
 
 
-def _visitante():
-    c = TestClient(app)
-    r = c.post("/auth/demo", headers=H)
+class Visitante:
+    """Um navegador: o mesmo app (um laço de eventos só, como no uvicorn), com
+    os cookies deste visitante. Um TestClient por visitante, sem contexto,
+    encerraria o laço a cada requisição e mataria a coleta em segundo plano."""
+
+    def __init__(self, api: TestClient) -> None:
+        self.api = api
+        self.cookies = None
+
+    def _req(self, metodo, url, **kw):
+        self.api.cookies.clear()
+        if self.cookies:
+            self.api.cookies.update(self.cookies)
+        r = self.api.request(metodo, url, **kw)
+        self.cookies = dict(self.api.cookies)
+        return r
+
+    def get(self, url, **kw):
+        return self._req("GET", url, **kw)
+
+    def post(self, url, **kw):
+        return self._req("POST", url, **kw)
+
+
+def _visitante(api):
+    v = Visitante(api)
+    r = v.post("/auth/demo", headers=H)
     assert r.status_code == 200, r.text
-    return c, r.json()
+    return v, r.json()
 
 
 def _aguardar(c):
@@ -45,9 +69,12 @@ def _aguardar(c):
 
 
 def test_cada_visitante_ganha_uma_juliana_so_sua(publico):
-    with TestClient(app):
-        a, ua = _visitante()
-        b, ub = _visitante()
+    with TestClient(app) as api:
+        a, ua = _visitante(api)
+        # O login volta na hora; a semeadura segue em segundo plano e o Raio-X
+        # mostra a espera (nunca "R$ 0,00" nem "conecte seu banco").
+        assert a.get("/raiox").json()["coleta_em_andamento"] is True
+        b, ub = _visitante(api)
         _aguardar(a)
         _aguardar(b)
         assert ua["demo"] and ub["demo"] and ua["apelido"] == "Juliana"
@@ -96,8 +123,8 @@ def test_limite_por_ip_e_de_demos_ativas(publico, monkeypatch):
 
 
 def test_demo_vencida_e_apagada_com_todos_os_dados(publico):
-    with TestClient(app):
-        c, _ = _visitante()
+    with TestClient(app) as api:
+        c, _ = _visitante(api)
         _aguardar(c)
         with Session(engine) as s:
             # A demo recém-criada é a de maior id com validade definida.

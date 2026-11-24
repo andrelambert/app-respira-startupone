@@ -42,7 +42,16 @@ export default function Entrar() {
     navigate(destino, { replace: true });
   };
   const login = useMutation({ mutationFn: (d: Dados) => api.entrar(d.email, d.senha), onSuccess: aoEntrar });
-  const demo = useMutation({ mutationFn: api.entrarDemo, onSuccess: aoEntrar });
+  // A demo vai direto ao Raio-X: os dados dela chegam em segundo plano e a
+  // tela de espera mostra o progresso (sem "volta", que tem prioridade).
+  const demo = useMutation({
+    mutationFn: api.entrarDemo,
+    onSuccess: (u: Usuario) => {
+      qc.clear();
+      qc.setQueryData(chaves.usuario, u);
+      navigate(params.get('volta') ? destino : '/raiox', { replace: true });
+    },
+  });
 
   if (isLoading) return <Carregando />;
   if (usuario) return <Navigate to={destino} replace />;

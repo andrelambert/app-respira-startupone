@@ -38,6 +38,7 @@ from app.schemas import (
     SoMinimoOut,
 )
 from app.services import analise
+from app.services import demo as demo_svc
 from app.services.analise import Capacidade
 
 log = logging.getLogger("respira.plano")
@@ -64,7 +65,7 @@ def raiox(u: UsuarioDep, s: SessionDep) -> RaioXOut:
     r = analise.montar_raio_x(s, u)
     ag = r.agregado
     consentimentos = [c for c in repo_c.listar(s, u.id) if c.status == StatusConsentimento.ATIVO]
-    em_andamento = any(
+    em_andamento = u.id in demo_svc.preparando or any(
         item.status == StatusColeta.AGUARDANDO
         for c in consentimentos
         for item in repo_c.coleta(s, c.id)  # type: ignore[arg-type]
