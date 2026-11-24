@@ -7,7 +7,7 @@ import { Button, Carregando, EstadoErro, cx } from '@/components/ui';
 import { useHoje, useVisaoGeral } from '@/hooks/queries';
 import { useDebounced } from '@/hooks/useDebounced';
 import { api } from '@/lib/api';
-import { categoriaNome, pfm as copyPfm, tipoBelvo, transacoes as copy } from '@/lib/copy';
+import { categoriaNome, nomeGasto, pfm as copyPfm, tipoBelvo, transacoes as copy } from '@/lib/copy';
 import { dataCompleta } from '@/lib/datas';
 import {
   chips,
@@ -69,7 +69,7 @@ export default function Transacoes() {
         ? copy.chipDatas(f.desde && dataCompleta(f.desde), f.ate && dataCompleta(f.ate))
         : copy.periodos[p] ?? p,
     conta: nomeConta,
-    categoria: categoriaNome,
+    categoria: nomeGasto, // categoria ou subcategoria (vindo de uma barra de gastos)
     direcao: (d) => copy.tipos[d] ?? d,
     valor: copy.chipValor,
     soDivida: copy.soDivida,

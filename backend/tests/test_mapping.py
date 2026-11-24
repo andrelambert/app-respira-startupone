@@ -383,3 +383,58 @@ def test_nome_curto_do_banco_sem_pessoa_fisica():
     assert nome_curto("Nubank") == "Nubank"
     [i] = mapear_instituicoes([{"name": "itau_br_retail", "display_name": "Itaú - Pessoa Física"}])
     assert i.nome == "Itaú"
+
+
+# --- Fase 7: parcelas no cartão e taxonomia V2 ----------------------------------------
+
+
+def _txn_cartao(**kw):
+    base = {
+        "id": "t-evino-3", "type": "OUTFLOW", "amount": "30.00", "status": "PROCESSED",
+        "description": "Evino", "category": "Food & Groceries", "subcategory": "Alcohol & Tobacco",
+        "value_date": "2026-10-29", "accounting_date": "2026-12-29", "transacted_at": "2026-10-29T15:00:00Z",
+        "account": {"id": "cartao-1", "category": "CREDIT_CARD"},
+        "credit_card_data": {"card_number": "1234", "installment_identifier": 3, "number_of_installments": 12},
+    }
+    base.update(kw)
+    return base
+
+
+def test_parcela_do_cartao_entra_no_mes_em_que_cai():
+    """Compra em 12x: todas com a mesma data de compra; cada parcela no seu mês."""
+    from app.providers.mapping import mapear_transacoes
+
+    [t] = mapear_transacoes([_txn_cartao()])
+    assert t.data_mov == date(2026, 12, 29)  # accounting_date
+    assert t.data_compra == date(2026, 10, 29)  # a compra
+    assert (t.parcela_numero, t.parcelas_total) == (3, 12)
+
+
+def test_compra_a_vista_no_cartao_e_conta_corrente_nao_mudam():
+    from app.providers.mapping import mapear_transacoes
+
+    [avista] = mapear_transacoes([_txn_cartao(
+        accounting_date="2026-10-29", credit_card_data={"card_number": "1234", "number_of_installments": 1},
+    )])
+    assert (avista.data_mov, avista.data_compra, avista.parcela_numero, avista.parcelas_total) == (
+        date(2026, 10, 29), None, None, None,
+    )
+    [corrente] = mapear_transacoes([_txn_cartao(
+        id="t-cc", credit_card_data=None, accounting_date=None, account={"id": "cc", "category": "CHECKING_ACCOUNT"},
+    )])
+    assert corrente.data_mov == date(2026, 10, 29) and corrente.data_compra is None
+
+
+def test_essencial_pela_subcategoria_v2():
+    from app.providers.mapping import essencial
+
+    assert essencial("Food & Groceries", "Groceries")
+    assert not essencial("Food & Groceries", "Restaurants")
+    assert not essencial("Food & Groceries", "Alcohol & Tobacco")
+    assert not essencial("Food & Groceries", "Delivery")
+    assert essencial("Bills & Utilities", "Rent")
+    assert essencial("Home & Life", "Pharmacies") and not essencial("Home & Life", "Gyms & Fitness")
+    assert essencial("Transport & Travel", "Public Transit") and not essencial("Transport & Travel", "Flights")
+    assert not essencial("Online Platforms & Leisure", "Movie & Video")
+    assert essencial("Food & Groceries", None)  # sem subcategoria: vale a categoria
+    assert not essencial(None, None)

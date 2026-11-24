@@ -2,8 +2,8 @@ import { useState } from 'react';
 
 import { cx } from '@/components/ui';
 import type { Transacao } from '@/lib/api';
-import { categoriaNome, nomeFatura, pfm as copy, subcategoriaNome } from '@/lib/copy';
-import { dataCompleta, dataHoraLocal, diaMes } from '@/lib/datas';
+import { categoriaNome, chaveGasto, nomeFatura, nomeGasto, pfm as copy, subcategoriaNome } from '@/lib/copy';
+import { dataCompleta, dataHoraLocal, diaMesComAno } from '@/lib/datas';
 import { brl } from '@/lib/money';
 
 /**
@@ -23,6 +23,7 @@ export function LinhaTransacao({
   const entrada = t.direcao === 'ENTRADA';
   const abs = Math.abs(t.valor) as typeof t.valor;
   const valor = `${entrada ? '+' : '−'}${brl(abs)}`;
+  const parcela = Boolean(t.parcela_numero && t.parcelas_total);
   return (
     <li>
       <button
@@ -35,7 +36,11 @@ export function LinhaTransacao({
         <div className="min-w-0">
           <p className="truncate font-medium text-ink">{(cartao && t.estabelecimento) || t.descricao || '—'}</p>
           <p className="truncate text-xs text-slate">
-            {diaMes(t.data)} · {t.categoria ? categoriaNome(t.categoria) : copy.semCategoria}
+            {diaMesComAno(t.data)}
+            {/* A parcela antes da categoria: o nome da categoria pode ser longo e cortar o resto. */}
+            {parcela ? ` · ${copy.parcelaCurta(t.parcela_numero!, t.parcelas_total!)}` : ''}
+            {' · '}
+            {t.categoria ? nomeGasto(chaveGasto(t.categoria, t.subcategoria)) : copy.semCategoria}
             {banco?.nome ? ` · ${banco.nome}` : ''}
           </p>
         </div>
@@ -45,7 +50,16 @@ export function LinhaTransacao({
       {aberta && (
         <dl id={`tx-${t.id}`} className="grid grid-cols-2 gap-x-3 gap-y-2 bg-light px-4 py-3 text-sm">
           <Detalhe rotulo={copy.detalhe.descricao} valor={t.descricao} largo />
-          {t.transacionado_em ? (
+          {parcela ? (
+            <>
+              <Detalhe rotulo={copy.detalhe.parcela} valor={copy.detalhe.parcelaDe(t.parcela_numero!, t.parcelas_total!)} />
+              <Detalhe rotulo={copy.detalhe.lancadaEm} valor={dataCompleta(t.data)} />
+              <Detalhe
+                rotulo={copy.detalhe.compraEm}
+                valor={t.transacionado_em ? dataHoraLocal(t.transacionado_em) : dataCompleta(t.data_compra ?? t.data)}
+              />
+            </>
+          ) : t.transacionado_em ? (
             <Detalhe rotulo={copy.detalhe.dataHora} valor={dataHoraLocal(t.transacionado_em)} />
           ) : (
             <Detalhe rotulo={copy.detalhe.data} valor={dataCompleta(t.data)} />
@@ -54,7 +68,7 @@ export function LinhaTransacao({
           {banco && <Detalhe rotulo={copy.detalhe.conta} valor={[banco.nome, banco.conta].filter(Boolean).join(' · ')} />}
           {/* Categoria e subcategoria da Belvo, traduzidas (A6). */}
           <Detalhe rotulo={copy.detalhe.categoria} valor={t.categoria && categoriaNome(t.categoria)} />
-          <Detalhe rotulo={copy.detalhe.subcategoria} valor={subcategoriaNome(t.subcategoria)} />
+          <Detalhe rotulo={copy.detalhe.subcategoria} valor={subcategoriaNome(t.categoria, t.subcategoria)} />
           <Detalhe rotulo={copy.detalhe.tipoOperacao} valor={t.tipo_operacao} />
           {/* Estabelecimento e final do cartão só existem em transação de cartão. */}
           {cartao && <Detalhe rotulo={copy.detalhe.finalCartao} valor={t.final_cartao} />}

@@ -31,6 +31,11 @@ export function dataHoraLocal(iso: string): string {
   return dia ? `${dataCompleta(dia)}, ${hh}:${mm}` : dataCompleta(iso.slice(0, 10));
 }
 
+/** "2026-10-12" → "12 de outubro"; de outro ano, "12 de outubro de 2027". */
+export function diaMesComAno(iso: string, hoje: Date = new Date()): string {
+  return parseISO(iso).getFullYear() === hoje.getFullYear() ? diaMes(iso) : dataCompleta(iso);
+}
+
 /** "2026-10-11", 3 → "2027-01-01": primeiro dia do mês, ``n`` meses à frente. */
 export function inicioDoMesMais(iso: string, n: number): string {
   return format(addMonths(startOfMonth(parseISO(iso)), n), 'yyyy-MM-dd');

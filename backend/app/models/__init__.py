@@ -329,6 +329,11 @@ class Transacao(SQLModel, table=True):
     tipo_operacao: str | None = Field(default=None, max_length=60)  # operation_type, cru
     final_cartao: str | None = Field(default=None, max_length=4)  # credit_card_data.card_number, só o final
     fatura_nome: str | None = Field(default=None, max_length=60)  # credit_card_data.bill_name
+    # Parcela de compra no cartão: data_mov é o mês em que a parcela cai; aqui a
+    # data da compra e "parcela N de M" (credit_card_data).
+    data_compra: date | None = None
+    parcela_numero: int | None = None
+    parcelas_total: int | None = None
     valor: Decimal = _dinheiro()  # negativo = saída
     # Direção explícita: o valor é guardado como texto (Decimal exato), então
     # filtrar entrada/saída pelo sinal em SQL não seria confiável.

@@ -487,6 +487,10 @@ class TransacaoOut(BaseModel):
     subcategoria: str | None
     valor: Dinheiro  # negativo = saída
     direcao: Literal["ENTRADA", "SAIDA"]
+    # Parcela de compra no cartão: ``data`` é o mês em que cai; aqui a compra e "N de M".
+    data_compra: date | None = None
+    parcela_numero: int | None = None
+    parcelas_total: int | None = None
 
 
 class TransacaoUnificadaOut(TransacaoOut):

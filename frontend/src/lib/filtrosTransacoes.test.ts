@@ -45,7 +45,8 @@ describe('filtros de "Todas as transações" na URL (N1)', () => {
     expect(intervalo({ ...FILTROS_VAZIOS, periodo: 'mes' }, '2027-02-23')).toEqual({ desde: '2027-02-01', ate: '2027-02-23' });
     expect(intervalo({ ...FILTROS_VAZIOS, periodo: 'mes_passado' }, '2027-03-15')).toEqual({ desde: '2027-02-01', ate: '2027-02-28' });
     expect(intervalo({ ...FILTROS_VAZIOS, periodo: '30' }, '2026-11-23')).toEqual({ desde: '2026-10-24', ate: '2026-11-23' });
-    expect(intervalo(FILTROS_VAZIOS, '2026-11-23')).toEqual({});
+    // "Tudo" vai até hoje: parcela futura do cartão não entra no extrato nem no total.
+    expect(intervalo(FILTROS_VAZIOS, '2026-11-23')).toEqual({ ate: '2026-11-23' });
   });
 
   it('valor em reais digitado vira decimal para a API', () => {
@@ -53,7 +54,7 @@ describe('filtros de "Todas as transações" na URL (N1)', () => {
     expect(valorDecimal('100')).toBe('100');
     expect(valorDecimal('-5')).toBeNull();
     const p = paraApi({ ...FILTROS_VAZIOS, valorMin: '1.000', soDivida: true, contas: [2] }, '2026-11-23');
-    expect(p).toEqual({ valor_min: '1000', so_divida: 'true', contas: '2' });
+    expect(p).toEqual({ ate: '2026-11-23', valor_min: '1000', so_divida: 'true', contas: '2' });
   });
 
   it('um chip por filtro, e remover tira só aquele', () => {

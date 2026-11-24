@@ -118,7 +118,9 @@ export function intervalo(f: Filtros, hoje: string): { desde?: string; ate?: str
     case 'personalizado':
       return { ...(f.desde ? { desde: f.desde } : {}), ...(f.ate ? { ate: f.ate } : {}) };
     default:
-      return {};
+      // "Tudo" é o que já aconteceu: parcelas futuras de compras no cartão
+      // (accounting_date à frente) só aparecem escolhendo datas futuras.
+      return { ate: hoje };
   }
 }
 

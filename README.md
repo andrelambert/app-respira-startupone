@@ -87,12 +87,12 @@ contra a **Belvo em produção** (dados bancários reais) e em um **modo demonst
 
 | Funcionalidade | O que faz | Situação |
 |---|---|---|
-| **F1 — Conexão de contas** | Autorização via widget da Belvo (Open Finance Brasil), aberto em nova aba; coleta de contas, cartões, faturas, empréstimos e transações, com progresso em tempo real; revogação em um toque. Dívidas fora do Open Finance (carnê, crediário) entram por cadastro manual assistido. | ✅ |
+| **F1 — Conexão de contas** | Autorização via widget da Belvo (Open Finance Brasil), aberto em nova aba; coleta de contas, cartões, faturas, empréstimos e transações, com uma tela de espera que mostra o progresso por banco e por etapa (e não cai se a conexão oscilar); revogação em um toque. Dívidas fora do Open Finance (carnê, crediário) entram por cadastro manual assistido. | ✅ |
 | **F2 — Raio-X da dívida** | Total consolidado, lista ordenada por custo efetivo (taxa ao ano), data de quitação na mesma tela e o alerta de quando pagar só o mínimo faz a dívida crescer. | ✅ |
 | **F3 — Plano de quitação** | Três estratégias lado a lado (Avalanche, Bola de neve, Equilibrado), diferença em reais e meses, *slider* de capacidade que move a data em tempo real. **Novo:** selo **"✓ Conferido no Oracle"** — o mesmo plano calculado também em PL/SQL dentro do banco, igual ao centavo — e o link **"Ver de onde veio"** que explica o valor mensal calculado. | ✅ |
 | **F4 — Acompanhamento e alertas** | Eventos determinísticos (rotativo, atraso iminente, atraso, cheque especial, pico de gasto, desvio do plano, dívida quitada), previsto × realizado e marcos. **Novo:** alertas não se repetem e saem quando deixam de valer; **próximos vencimentos** no Início. | ✅ (dentro do app; sem push/e-mail) |
 | **F5 — Microlições e copiloto** | 9 microlições estáticas casadas por regra com o evento. Copiloto de IA visível e desabilitado ("em breve"). | 🟡 Estrutura pronta; IA não implementada |
-| **Finanças do dia a dia (PFM)** | Saldos por banco, faturas, extratos. **Novo:** **Todas as transações** com filtros, **Para onde foi o dinheiro** (gastos por categoria × média, ligado à data de saída), **entradas, gastos e dívida mês a mês**, **filtros e ordenação de dívidas**. | ✅ |
+| **Finanças do dia a dia (PFM)** | Saldos por banco, faturas, extratos. **Novo:** **Todas as transações** com filtros, **Para onde foi o dinheiro** (gastos por subcategoria × média, ligado à data de saída), **entradas, gastos e dívida mês a mês**, **filtros e ordenação de dívidas**. Categorias pela **taxonomia V2 da Belvo**, em português ("Restaurantes e lanchonetes", "Bebidas e tabaco", "Mercado"), e **compras parceladas no cartão** com cada parcela no mês em que cai ("parcela 3/12"). | ✅ |
 
 ### O que mudou na Fase 7
 
@@ -104,6 +104,7 @@ contra a **Belvo em produção** (dados bancários reais) e em um **modo demonst
 | **Melhorias do teste do MVP** | Todas as transações (N1), gastos por categoria com a frase "sua data chegaria N meses antes" (N2), próximos vencimentos (N3), filtros de dívidas (N4), fluxo mensal e "de onde veio" (N5). |
 | **Publicação** | Frontend na Vercel, backend em Docker no Render, demonstração por visitante, cabeçalhos de segurança, workflow que mantém o serviço ativo. |
 | **Segurança** | CPF criptografado em repouso, limites de tentativa no cadastro e na demo, dependências sem vulnerabilidade alta ou crítica. |
+| **Ajustes do teste com conta real** | Parcelas do cartão pelo `accounting_date` (data em que a parcela cai), com data da compra e número da parcela; taxonomia V2 da Belvo (16 categorias, ~80 subcategorias) com gasto essencial definido pela subcategoria; espera da coleta redesenhada e resistente a quedas de conexão; consulta à Belvo a cada 5 s. |
 
 **Modo demonstração (Juliana).** Simula a jornada inteira com dados fictícios no **mesmo formato
 de resposta da Belvo** (o mapeamento Belvo → domínio é exercitado de verdade): três bancos
@@ -191,8 +192,8 @@ variáveis secretas do Render.
 ### Testes
 
 ```bash
-cd backend && uv run pytest     # 176 testes (173 no SQLite + 3 que só rodam no Oracle)
-cd frontend && npm test         # 59 testes
+cd backend && uv run pytest     # 180 testes (177 no SQLite + 3 que só rodam no Oracle)
+cd frontend && npm test         # 60 testes
 python3 ops/oracle/testes_oracle.py   # a suíte do backend no schema de teste do Oracle
 ```
 
@@ -218,9 +219,9 @@ python3 ops/oracle/testes_oracle.py   # a suíte do backend no schema de teste d
 | **Criar conta** | `/cadastro` | E-mail, senha, nome completo e CPF (só quando a conexão com a Belvo está ligada; gravado cifrado). Pergunta opcional sobre planos anteriores, que muda a estratégia sugerida. |
 | **Conectar banco** | `/conectar` | O que é lido e o que não é feito; **Conectar outro banco** abre a autorização em nova aba e mostra o progresso da coleta. Na Juliana, a autorização é simulada. |
 | **Início** | `/inicio` | A data em que você fica livre, quanto já foi pago, **O que fazer este mês**, **Próximos vencimentos**, alertas, dívidas quitadas e o mês a mês. Na Juliana, o painel **Modo demonstração** simula os meses. |
-| **Contas** | `/contas` | Saldos por banco, faturas em aberto, **Ver todas as transações**, **Para onde foi o dinheiro** (gastos por categoria × média dos 3 meses, com a frase que liga o corte à data de saída) e **Entradas, gastos e dívida, mês a mês**. |
+| **Contas** | `/contas` | Saldos por banco, faturas em aberto, **Ver todas as transações**, **Para onde foi o dinheiro** (gastos por subcategoria × média dos 3 meses — delivery separado do mercado —, com a frase que liga o corte à data de saída) e **Entradas, gastos e dívida, mês a mês**. |
 | **Detalhe da conta** | `/contas/:id` | Conta: saldo e extrato com filtros. Cartão: faturas (atual e anteriores, "vence/venceu em") e extrato. |
-| **Todas as transações** | `/transacoes` | Extrato de todas as contas: período, banco, tipo, categoria, busca, faixa de valor e **Só pagamentos de dívida**; resumo de entradas, saídas e resultado. Filtros na URL (o botão voltar e o link compartilhado funcionam). |
+| **Todas as transações** | `/transacoes` | Extrato de todas as contas: período, banco, tipo, categoria, busca, faixa de valor e **Só pagamentos de dívida**; resumo de entradas, saídas e resultado. Cada transação mostra a subcategoria e, nas compras parceladas no cartão, "parcela 3/12" (o detalhe traz a data da compra e quando a parcela cai). Filtros na URL (o botão voltar e o link compartilhado funcionam). |
 | **Próximos vencimentos** | `/vencimentos` | Faturas e parcelas nos próximos 7, 15 ou 30 dias, com status (pago, pendente, atrasado) e, com plano ativo, o valor do plano. |
 | **Raio-X** | `/raiox` | Quanto você deve, as dívidas da mais cara para a mais barata, a data de quitação, os juros do mês e o alerta do mínimo. |
 | **Dívidas** | `/dividas` | Cada dívida com contrato, atraso e selos de estimativa; ordenar (ordem do plano, maior taxa, maior saldo, próximo vencimento, por banco) e filtrar (banco, tipo, situação). |
@@ -278,8 +279,11 @@ flowchart LR
   (`frontend/vercel.json`). O cookie de sessão fica `HttpOnly; Secure; SameSite=Lax`, sem CORS aberto.
 - **O widget abre em nova aba, não em `iframe`** (bancos bloqueiam ser enquadrados). A aba original
   fica sabendo do resultado por `BroadcastChannel` **e** por consulta ao backend.
-- **Coleta por polling, webhooks opcionais.** Sem túnel/webhook configurado, o backend consulta a
-  Belvo periodicamente; com webhook (autenticado e idempotente), ele assume.
+- **Coleta por polling, webhooks opcionais.** Sem webhook configurado, o backend consulta a Belvo a
+  cada 5 s (por até 10 minutos) até os dados chegarem; com webhook (autenticado e idempotente), ele
+  assume. A tela de espera consulta o nosso backend a cada 5 s e não cai se a conexão oscilar.
+- **Taxonomia da Belvo em um lugar só.** Os nomes da Belvo (categorias, subcategorias, tipos de
+  produto) só aparecem em `providers/mapping.py` (regras) e `frontend/src/lib/copy.ts` (tradução).
 - **Provedor por usuário.** A conta demo usa o `FixtureProvider` (dados fictícios no formato da
   Belvo); toda conta registrada usa o `BelvoProvider`.
 - **Camadas com responsabilidades fechadas:**
@@ -395,7 +399,9 @@ O núcleo do produto (`backend/app/domain/planner.py`) é um **porte fiel** do p
 
 1. **Capacidade de pagamento** — calculada do histórico: mediana das entradas menos mediana dos
    gastos essenciais dos últimos 6 meses, **com 10% de reserva** para imprevistos. A tela
-   "Ver de onde veio" mostra essa conta mês a mês.
+   "Ver de onde veio" mostra essa conta mês a mês. "Essencial" é decidido pela subcategoria da
+   taxonomia V2 da Belvo (`mapping.ESSENCIAIS_V2`): mercado, contas da casa, farmácia, saúde,
+   educação e transporte do dia a dia sim; restaurante, delivery, bebida e viagem não.
 2. **Ordenação por estratégia** — Avalanche (maior taxa primeiro), Bola de neve (menor saldo
    primeiro) ou Equilibrado (a menor dívida primeiro e depois por taxa).
 3. **Simulação mês a mês** — juros antes do pagamento, arredondados a cada mês; paga-se o mínimo de
@@ -436,11 +442,11 @@ decisão marcada como provisória no código porque veio de uma pesquisa com 10 
 
 | Suíte | Quantidade | O que cobre |
 |---|---:|---|
-| `test_mapping.py` | 46 | Belvo → domínio: modalidades, taxa de juros (inclusive pelo CET), cheque especial, contratos, faturas, transações, fuso horário, nome curto do banco |
+| `test_mapping.py` | 49 | Belvo → domínio: modalidades, taxa de juros (inclusive pelo CET), cheque especial, contratos, faturas, transações, fuso horário, nome curto do banco, parcelas do cartão pelo `accounting_date`, essencial pela subcategoria V2 |
 | `test_oracle_ddl.py` | 36 | O esquema compila para o Oracle; PK com IDENTITY; dinheiro como `NUMBER` (e ida e volta exata, no Oracle) |
 | `test_planner.py` | 20 | Os números da Fase 5 ao centavo, empates, uma dívida, capacidade insuficiente, sem dívidas |
 | `test_api.py` | 13 | Jornada da Juliana, autenticação, isolamento entre usuários, webhooks, `/health`, `/config` |
-| `test_transacoes.py` | 13 | Todas as transações: cada filtro, somas, paginação, parâmetros inválidos, isolamento |
+| `test_transacoes.py` | 14 | Todas as transações: cada filtro (inclusive por subcategoria), somas, paginação, parâmetros inválidos, isolamento, parcelas da demo uma por mês |
 | `test_alertas.py` | 12 | Alertas não se repetem e saem quando deixam de valer; conta nomeada; cheque especial atual |
 | `test_gastos.py` | 8 | Gastos por categoria, impacto no plano, fluxo mensal coerente com a capacidade |
 | `test_vencimentos.py` | 7 | Próximos vencimentos: datas, janela, status, cartão sem duplicar |
@@ -448,8 +454,8 @@ decisão marcada como provisória no código porque veio de uma pesquisa com 10 
 | `test_cpf_cifrado.py` | 5 | CPF nunca em texto no banco, "em uso" pelo hash, sem chave não grava, legado cifrado |
 | `test_publicacao.py` | 4 | Demo por visitante isolada, limites, limpeza, versão pública |
 | `test_consistencia.py` + `test_oracle_motor.py` | 4 | Mesma data e total entre telas; Python × PL/SQL (no Oracle) |
-| **Backend** | **176** | 173 rodam no SQLite; 3 só no Oracle (`@pytest.mark.oracle`) |
-| **Frontend (Vitest)** | **59** | Dinheiro, datas, textos, cadastro, filtros na URL (transações e dívidas), vencimentos, gastos, tela de erro |
+| **Backend** | **180** | 177 rodam no SQLite; 3 só no Oracle (`@pytest.mark.oracle`) |
+| **Frontend (Vitest)** | **60** | Dinheiro, datas, textos e taxonomia, cadastro, filtros na URL (transações e dívidas), vencimentos, gastos, telas de erro |
 
 A suíte do backend também roda contra o Oracle, no schema `RESPIRA_TESTE`
 (`python3 ops/oracle/testes_oracle.py`). Na última rodada completa no Oracle, depois do motor em
@@ -478,6 +484,11 @@ PL/SQL, **137 testes passaram** e nenhum falhou; os testes das telas novas foram
   CET ou uma referência por modalidade — sempre com selo de **estimada** na interface.
 - **Parcelas de empréstimo:** o Open Finance não informa se a parcela do mês já foi paga; em
   "Próximos vencimentos" elas ficam "pendente" até vencer.
+- **Parcelas futuras do cartão** não entram no extrato "Tudo" (que vai até hoje) nem nos totais;
+  para vê-las, escolha datas futuras em "Escolher datas". Uma visão própria de "parcelas a vencer"
+  ainda não existe.
+- **Dados já coletados se reorganizam na próxima sincronização** (botão **Atualizar**, em Contas):
+  categorias, essenciais e datas de parcela são calculados quando os dados chegam da Belvo.
 - **Alertas só dentro do app** — sem push nem e-mail. **Copiloto de IA não implementado.**
 - **Pesquisa de validação com n=10, fora do público-alvo.** Decisões derivadas dela estão marcadas
   como provisórias. O teste do MVP da Fase 7 foi simulado com personas (método descrito no documento).

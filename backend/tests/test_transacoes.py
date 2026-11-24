@@ -125,3 +125,21 @@ def test_isolamento_entre_usuarios(api):
     assert api.get("/transacoes/categorias").json() == []
     api.cookies.clear()
     assert api.get("/transacoes").status_code == 401
+
+
+def test_filtro_por_subcategoria_e_parcelas(demo_limpa):
+    """Fase 7: o toque numa barra de gastos filtra pela subcategoria V2
+    ("Food & Groceries::Delivery"), sem trazer o mercado da mesma categoria; e a
+    compra parcelada da demo vem com uma parcela por mês."""
+    api = demo_limpa
+    _, delivery = _tudo(api, categorias="Food & Groceries::Delivery")
+    assert delivery and {(t["categoria"], t["subcategoria"]) for t in delivery} == {("Food & Groceries", "Delivery")}
+    _, alimentacao = _tudo(api, categorias="Food & Groceries")
+    assert len(alimentacao) > len(delivery)  # a categoria inteira inclui o mercado
+
+    _, geladeira = _tudo(api, busca="eletrodom")
+    assert [t["parcela_numero"] for t in sorted(geladeira, key=lambda t: t["data"])] == list(range(1, 11))
+    assert {t["parcelas_total"] for t in geladeira} == {10}
+    meses = [t["data"][:7] for t in geladeira]
+    assert len(set(meses)) == 10  # uma parcela em cada mês, não todas no mês da compra
+    assert all(t["data_compra"] in (None, min(meses) + "-09") for t in geladeira)

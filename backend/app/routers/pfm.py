@@ -231,6 +231,9 @@ def todas_transacoes(
                 subcategoria=t.subcategoria,
                 valor=t.valor,
                 direcao=t.direcao.value,
+                data_compra=t.data_compra,
+                parcela_numero=t.parcela_numero,
+                parcelas_total=t.parcelas_total,
                 conta_id=t.conta_id,
                 banco=origem.get(t.conta_id or -1, (None, None, None))[0],
                 banco_logo=origem.get(t.conta_id or -1, (None, None, None))[1],
@@ -363,6 +366,9 @@ def extrato(
                 subcategoria=t.subcategoria,
                 valor=t.valor,
                 direcao=t.direcao.value,
+                data_compra=t.data_compra,
+                parcela_numero=t.parcela_numero,
+                parcelas_total=t.parcelas_total,
             )
             for t in itens
         ],

@@ -41,9 +41,20 @@ ANUAL_PERCENTUAL_A_PARTIR_DE = Decimal("8")
 # Cheque especial não tem "mínimo" contratual. Estimativa: 10% do usado.
 FRACAO_MINIMO_CHEQUE = Decimal("0.10")
 
-# Categorias da Belvo (enum de ``TransactionOpenFinanceBrazil.category``) que
-# contam como gasto essencial no §5.1. Tabela explícita: o usuário nunca
-# classifica nada (princípio 1, §3).
+# Gasto essencial no §5.1, pela taxonomia V2 da Belvo (categoria → subcategorias).
+# Tabela explícita: o usuário nunca classifica nada (princípio 1, §3).
+# None = a categoria inteira é essencial. Ex.: em Food & Groceries só o mercado
+# é essencial — restaurante, delivery e bebida não (Fase 7, a pedido da equipe).
+ESSENCIAIS_V2: dict[str, frozenset[str] | None] = {
+    "Bills & Utilities": None,  # luz, água, aluguel, internet e telefone
+    "Insurance": None,
+    "Taxes": frozenset({"Income Tax", "Auto Tax & Fees", "Real Estate Tax & Fees", "Government Fees", "Other"}),
+    "Food & Groceries": frozenset({"Groceries"}),
+    "Home & Life": frozenset({"Health", "Pharmacies", "Education", "Veterinary Services"}),
+    # Ir e vir do trabalho; viagem (voo, hotel, aluguel de carro, milhas) não.
+    "Transport & Travel": frozenset({"Gas", "Public Transit", "Taxis & Rideshares", "Parking & Tolls", "Auto Expenses"}),
+}
+# Sem subcategoria (dado antigo ou instituição que não manda), vale a categoria.
 CATEGORIAS_ESSENCIAIS = frozenset(
     {
         "Bills & Utilities",  # luz, água, telefone, internet
@@ -54,6 +65,17 @@ CATEGORIAS_ESSENCIAIS = frozenset(
         "Taxes",
     }
 )
+
+
+def essencial(categoria: str | None, subcategoria: str | None) -> bool:
+    if categoria not in ESSENCIAIS_V2:
+        return False
+    subs = ESSENCIAIS_V2[categoria]
+    if subs is None or not subcategoria:
+        return subs is None or categoria in CATEGORIAS_ESSENCIAIS
+    return subcategoria in subs
+
+
 # Saídas nesta categoria são pagamento de dívida: não são gasto essencial —
 # são justamente o que a capacidade vai cobrir.
 CATEGORIA_PAGAMENTO_DIVIDA = "Credits & Loans"
@@ -150,6 +172,11 @@ class TransacaoMapeada:
     tipo_operacao: str | None = None
     final_cartao: str | None = None  # só os 4 últimos dígitos (PCI)
     fatura_nome: str | None = None  # credit_card_data.bill_name (ex.: Sep-2026)
+    # Compra parcelada no cartão: cada parcela entra no mês em que cai
+    # (accounting_date); a data da compra e "3 de 12" ficam para a tela.
+    data_compra: date | None = None
+    parcela_numero: int | None = None
+    parcelas_total: int | None = None
 
 
 @dataclass
@@ -759,16 +786,28 @@ def mapear_transacoes(transacoes: Iterable[Json]) -> list[TransacaoMapeada]:
         # ``value_date`` só como reserva quando a instituição não manda a hora.
         transacionado_em = _datahora_utc(t.get("transacted_at"))
         data_mov = horario_brasil(transacionado_em).date() if transacionado_em else _data(t.get("value_date"))
+        cartao = t.get("credit_card_data")
+        conta = t.get("account")
+        categoria_conta = conta.get("category") if isinstance(conta, dict) else None
+        # Cartão: a data que vale é a do lançamento na fatura (accounting_date). Numa
+        # compra em 12x, as 12 parcelas têm a mesma data de compra (value_date /
+        # transacted_at) e cada uma tem o seu accounting_date — o mês em que cai.
+        # Conta corrente não manda accounting_date.
+        data_compra = None
+        e_cartao = isinstance(cartao, dict) or categoria_conta == "CREDIT_CARD"
+        lancamento = _data(t.get("accounting_date")) if e_cartao else None
+        if lancamento is not None and data_mov is not None and lancamento != data_mov:
+            data_compra, data_mov = data_mov, lancamento
+        total_parcelas = _inteiro(cartao.get("number_of_installments")) if isinstance(cartao, dict) else None
+        parcelado = total_parcelas is not None and total_parcelas > 1
         if tipo not in {"INFLOW", "OUTFLOW"} or valor is None or data_mov is None:
             continue  # sem direção ou sem valor não dá para usar com segurança
         if t.get("status") == "PENDING":
             continue
         valor = abs(valor) if tipo == "INFLOW" else -abs(valor)
         categoria = t.get("category")
-        conta = t.get("account")
-        categoria_conta = conta.get("category") if isinstance(conta, dict) else None
+        subcategoria = t.get("subcategory") or None
         merchant = t.get("merchant") or {}
-        cartao = t.get("credit_card_data")
         saida.append(
             TransacaoMapeada(
                 id_externo=t["id"],
@@ -777,7 +816,7 @@ def mapear_transacoes(transacoes: Iterable[Json]) -> list[TransacaoMapeada]:
                 valor=arredondar(valor),
                 descricao=(t.get("description") or "")[:200],
                 categoria=categoria,
-                essencial=valor < 0 and categoria in CATEGORIAS_ESSENCIAIS,
+                essencial=valor < 0 and essencial(categoria, subcategoria),
                 pagamento_divida=valor < 0 and categoria == CATEGORIA_PAGAMENTO_DIVIDA,
                 # Entrada no cartão ou no empréstimo é pagamento/estorno, não renda.
                 conta_como_renda=valor > 0
@@ -785,7 +824,7 @@ def mapear_transacoes(transacoes: Iterable[Json]) -> list[TransacaoMapeada]:
                 and categoria_conta not in CATEGORIAS_CONTA_SEM_RENDA,
                 estabelecimento=(merchant.get("merchant_name") or None) if isinstance(merchant, dict) else None,
                 estabelecimento_site=_url_https(merchant.get("website")) if isinstance(merchant, dict) else None,
-                subcategoria=(t.get("subcategory") or None),
+                subcategoria=subcategoria,
                 transacionado_em=transacionado_em,
                 tipo_operacao=(str(t.get("operation_type") or "").strip()[:60] or None),
                 # Já vem só com o final no Brasil; _final garante que nunca passe de 4.
@@ -794,6 +833,9 @@ def mapear_transacoes(transacoes: Iterable[Json]) -> list[TransacaoMapeada]:
                 fatura_nome=(str(cartao.get("bill_name") or "").strip()[:60] or None)
                 if isinstance(cartao, dict)
                 else None,
+                data_compra=data_compra,
+                parcela_numero=_inteiro(cartao.get("installment_identifier")) if parcelado and isinstance(cartao, dict) else None,
+                parcelas_total=total_parcelas if parcelado else None,
             )
         )
     return saida
