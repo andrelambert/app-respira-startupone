@@ -19,7 +19,7 @@ jobs:
     steps:
       - name: GET /health (com espera para o Render acordar)
         env:
-          URL: ${{ vars.RESPIRA_API_URL || 'https://respira-api.onrender.com' }}
+          URL: ${{ vars.RESPIRA_API_URL || 'https://respira-api-qo4n.onrender.com' }}
         run: |
           curl --fail --silent --show-error --retry 6 --retry-delay 20 --retry-all-errors \
                --max-time 90 "$URL/health"
