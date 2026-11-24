@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { Link, Navigate } from 'react-router';
 
@@ -12,7 +12,6 @@ import {
 import {
   BarraIndeterminada,
   Badge,
-  Button,
   Card,
   Carregando,
   EstadoErro,
@@ -22,7 +21,8 @@ import {
   Money,
   cx,
 } from '@/components/ui';
-import { chaves, chavesFinanceiras, useConsentimentos, useUsuario } from '@/hooks/queries';
+import { EsperaColeta } from '@/components/respira/EsperaColeta';
+import { chaves, useConsentimentos, useUsuario } from '@/hooks/queries';
 import { api, type Consentimento, type Divida, type RaioX as TRaioX } from '@/lib/api';
 import {
   alertaDividaCresce,
@@ -31,7 +31,6 @@ import {
   coleta as copyColeta,
   conectar,
   divida as copyDivida,
-  estados,
   fraseRaioX,
   metodoNome,
   pfm,
@@ -39,7 +38,6 @@ import {
 } from '@/lib/copy';
 import { percentual, sub } from '@/lib/money';
 
-const LIMITE_ESPERA_MS = 3 * 60 * 1000;
 // Quantas linhas cabem antes da data de quitação sem rolar num celular de 360 px (§9).
 const LINHAS_NA_DOBRA = 5;
 
@@ -255,60 +253,3 @@ function LinhaDivida({ d, cor }: { d: Divida; cor: string }) {
   );
 }
 
-function EsperaColeta({ consentimentos, oscilou = false }: { consentimentos: Consentimento[]; oscilou?: boolean }) {
-  const [inicio] = useState(() => Date.now());
-  const [agora, setAgora] = useState(() => Date.now());
-  const qc = useQueryClient();
-  useEffect(() => {
-    const t = window.setInterval(() => setAgora(Date.now()), 5000);
-    return () => window.clearInterval(t);
-  }, []);
-  const sync = useMutation({
-    mutationFn: api.sync,
-    onSettled: () => chavesFinanceiras.forEach((k) => void qc.invalidateQueries({ queryKey: k })),
-  });
-  const demorou = agora - inicio > LIMITE_ESPERA_MS;
-  const emColeta = consentimentos.filter((c) => c.status === 'ATIVO' && !c.coleta_concluida);
-
-  return (
-    <div className="flex flex-col gap-5 pt-4" aria-live="polite">
-      {demorou ? (
-        <Card tom="atencao" className="flex flex-col gap-3">
-          <h1 className="text-xl font-bold text-navy">{copyColeta.demorou.titulo}</h1>
-          <p>{copyColeta.demorou.texto}</p>
-          <Button onClick={() => sync.mutate()} disabled={sync.isPending}>
-            {copyColeta.demorou.recarregar}
-          </Button>
-        </Card>
-      ) : (
-        <>
-          <h1 className="text-2xl font-bold leading-tight text-navy">{copyColeta.titulo}</h1>
-          <p className="text-ink">{copyColeta.texto}</p>
-          <BarraIndeterminada rotulo={copyColeta.titulo} />
-          {oscilou && (
-            <p role="status" className="text-sm text-amber-ink">
-              {estados.reconectando}
-            </p>
-          )}
-        </>
-      )}
-      {emColeta.map((c) => (
-        <Card key={c.id} as="div">
-          <p className="mb-2 font-semibold text-navy">{c.instituicao}</p>
-          <ul className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
-            {c.coleta
-              .filter((r) => r.recurso !== 'OWNERS')
-              .map((r) => (
-                <li key={r.recurso} className={cx('flex items-center gap-1', r.status === 'RECEBIDO' ? 'text-green-ink' : 'text-slate')}>
-                  {r.status === 'RECEBIDO' ? Icone.check : Icone.relogio}
-                  {copyColeta.recursos[r.recurso] ?? r.recurso}
-                  {r.status === 'AGUARDANDO' && '…'}
-                  {r.status === 'INDISPONIVEL' && ' (indisponível)'}
-                </li>
-              ))}
-          </ul>
-        </Card>
-      ))}
-    </div>
-  );
-}

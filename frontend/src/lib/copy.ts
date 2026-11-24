@@ -229,7 +229,22 @@ export function erroConexao(codigo?: string | null): string {
 
 export const coleta = {
   titulo: 'Conectamos sua conta. Estamos buscando seus dados no banco.',
+  conectado: 'Conta conectada',
+  buscando: 'Estamos buscando seus dados no banco',
   texto: 'Isso costuma levar de 30 segundos a 2 minutos.',
+  progresso: (prontas: number, total: number) =>
+    total ? `${prontas} de ${total} ${total === 1 ? 'etapa' : 'etapas'}` : 'Começando…',
+  tempo: (s: number) => (s < 60 ? `${s} s` : `${Math.floor(s / 60)} min ${String(s % 60).padStart(2, '0')} s`),
+  bancoPronto: 'Pronto',
+  estados: { RECEBIDO: 'Pronto', AGUARDANDO: 'Buscando…', INDISPONIVEL: 'Indisponível' } as Record<string, string>,
+  etapas: {
+    ACCOUNTS: { nome: 'Contas e cartões', detalhe: 'saldos, limites, empréstimos' },
+    BILLS: { nome: 'Faturas', detalhe: 'valor, mínimo e vencimento' },
+    TRANSACTIONS: { nome: 'Transações', detalhe: 'até 12 meses de histórico' },
+    INCOMES: { nome: 'Renda', detalhe: 'quanto entra por mês' },
+    RECURRING_EXPENSES: { nome: 'Gastos fixos', detalhe: 'contas que se repetem' },
+  } as Record<string, { nome: string; detalhe: string }>,
+  podeSair: 'Você pode continuar usando o app: os dados aparecem aqui assim que chegarem.',
   recursos: {
     ACCOUNTS: 'contas',
     BILLS: 'faturas',
