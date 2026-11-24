@@ -66,6 +66,10 @@ def test_modo_publico_sem_belvo_sem_cpf_e_noindex(publico, monkeypatch):
     with TestClient(app) as c:
         cfg = c.get("/config")
         assert cfg.json()["modo_publico"] is True and cfg.json()["belvo_configurada"] is False
+        # Como no Render: sem DEMO_EMAIL (não há Juliana fixa), o botão da demo
+        # continua disponível — achado no primeiro acesso à versão publicada.
+        monkeypatch.setattr(publico, "demo_email", None)
+        assert c.get("/config").json()["demo_disponivel"] is True
         assert cfg.headers["x-robots-tag"] == "noindex, nofollow"
         r = c.post(
             "/auth/registrar",

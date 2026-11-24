@@ -3,10 +3,10 @@ import { Suspense } from 'react';
 import { Link, Navigate, NavLink, Outlet, ScrollRestoration, useLocation, useNavigate } from 'react-router';
 
 import { Badge, Carregando, cx } from '@/components/ui';
-import { useConfig, useUsuario } from '@/hooks/queries';
+import { useUsuario } from '@/hooks/queries';
 import { useOnline } from '@/hooks/useOnline';
 import { api } from '@/lib/api';
-import { conta, estados, marca, nav, versaoPublica } from '@/lib/copy';
+import { conta, estados, marca, nav } from '@/lib/copy';
 
 /** Rotas com dado financeiro: só com sessão. Sem ela, vai para /entrar e volta depois. */
 export function ExigeLogin() {
@@ -57,17 +57,6 @@ function Logo() {
   );
 }
 
-/** M5: na versão pública, uma faixa discreta em toda tela. */
-function FaixaVersaoPublica() {
-  const config = useConfig();
-  if (!config.data?.modo_publico) return null;
-  return (
-    <p role="note" className="bg-navy px-4 py-1.5 text-center text-xs text-white">
-      {versaoPublica}
-    </p>
-  );
-}
-
 function AvisoOffline() {
   const online = useOnline();
   if (online) return null;
@@ -90,7 +79,6 @@ export function LayoutApp() {
   ];
   return (
     <div className="min-h-dvh bg-light pb-24">
-      <FaixaVersaoPublica />
       <AvisoOffline />
       <header className="sticky top-0 z-10 border-b border-line bg-white/95 backdrop-blur">
         <div className="mx-auto flex max-w-lg items-center px-4">
@@ -132,7 +120,6 @@ export function LayoutApp() {
 export function LayoutSimples() {
   return (
     <div className="min-h-dvh bg-light">
-      <FaixaVersaoPublica />
       <AvisoOffline />
       <header className="mx-auto flex max-w-lg items-center px-4 pt-2">
         <Logo />

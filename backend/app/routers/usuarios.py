@@ -49,7 +49,11 @@ def _logar(s: SessionDep, u: Usuario, resposta: Response) -> UsuarioOut:
 @router.get("/config", response_model=ConfigOut)
 def config(s: SessionDep) -> ConfigOut:
     cfg = get_settings()
-    demo = cfg.demo_configurada() and cfg.demo_email is not None and repo_u.por_email(s, cfg.demo_email) is not None
+    if cfg.demo_por_visitante:
+        # Cada visitante ganha a sua Juliana: não depende de uma conta fixa existir.
+        demo = cfg.demo_habilitada
+    else:
+        demo = cfg.demo_configurada() and cfg.demo_email is not None and repo_u.por_email(s, cfg.demo_email) is not None
     return ConfigOut(
         demo_disponivel=demo,
         belvo_configurada=cfg.belvo_configurada(),
