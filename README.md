@@ -16,7 +16,7 @@ A unidade de valor do produto é **uma data**, não um gráfico: todo app financ
 | **Aplicativo** | **https://app-respira-startupone.vercel.app** |
 | API (saúde do serviço) | https://respira-api-qo4n.onrender.com/health |
 
-Na tela de entrar, toque em **"Entrar como Juliana (demonstração)"**: cada visitante ganha uma
+Na página inicial (ou na tela de entrar), toque em **"Entrar como Juliana (demonstração)"**: cada visitante ganha uma
 Juliana só sua, com dados fictícios, apagada depois de 24 horas. Dá para simular meses, ativar um
 plano e reiniciar à vontade sem atrapalhar ninguém.
 
@@ -204,7 +204,7 @@ python3 ops/oracle/testes_oracle.py   # a suíte do backend no schema de teste d
 ### Navegação
 
 - **Antes de entrar:** a página inicial (`/`) leva a **Entrar** (`/entrar`) ou **Criar conta**
-  (`/cadastro`). Na tela de entrar está **"Entrar como Juliana (demonstração)"**.
+  (`/cadastro`). As duas telas têm **"Entrar como Juliana (demonstração)"**.
 - **Depois de entrar:** a barra fixa na parte de baixo leva a **Início · Contas · Raio-X · Dívidas ·
   Plano · Configurações**.
 - **Primeira vez de uma conta nova:** Criar conta → Conectar banco → (autorização no banco, em
@@ -214,7 +214,7 @@ python3 ops/oracle/testes_oracle.py   # a suíte do backend no schema de teste d
 
 | Tela | Rota | Para que serve e como usar |
 |---|---|---|
-| **Página inicial** | `/` | O produto em três passos e o aviso "Este app não movimenta o seu dinheiro". |
+| **Página inicial** | `/` | O produto em três passos, o aviso "Este app não movimenta o seu dinheiro" e o atalho **Entrar como Juliana (demonstração)**. |
 | **Entrar** | `/entrar` | E-mail e senha, ou **Entrar como Juliana (demonstração)**. |
 | **Criar conta** | `/cadastro` | E-mail, senha, nome completo e CPF (só quando a conexão com a Belvo está ligada; gravado cifrado). Pergunta opcional sobre planos anteriores, que muda a estratégia sugerida. |
 | **Conectar banco** | `/conectar` | O que é lido e o que não é feito; **Conectar outro banco** abre a autorização em nova aba e mostra o progresso da coleta. Na Juliana, a autorização é simulada. |
