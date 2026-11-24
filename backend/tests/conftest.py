@@ -28,6 +28,8 @@ os.environ.update(
         "DEMO_EMAIL": "demo@teste.local",
         "DEMO_SENHA": "senha-demo-de-teste",
         "LOG_LEVEL": "WARNING",
+        # Chave de CPF gerada a cada execução: nenhuma chave fixa no código (§12.3).
+        "CPF_CHAVE": __import__("cryptography.fernet", fromlist=["Fernet"]).Fernet.generate_key().decode(),
     }
 )
 

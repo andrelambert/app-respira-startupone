@@ -27,6 +27,10 @@ class Settings(BaseSettings):
     # O Always Free limita sessões simultâneas: pool pequeno.
     oracle_pool_size: int = Field(default=3, ge=1, le=10)
     oracle_regiao: str | None = None
+
+    # CPF criptografado em repouso (M6). Chave Fernet (gerada com
+    # Fernet.generate_key()); só no ambiente, nunca no Git.
+    cpf_chave: SecretStr | None = None
     log_level: str = "INFO"
     sessao_dias: int = Field(default=7, ge=1, le=30)
 

@@ -782,9 +782,6 @@ export const erroRota = {
   inicio: 'Ir para o Início',
 };
 
-// M5: faixa da versão pública.
-export const versaoPublica = 'Versão de demonstração acadêmica — não informe dados reais.';
-
 export const estados = {
   carregando: 'Carregando…',
   erroTitulo: 'Não conseguimos carregar agora',

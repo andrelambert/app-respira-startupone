@@ -10,7 +10,7 @@ from app.repositories import consentimentos as repo_c
 from app.repositories import usuarios as repo_u
 from app.routers.comum import SessionDep, UsuarioDep
 from app.schemas import ConfigOut, LoginEntrada, RegistroEntrada, UsuarioAtualizar, UsuarioOut
-from app.services import auth, conexao, demo
+from app.services import auth, conexao, cripto, demo
 from app.services.contexto import hoje_do_usuario
 
 log = logging.getLogger("respira.auth")
@@ -18,14 +18,15 @@ router = APIRouter(tags=["conta"])
 
 
 def _out(u: Usuario) -> UsuarioOut:
+    cpf = cripto.decifrar(u.cpf)  # só em memória, só para mascarar
     return UsuarioOut(
         apelido=u.apelido,
         email=u.email,
         nome_completo=u.nome_completo,
         demo=u.demo,
-        tem_identificacao=bool(u.cpf and u.nome_completo),
+        tem_identificacao=bool(cpf and u.nome_completo),
         # Só os 3 primeiros e os 2 últimos dígitos: o suficiente para reconhecer.
-        cpf_mascarado=f"{u.cpf[:3]}.***.***-{u.cpf[-2:]}" if u.cpf else None,
+        cpf_mascarado=f"{cpf[:3]}.***.***-{cpf[-2:]}" if cpf else None,
         ja_desistiu_de_plano=u.ja_desistiu_de_plano,
         meses_simulados=u.meses_simulados,
         hoje=hoje_do_usuario(u),
@@ -49,7 +50,11 @@ def _logar(s: SessionDep, u: Usuario, resposta: Response) -> UsuarioOut:
 @router.get("/config", response_model=ConfigOut)
 def config(s: SessionDep) -> ConfigOut:
     cfg = get_settings()
-    demo = cfg.demo_configurada() and cfg.demo_email is not None and repo_u.por_email(s, cfg.demo_email) is not None
+    if cfg.demo_por_visitante:
+        # Cada visitante ganha a sua Juliana: não depende de uma conta fixa existir.
+        demo = cfg.demo_habilitada
+    else:
+        demo = cfg.demo_configurada() and cfg.demo_email is not None and repo_u.por_email(s, cfg.demo_email) is not None
     return ConfigOut(
         demo_disponivel=demo,
         belvo_configurada=cfg.belvo_configurada(),
@@ -74,9 +79,13 @@ def registrar(dados: RegistroEntrada, request: Request, s: SessionDep, resposta:
     cpf = dados.cpf if get_settings().belvo_configurada() else None
     if get_settings().belvo_configurada() and not cpf:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, detail="cpf_obrigatorio")
+    if cpf and not cripto.configurada():
+        # Sem chave, o CPF não é gravado — nunca em texto puro (M6).
+        log.error("cpf_chave_ausente — cadastro com CPF recusado")
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, detail="cadastro_indisponivel")
     if repo_u.por_email(s, dados.email) is not None:
         raise HTTPException(status.HTTP_409_CONFLICT, detail="email_em_uso")
-    if cpf and repo_u.por_cpf(s, cpf) is not None:
+    if cpf and repo_u.por_cpf_hash(s, cripto.hash_cpf(cpf)) is not None:
         raise HTTPException(status.HTTP_409_CONFLICT, detail="cpf_em_uso")
     u = repo_u.criar(
         s,
@@ -86,7 +95,8 @@ def registrar(dados: RegistroEntrada, request: Request, s: SessionDep, resposta:
             senha_hash=auth.hash_senha(dados.senha),
             apelido=dados.nome_completo.split()[0][:60],
             nome_completo=dados.nome_completo,
-            cpf=cpf,
+            cpf=cripto.cifrar(cpf) if cpf else None,
+            cpf_hash=cripto.hash_cpf(cpf) if cpf else None,
             ja_desistiu_de_plano=dados.ja_desistiu_de_plano,
         ),
     )

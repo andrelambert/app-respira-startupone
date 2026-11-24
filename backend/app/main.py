@@ -24,8 +24,9 @@ from app.repositories import consentimentos as repo_c
 from app.repositories import eventos as repo_e
 from app.repositories import oracle as repo_oracle
 from app.repositories import sistema as repo_sistema
+from app.repositories import usuarios as repo_u
 from app.routers import analise, belvo_webhook, consentimentos, demo, eventos, pfm, usuarios
-from app.services import coleta, instituicoes
+from app.services import coleta, cripto, instituicoes
 from app.services import demo as demo_svc
 from app.services.contexto import fixture
 from app.services.demo import garantir_juliana
@@ -66,7 +67,27 @@ def _migrar() -> None:
             log.info("pkg_plano_app instalado")
 
 
+def _cifrar_cpfs_legados() -> None:
+    """M6: cadastros de antes da criptografia têm o CPF em texto puro. Com a
+    CPF_CHAVE configurada, cifra na subida; sem ela, avisa (sem mostrar o CPF)."""
+    with Session(engine) as s:
+        legados = repo_u.com_cpf_em_texto_puro(s)
+        if not legados:
+            return
+        if not cripto.configurada():
+            log.warning("cpf_em_texto_puro qtd=%s — configure CPF_CHAVE para cifrar", len(legados))
+            return
+        for u in legados:
+            assert u.cpf is not None
+            u.cpf_hash = cripto.hash_cpf(u.cpf)
+            u.cpf = cripto.cifrar(u.cpf)
+            s.add(u)
+        s.commit()
+        log.info("cpfs_cifrados qtd=%s", len(legados))
+
+
 def _preparar() -> None:
+    _cifrar_cpfs_legados()
     with Session(engine) as s:
         repo_e.upsert_licoes(s, [Licao.model_validate(li.model_dump()) for li in LICOES])
         for c in repo_c.ativos(s):
