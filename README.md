@@ -2,19 +2,35 @@
 
 > **Descubra quando você sai das dívidas.**
 > Projeto do **Enterprise Challenge / Startup One** do curso de **Engenharia de Software da FIAP**
-> (4º e último ano) — protótipo funcional da Fase 6.
+> (4º e último ano) — **Fase 7, MVP final**.
 
 O Respira lê as dívidas de uma pessoa via **Open Finance** (pela [Belvo](https://belvo.com)),
 calcula **quando ela fica livre delas** e propõe um plano de quitação que cabe no bolso.
 A unidade de valor do produto é **uma data**, não um gráfico: todo app financeiro responde
 "para onde foi meu dinheiro"; o Respira responde **"quando isso acaba"**.
 
+## Acesse online
+
+| | |
+|---|---|
+| **Aplicativo** | **https://app-respira-startupone.vercel.app** |
+| API (saúde do serviço) | https://respira-api-qo4n.onrender.com/health |
+
+Na tela de entrar, toque em **"Entrar como Juliana (demonstração)"**: cada visitante ganha uma
+Juliana só sua, com dados fictícios, apagada depois de 24 horas. Dá para simular meses, ativar um
+plano e reiniciar à vontade sem atrapalhar ninguém.
+
+> O backend roda no plano gratuito do Render, que **dorme após 15 minutos sem uso**. O primeiro
+> acesso depois disso pode levar cerca de um minuto para acordar; os seguintes são imediatos.
+
 ### Sobre este projeto
 
 O Respira é o projeto da equipe abaixo para o **Enterprise Challenge / Startup One** do
 **4º e último ano de Engenharia de Software da FIAP**. A Fase 5 validou o problema, a persona e
-o modelo de dados (com o motor de plano em Oracle PL/SQL); esta Fase 6 entrega o protótipo
-funcional, integrado a dados bancários reais.
+o modelo de dados (com o motor de plano em Oracle PL/SQL); a Fase 6 entregou o protótipo
+funcional, integrado a dados bancários reais; esta **Fase 7** entrega o **MVP final**: publicado,
+com o **Oracle Autonomous AI Database** como banco principal, o motor conferido em PL/SQL dentro do
+Oracle, as correções da avaliação de usabilidade e as melhorias vindas do teste do MVP.
 
 | Integrante | RM |
 |---|---|
@@ -30,17 +46,19 @@ funcional, integrado a dados bancários reais.
 
 1. [O problema](#1-o-problema)
 2. [O que construímos](#2-o-que-construímos)
-3. [Como rodar](#3-como-rodar)
+3. [Como rodar localmente](#3-como-rodar-localmente)
 4. [Telas e como navegar](#4-telas-e-como-navegar)
 5. [Roteiro de avaliação (5 minutos)](#5-roteiro-de-avaliação-5-minutos)
 6. [Arquitetura](#6-arquitetura)
-7. [Stack](#7-stack)
-8. [O motor de plano](#8-o-motor-de-plano)
-9. [Segurança e privacidade](#9-segurança-e-privacidade)
-10. [Testes](#10-testes)
-11. [Limitações atuais](#11-limitações-atuais)
-12. [Próximos passos](#12-próximos-passos)
-13. [Documentação e referências](#13-documentação-e-referências)
+7. [Banco de dados: Oracle Autonomous AI Database](#7-banco-de-dados-oracle-autonomous-ai-database)
+8. [Como publicar (Render + Vercel)](#8-como-publicar-render--vercel)
+9. [Stack](#9-stack)
+10. [O motor de plano](#10-o-motor-de-plano)
+11. [Segurança e privacidade](#11-segurança-e-privacidade)
+12. [Testes](#12-testes)
+13. [Limitações atuais](#13-limitações-atuais)
+14. [Próximos passos](#14-próximos-passos)
+15. [Documentação e referências](#15-documentação-e-referências)
 
 ---
 
@@ -63,45 +81,50 @@ O contexto completo (pesquisa, persona, princípios, regras de negócio) está e
 
 ## 2. O que construímos
 
-Um aplicativo web *mobile-first* (pensado para Android intermediário, telas de 360 px) com
-backend próprio, que roda contra a **Belvo em produção** — dados bancários reais — e também em
-um **modo demonstração** com a Juliana, que não precisa de nenhuma credencial.
+Um aplicativo web *mobile-first* (pensado para Android intermediário, telas de 360 px), com
+backend próprio e banco **Oracle Autonomous AI Database** em São Paulo, publicado na internet. Roda
+contra a **Belvo em produção** (dados bancários reais) e em um **modo demonstração** com a Juliana.
 
 | Funcionalidade | O que faz | Situação |
 |---|---|---|
-| **F1 — Conexão de contas** | Autorização via widget da Belvo (Open Finance Brasil), aberto em nova aba; coleta de contas, cartões, faturas, empréstimos e transações; acompanhamento da coleta em tempo real; revogação em um toque. Dívidas fora do Open Finance (carnê, crediário) entram por cadastro manual assistido. | ✅ Implementado |
-| **F2 — Raio-X da dívida** | Total consolidado, lista ordenada por custo efetivo (taxa ao ano), data de quitação projetada na mesma tela e o alerta explícito de que, pagando só o mínimo, a dívida cresce — no total ou numa dívida específica (*"rotativo do cartão: cresce R$ 104 por mês"*). | ✅ Implementado |
-| **Dívidas** | Cada dívida por credor: saldo, taxa ao ano, parcela, dados do contrato (parcelas pagas, valor contratado, fim do contrato), atraso, selos de estimativa e o papel dela no plano (ordem, quanto pagar este mês, quando é quitada). | ✅ Implementado |
-| **F3 — Plano de quitação** | Três estratégias lado a lado (Avalanche, Bola de neve, Equilibrado), com a diferença traduzida em reais e meses, e um *slider* de capacidade mensal que move a data em tempo real. | ✅ Implementado |
-| **F4 — Acompanhamento e alertas** | Detecção determinística de eventos (entrada no rotativo, atraso iminente, atraso confirmado, cheque especial, pico de gasto, desvio do plano, dívida quitada), previsto × realizado mês a mês e marcos celebrados. Só há alerta quando existe uma ação concreta e um valor em reais em jogo. | ✅ Implementado (alertas dentro do app; sem push/e-mail) |
-| **F5 — Microlições e copiloto** | 9 microlições estáticas, casadas por regra com o evento detectado. O copiloto de IA aparece **desabilitado, com rótulo "em breve"** — nenhuma resposta de IA é simulada. | 🟡 Estrutura pronta; IA não implementada |
-| **Contas (visão financeira)** | Saldos por banco, faturas de cartão (com pagamentos e mínimo), extrato paginado com filtros, categoria, horário e tipo de operação de cada transação. | ✅ Implementado |
+| **F1 — Conexão de contas** | Autorização via widget da Belvo (Open Finance Brasil), aberto em nova aba; coleta de contas, cartões, faturas, empréstimos e transações, com progresso em tempo real; revogação em um toque. Dívidas fora do Open Finance (carnê, crediário) entram por cadastro manual assistido. | ✅ |
+| **F2 — Raio-X da dívida** | Total consolidado, lista ordenada por custo efetivo (taxa ao ano), data de quitação na mesma tela e o alerta de quando pagar só o mínimo faz a dívida crescer. | ✅ |
+| **F3 — Plano de quitação** | Três estratégias lado a lado (Avalanche, Bola de neve, Equilibrado), diferença em reais e meses, *slider* de capacidade que move a data em tempo real. **Novo:** selo **"✓ Conferido no Oracle"** — o mesmo plano calculado também em PL/SQL dentro do banco, igual ao centavo — e o link **"Ver de onde veio"** que explica o valor mensal calculado. | ✅ |
+| **F4 — Acompanhamento e alertas** | Eventos determinísticos (rotativo, atraso iminente, atraso, cheque especial, pico de gasto, desvio do plano, dívida quitada), previsto × realizado e marcos. **Novo:** alertas não se repetem e saem quando deixam de valer; **próximos vencimentos** no Início. | ✅ (dentro do app; sem push/e-mail) |
+| **F5 — Microlições e copiloto** | 9 microlições estáticas casadas por regra com o evento. Copiloto de IA visível e desabilitado ("em breve"). | 🟡 Estrutura pronta; IA não implementada |
+| **Finanças do dia a dia (PFM)** | Saldos por banco, faturas, extratos. **Novo:** **Todas as transações** com filtros, **Para onde foi o dinheiro** (gastos por categoria × média, ligado à data de saída), **entradas, gastos e dívida mês a mês**, **filtros e ordenação de dívidas**. | ✅ |
+
+### O que mudou na Fase 7
+
+| Bloco | Principais entregas |
+|---|---|
+| **Correções da avaliação da Fase 6** | Alertas que se acumulavam; "1ª dívida quitada" coerente com a ordem de pagamento; tela própria quando algo não carrega; datas iguais entre telas; rótulos da Belvo em português ("Mercado", "out/2026", "Itaú"); botão "Começar este plano" fixo; "venceu em"; na demo, contas e faturas avançam com os meses simulados. |
+| **Oracle como banco principal** | python-oracledb com mTLS pela wallet, esquema criado na primeira subida, migrações nos dois bancos, dinheiro como `NUMBER`. A jornada da Juliana dá os mesmos números, ao centavo, no Oracle e no SQLite. |
+| **Oracle como parte da estratégia** | Motor de quitação da Fase 5 em PL/SQL (`backend/oracle/pkg_plano_app.sql`) rodando sobre as tabelas do app; o selo "Conferido no Oracle" aparece só quando Python e PL/SQL coincidem. `/health` mostra banco, versão e região; card "Onde ficam os seus dados". |
+| **Melhorias do teste do MVP** | Todas as transações (N1), gastos por categoria com a frase "sua data chegaria N meses antes" (N2), próximos vencimentos (N3), filtros de dívidas (N4), fluxo mensal e "de onde veio" (N5). |
+| **Publicação** | Frontend na Vercel, backend em Docker no Render, demonstração por visitante, cabeçalhos de segurança, workflow que mantém o serviço ativo. |
+| **Segurança** | CPF criptografado em repouso, limites de tentativa no cadastro e na demo, dependências sem vulnerabilidade alta ou crítica. |
 
 **Modo demonstração (Juliana).** Simula a jornada inteira com dados fictícios no **mesmo formato
-de resposta da Belvo** (o mapeamento Belvo → domínio é exercitado de verdade): conexão por um
-widget simulado, coleta, Raio-X, plano e acompanhamento. A Juliana tem **três bancos conectados**
-— Nubank (conta, cartão no rotativo e empréstimo pessoal), Itaú (conta no cheque especial, cartão
-parcelado e financiamento de moto) e Caixa (poupança, consignado e um crédito pessoal com parcela
-atrasada) — mais um carnê de loja cadastrado à mão, 12 meses de transações na conta e nos cartões
-e histórico de faturas. Os contratos de empréstimo e financiamento seguem o formato de dados reais
-da Belvo (inclusive os campos que no Brasil vêm vazios). A tela inicial dela tem controles para
-**avançar um mês** (inclusive um "mês difícil", para ver o plano se recalcular sem linguagem de
-falha) e **reiniciar a demonstração**.
+de resposta da Belvo** (o mapeamento Belvo → domínio é exercitado de verdade): três bancos
+conectados — Nubank (conta, cartão no rotativo e empréstimo pessoal), Itaú (conta no cheque
+especial, cartão parcelado e financiamento de moto) e Caixa (poupança, consignado e um crédito
+pessoal com parcela atrasada) —, um carnê de loja incluído à mão e 12 meses de transações. A tela
+Início tem controles para **avançar um mês** (inclusive um "mês difícil") e **reiniciar**.
 
 ---
 
-## 3. Como rodar
+## 3. Como rodar localmente
 
 ### Pré-requisitos
 
 | Ferramenta | Versão | Observação |
 |---|---|---|
-| [uv](https://docs.astral.sh/uv/) | recente | gerencia o Python do backend; instala o Python 3.12+ sozinho se precisar |
+| [uv](https://docs.astral.sh/uv/) | recente | gerencia o Python do backend (3.13, de `backend/.python-version`) |
 | Node.js | 20.19+ ou 22.12+ | exigência do Vite |
+| Docker | opcional | para subir tudo com um comando |
 
-Testado em macOS com Python 3.13, Node 26 e uv 0.12.
-
-### Passo a passo
+### Passo a passo (SQLite, sem nenhuma credencial)
 
 ```bash
 # 1) Configuração do backend (uma vez só)
@@ -117,24 +140,39 @@ npm install
 npm run dev
 ```
 
-Abra **http://localhost:5173**. A documentação interativa da API fica em http://localhost:8000/docs.
+Abra **http://localhost:5173** e toque em **"Entrar como Juliana (demonstração)"** (localmente,
+também dá para usar `juliana@respira.example` / `senha123`, que vêm de `DEMO_EMAIL`/`DEMO_SENHA`
+do `.env.example` — persona fictícia, não é segredo). A documentação interativa da API fica em
+http://localhost:8000/docs.
 
-> O arquivo `frontend/.env.example` já traz os valores padrão; copiar para `frontend/.env` só é
-> necessário se o backend rodar em outra porta.
+### Com Docker (um comando)
 
-### Entrar com a conta de demonstração
+```bash
+cp backend/.env.example backend/.env
+docker compose up --build
+```
 
-Na tela de login, clique em **"Entrar como Juliana (demonstração)"**, ou use:
+Backend em http://localhost:8000 e frontend em http://localhost:5173. Nenhum segredo entra na
+imagem: a configuração vem do `backend/.env` em tempo de execução.
 
-| | |
-|---|---|
-| **E-mail** | `juliana@respira.example` |
-| **Senha** | `senha123` |
+### Com o Oracle
 
-Essas credenciais **não são segredo**: a Juliana é uma persona fictícia, os dados dela são
-gerados pelo código (`backend/app/providers/fixture.py`) e a conta só existe no banco local de
-quem roda o projeto. Elas vêm de `DEMO_EMAIL`/`DEMO_SENHA` no `backend/.env` — o código não tem
-nenhuma credencial embutida.
+O banco é escolhido só pela configuração. Com um Autonomous AI Database e a wallet (veja a
+[seção 7](#7-banco-de-dados-oracle-autonomous-ai-database)), preencha no `backend/.env`:
+
+```dotenv
+DATABASE_URL=oracle+oracledb://@
+ORACLE_USER=RESPIRA_APP
+ORACLE_PASSWORD=...            # nunca no Git
+ORACLE_DSN=respira_tp          # alias do tnsnames.ora
+ORACLE_CONFIG_DIR=/caminho/para/a/wallet   # tnsnames.ora + ewallet.pem, fora do repositório
+ORACLE_WALLET_PASSWORD=...
+ORACLE_REGIAO=sa-saopaulo-1
+```
+
+O script `ops/oracle/configurar_env.py` grava essas linhas a partir de `~/.oracle/respira/` sem
+exibir as senhas. Para voltar ao SQLite sem editar o arquivo:
+`DATABASE_URL=sqlite:///./respira.db uv run uvicorn app.main:app --reload --port 8000`.
 
 ### O que funciona para quem clona o repositório
 
@@ -142,24 +180,20 @@ nenhuma credencial embutida.
 |---|---|---|
 | Conta demo (Juliana) | ✅ Sim, sem configurar nada além do passo 1 | Dados fictícios gerados pelo próprio backend |
 | Criar uma conta nova | ✅ Sim | Cadastro, login e telas funcionam normalmente |
-| Conectar um banco real | ❌ Não, sem chaves próprias | Exige `BELVO_SECRET_ID`/`BELVO_SECRET_PASSWORD`, que **não estão no repositório** (ver abaixo). Sem elas, a tela de conexão avisa que a integração não está configurada |
+| Conectar um banco real | ❌ Não, sem chaves próprias | Exige `BELVO_SECRET_ID`/`BELVO_SECRET_PASSWORD` e `CPF_CHAVE`, que **não estão no repositório** |
+| Usar o Oracle | ❌ Não, sem banco e wallet próprios | Credenciais e wallet nunca vão para o Git |
 
-**Por que as chaves da Belvo não estão no repositório.** O projeto tem acesso à Belvo em
-**produção** — as chaves dão leitura a dados financeiros reais de quem conectar um banco.
-Publicá-las seria um comprometimento de segurança (e violaria as regras do próprio projeto,
-§12 da especificação). Elas ficam apenas no `backend/.env` de quem desenvolve, que o Git ignora.
-Quem tiver uma conta Belvo própria pode preencher as variáveis no `backend/.env` e reiniciar o
-backend; o fluxo real fica disponível para qualquer conta registrada.
-
-**O banco de dados também não vai para o Git.** O arquivo `backend/respira.db` contém dados
-bancários reais de quem testou com a Belvo. Ele é recriado do zero na primeira subida, já com a
-Juliana — os dados dela vêm do código, não do banco.
+**Por que as chaves não estão no repositório.** O projeto tem acesso à Belvo em **produção** — as
+chaves dão leitura a dados financeiros reais de quem conectar um banco. Elas, a senha e a wallet do
+Oracle e a chave do CPF ficam só no `backend/.env` de quem desenvolve (ignorado pelo Git) e nas
+variáveis secretas do Render.
 
 ### Testes
 
 ```bash
-cd backend && uv run pytest     # 83 testes
-cd frontend && npm test         # 30 testes
+cd backend && uv run pytest     # 176 testes (173 no SQLite + 3 que só rodam no Oracle)
+cd frontend && npm test         # 59 testes
+python3 ops/oracle/testes_oracle.py   # a suíte do backend no schema de teste do Oracle
 ```
 
 ---
@@ -169,60 +203,56 @@ cd frontend && npm test         # 30 testes
 ### Navegação
 
 - **Antes de entrar:** a página inicial (`/`) leva a **Entrar** (`/entrar`) ou **Criar conta**
-  (`/cadastro`). Na tela de entrar está o botão **"Entrar como Juliana (demonstração)"**.
-- **Depois de entrar:** uma barra fixa na parte de baixo da tela leva às seis áreas do app —
-  **Início · Contas · Raio-X · Dívidas · Plano · Configurações**. No topo ficam o selo
-  "Demonstração" (só na conta da Juliana) e o botão **Sair**.
+  (`/cadastro`). Na tela de entrar está **"Entrar como Juliana (demonstração)"**.
+- **Depois de entrar:** a barra fixa na parte de baixo leva a **Início · Contas · Raio-X · Dívidas ·
+  Plano · Configurações**.
 - **Primeira vez de uma conta nova:** Criar conta → Conectar banco → (autorização no banco, em
-  nova aba) → Raio-X → Plano → Início. Depois disso, o Início é a tela de abertura.
+  nova aba) → Raio-X → Plano → Início.
 
 ### As telas
 
 | Tela | Rota | Para que serve e como usar |
 |---|---|---|
-| **Página inicial** | `/` | Apresenta o produto em três passos e o aviso "Este app não movimenta o seu dinheiro". Botões **Criar minha conta** e **Já tenho conta** (com sessão aberta, **Continuar de onde parei**). |
-| **Entrar** | `/entrar` | E-mail e senha, ou o botão **Entrar como Juliana (demonstração)**, que entra na conta fictícia sem digitar nada. |
-| **Criar conta** | `/cadastro` | E-mail, senha, nome completo e CPF (validado na hora; o banco usa para confirmar que é você). Uma pergunta opcional — "Você já tentou um plano para sair das dívidas antes?" — muda a estratégia sugerida no Plano. Nenhum dado financeiro é pedido. |
-| **Conectar banco** | `/conectar` | Explica o que é lido e o que não é feito, e mostra os bancos já conectados. **Conectar outro banco** abre a autorização em nova aba; ao terminar, o app volta sozinho e mostra o progresso da coleta (contas ✓ · transações…). Na conta da Juliana, a autorização é simulada (Nubank, Itaú, Caixa, e um "Banco Fora do Ar" para ver a tela de erro). Link para incluir uma dívida que não aparece pelo banco. |
-| **Início** | `/inicio` | A tela de todo dia. Sem plano: convite para ver o Raio-X. Com plano: a **data em que você fica livre**, quanto já foi pago, **O que fazer este mês** (quanto pagar em cada dívida, na ordem, com a prioridade marcada), alertas em **Precisa da sua atenção** (cada um com **Entendi** e **Entenda**, que abre uma microlição), dívidas quitadas e o mês a mês (previsto × realizado). Na conta da Juliana, o painel **Modo demonstração** simula a passagem dos meses. O card **Copiloto** aparece como "em breve". |
-| **Contas** | `/contas` | Visão financeira por banco: saldo em conta, faturas em aberto e cada produto (conta, cartão, empréstimo, financiamento), com filtro por banco e botão **Atualizar** para buscar dados novos. Toque num item para ver o detalhe. |
-| **Detalhe da conta** | `/contas/:id` | **Conta corrente/poupança:** saldo, agência e número da conta e o **extrato**, com filtros (Todas / Entradas / Saídas), período (30 a 120 dias) e busca; toque numa transação para ver data e hora, categoria, subcategoria e tipo de operação. **Cartão:** abas **Faturas** (fatura atual com total, mínimo e pagamentos; faturas anteriores) e **Extrato** (com estabelecimento, final do cartão e a fatura de cada compra). |
-| **Raio-X** | `/raiox` | O diagnóstico, de cima para baixo: quanto você deve no total, as dívidas da mais cara para a mais barata (com link para ver todas), a **data de quitação**, quanto você paga de juros por mês e o alerta quando pagar só o mínimo faz a dívida crescer. Botão **Ver meu plano de saída**. Mais abaixo, a composição da dívida e o link para a aba Dívidas. |
-| **Dívidas** | `/dividas` | Cada dívida, agrupada por banco/credor: saldo, taxa ao ano, parcela e vencimento, contrato (parcelas pagas, valor contratado, data de término), atraso e selos de estimativa. Com um plano ativo, mostra a **ordem de pagamento**, quanto vai para ela **este mês** e **quando é quitada**. Atalhos **Ver extrato** (abre a conta ou o cartão) e **Conferir** (corrigir valores estimados). |
-| **Plano** | `/plano` | O *slider* "Quanto você pode colocar por mês" (começa no valor calculado do seu histórico) move a data em tempo real. As três estratégias aparecem lado a lado, com meses, juros e primeira vitória; a sugerida vem marcada, com o motivo. Abaixo: o gráfico "Quanto você vai dever, mês a mês", os juros evitados em relação a pagar só o mínimo e a ordem de pagamento. **Começar este plano** ativa a estratégia escolhida. |
-| **Configurações** | `/configuracoes` | Seus dados (CPF mascarado), bancos conectados com a validade da autorização, **Revogar e apagar dados** por banco, **Buscar dados novos agora**, o que o app lê e o que não acessa, e **excluir a conta** (desabilitado na conta demo). |
-| **Incluir dívida** | `/dividas/nova` | Para o que não vem pelo banco (carnê, crediário, dívida com alguém): credor, tipo, quanto falta e valor da parcela; juros, vencimento e atraso são opcionais (sem juros, o app estima e marca como estimado). |
-| **Conferir dívida** | `/dividas/:id` | Corrige a parcela e a taxa quando o banco não as informou (e o saldo, nas dívidas incluídas à mão). |
-| **Microlição** | `/licoes/:slug` | Texto curto sobre o assunto de um alerta (rotativo, cheque especial, só o mínimo…), aberto pelo link **Entenda**. |
+| **Página inicial** | `/` | O produto em três passos e o aviso "Este app não movimenta o seu dinheiro". |
+| **Entrar** | `/entrar` | E-mail e senha, ou **Entrar como Juliana (demonstração)**. |
+| **Criar conta** | `/cadastro` | E-mail, senha, nome completo e CPF (só quando a conexão com a Belvo está ligada; gravado cifrado). Pergunta opcional sobre planos anteriores, que muda a estratégia sugerida. |
+| **Conectar banco** | `/conectar` | O que é lido e o que não é feito; **Conectar outro banco** abre a autorização em nova aba e mostra o progresso da coleta. Na Juliana, a autorização é simulada. |
+| **Início** | `/inicio` | A data em que você fica livre, quanto já foi pago, **O que fazer este mês**, **Próximos vencimentos**, alertas, dívidas quitadas e o mês a mês. Na Juliana, o painel **Modo demonstração** simula os meses. |
+| **Contas** | `/contas` | Saldos por banco, faturas em aberto, **Ver todas as transações**, **Para onde foi o dinheiro** (gastos por categoria × média dos 3 meses, com a frase que liga o corte à data de saída) e **Entradas, gastos e dívida, mês a mês**. |
+| **Detalhe da conta** | `/contas/:id` | Conta: saldo e extrato com filtros. Cartão: faturas (atual e anteriores, "vence/venceu em") e extrato. |
+| **Todas as transações** | `/transacoes` | Extrato de todas as contas: período, banco, tipo, categoria, busca, faixa de valor e **Só pagamentos de dívida**; resumo de entradas, saídas e resultado. Filtros na URL (o botão voltar e o link compartilhado funcionam). |
+| **Próximos vencimentos** | `/vencimentos` | Faturas e parcelas nos próximos 7, 15 ou 30 dias, com status (pago, pendente, atrasado) e, com plano ativo, o valor do plano. |
+| **Raio-X** | `/raiox` | Quanto você deve, as dívidas da mais cara para a mais barata, a data de quitação, os juros do mês e o alerta do mínimo. |
+| **Dívidas** | `/dividas` | Cada dívida com contrato, atraso e selos de estimativa; ordenar (ordem do plano, maior taxa, maior saldo, próximo vencimento, por banco) e filtrar (banco, tipo, situação). |
+| **Plano** | `/plano` | *Slider* de capacidade, as três estratégias, **"Ver de onde veio"**, o selo **"✓ Conferido no Oracle"**, o gráfico da dívida mês a mês e **Começar este plano** (fixo no rodapé). |
+| **Configurações** | `/configuracoes` | Seus dados (CPF mascarado), **Onde ficam os seus dados** (Oracle, São Paulo), bancos conectados, revogação, exclusão de conta. |
+| **Incluir dívida** | `/dividas/nova` | Para carnê, crediário ou dívida com alguém. |
+| **Conferir dívida** | `/dividas/:id` | Corrige parcela e taxa quando o banco não as informou. |
+| **Microlição** | `/licoes/:slug` | Texto curto sobre o assunto de um alerta, aberto pelo link **Entenda**. |
 
 ---
 
 ## 5. Roteiro de avaliação (5 minutos)
 
-Com o backend e o frontend no ar, clique em **"Entrar como Juliana (demonstração)"** e siga a
-jornada do produto (diagnóstico → plano → acompanhamento):
+Em **https://app-respira-startupone.vercel.app**, toque em **"Entrar como Juliana
+(demonstração)"**. Os dados chegam em alguns segundos (a tela mostra o progresso).
 
-1. **Raio-X** — "Você deve **R$ 20.183** em **8 compromissos**", as dívidas mais caras primeiro
-   (o rotativo aparece com **436% a.a.**), a data de quitação logo abaixo e o alerta de que,
-   pagando só o mínimo, o **rotativo do cartão cresce R$ 104 por mês**.
-2. **Dívidas** — as 8 dívidas por banco, com o contrato de cada uma (ex.: moto com 18 de 48
-   parcelas pagas), atrasos e selos de "taxa estimada" / "parcela estimada".
-3. **Plano** — as três estratégias lado a lado. Com a capacidade calculada do histórico
-   (R$ 1.755/mês): Avalanche quita em **16 meses** (R$ 7.727 de juros), Equilibrado em **17**
-   (R$ 7.941, com a primeira dívida quitada já no 1º mês), Bola de neve em **17** (R$ 9.258).
-   Arraste o *slider* e veja a data se mover. Toque em **"Começar este plano"**.
-4. **Início** — agora com a data de saída, "O que fazer este mês" (quanto pagar em cada dívida,
-   na ordem) e os alertas. No painel **Modo demonstração**, toque em "Simular mês seguindo o
-   plano" e depois em "Simular um mês difícil" (25% a menos no plano): o mês a mês mostra
-   previsto × realizado e a data é recalculada, sem linguagem de falha.
-5. **Dívidas** de novo — cada dívida mostra a ordem de pagamento, quanto vai para ela este mês e
-   quando é quitada.
-6. **Contas** — saldos dos três bancos, faturas dos cartões (com pagamentos e mínimo) e extratos
-   com o detalhe de cada transação (no cartão: estabelecimento, final do cartão e fatura).
-7. **Configurações** — o que o app lê e o que não lê, revogação por banco e exclusão de conta
-   (esta última desabilitada na conta demo).
+1. **Raio-X** — "Você deve **R$ 20.183** em **8 compromissos**", o rotativo com **436% a.a.**, a data
+   de quitação logo abaixo e o alerta de que o rotativo **cresce R$ 104 por mês** pagando só o mínimo.
+2. **Plano** — com a capacidade calculada do histórico (**R$ 1.755/mês**): Avalanche em **16 meses**
+   (R$ 7.727 de juros, 1ª dívida quitada no **5º mês**), Equilibrado em **17** (R$ 7.941), Bola de neve
+   em **17** (R$ 9.258). Toque em **"Ver de onde veio"** para ver a conta do R$ 1.755 e note o selo
+   **"✓ Conferido no Oracle"**. Arraste o *slider* e toque em **Começar este plano**.
+3. **Início** — data de saída, o que pagar este mês e os próximos vencimentos. No painel **Modo
+   demonstração**, simule um mês seguindo o plano e depois um mês difícil: a data é recalculada, sem
+   linguagem de falha, e os alertas não se repetem.
+4. **Contas** — em **Para onde foi o dinheiro**: *"Se delivery, streaming e lazer voltasse à sua
+   média, sobrariam R$ 220 por mês — sua data de saída chegaria 2 meses antes"*. Toque na barra para
+   ver as transações; volte e abra **Ver todas as transações** para experimentar os filtros.
+5. **Dívidas** — ordene por **maior taxa** e filtre **Em atraso**.
+6. **Configurações** — "Onde ficam os seus dados: Oracle Autonomous AI Database · São Paulo".
 
-Para recomeçar do zero, use **"Reiniciar demonstração"** no painel da tela Início.
+Para recomeçar, use **"Reiniciar demonstração"** no painel da tela Início.
 
 ---
 
@@ -230,190 +260,260 @@ Para recomeçar do zero, use **"Reiniciar demonstração"** no painel da tela In
 
 ```mermaid
 flowchart LR
-    U["Navegador<br/>React (Vite)"] -- "HTTP local · cookie de sessão" --> API["Backend<br/>FastAPI"]
-    API --> DB[("SQLite<br/>respira.db")]
-    API -- "Basic auth (chaves só no backend)" --> B["Belvo API<br/>Open Finance Brasil"]
+    U["Navegador<br/>React (Vite)"] -- "HTTPS" --> V["Vercel<br/>frontend estático"]
+    V -- "/api/* (rewrite, mesmo domínio)" --> R["Render<br/>FastAPI em Docker"]
+    R -- "mTLS (wallet)" --> O[("Oracle Autonomous AI Database<br/>São Paulo")]
+    O -. "PKG_PLANO_APP (PL/SQL)" .-> O
+    R -- "Basic auth (chaves só no backend)" --> B["Belvo API<br/>Open Finance Brasil"]
     U -. "nova aba" .-> W["Widget da Belvo<br/>→ app do banco"]
     W -. "callback /conectar/sucesso" .-> U
-    B -. "webhooks (opcional)" .-> API
+    G["GitHub Actions<br/>Manter ativo"] -. "GET /health 2x/semana" .-> R
 ```
 
 **Decisões principais:**
 
-- **Existe um backend porque as chaves da Belvo nunca podem estar no navegador.** Qualquer chave
-  num bundle de frontend é legível no DevTools. Toda chamada à Belvo sai do backend; o React só
-  conversa com a nossa API.
-- **O widget abre em nova aba, não em `iframe`.** O passo seguinte ao widget é o site do banco,
-  e bancos bloqueiam ser enquadrados. A aba original fica sabendo do resultado por
-  `BroadcastChannel` **e** por consulta periódica ao backend — a fonte de verdade é o servidor.
-- **Coleta por polling, webhooks opcionais.** A Belvo avisa por webhook quando os dados estão
-  prontos, mas `localhost` não recebe chamadas da internet. Por padrão o backend consulta a Belvo
-  periodicamente; com um túnel público configurado, os webhooks (autenticados e idempotentes)
-  assumem.
+- **Existe um backend porque as chaves da Belvo nunca podem estar no navegador.** Toda chamada à
+  Belvo sai do backend; o React só conversa com a nossa API.
+- **Mesmo domínio para o navegador.** O frontend chama `/api/...` e a Vercel repassa ao Render
+  (`frontend/vercel.json`). O cookie de sessão fica `HttpOnly; Secure; SameSite=Lax`, sem CORS aberto.
+- **O widget abre em nova aba, não em `iframe`** (bancos bloqueiam ser enquadrados). A aba original
+  fica sabendo do resultado por `BroadcastChannel` **e** por consulta ao backend.
+- **Coleta por polling, webhooks opcionais.** Sem túnel/webhook configurado, o backend consulta a
+  Belvo periodicamente; com webhook (autenticado e idempotente), ele assume.
 - **Provedor por usuário.** A conta demo usa o `FixtureProvider` (dados fictícios no formato da
-  Belvo); toda conta registrada usa o `BelvoProvider`. As duas implementam a mesma interface, e o
-  resto do sistema não sabe qual está em uso.
-- **Camadas com responsabilidades fechadas** — o que torna a troca de banco de dados barata:
+  Belvo); toda conta registrada usa o `BelvoProvider`.
+- **Camadas com responsabilidades fechadas:**
 
 ```
 backend/app/
-├── domain/        regras de negócio em Python puro, sem I/O (motor de plano, Raio-X, eventos)
+├── domain/        regras de negócio em Python puro, sem I/O (plano, Raio-X, eventos, vencimentos, gastos)
 ├── providers/     Belvo real, fixture da Juliana e mapping.py — único lugar que conhece os nomes da Belvo
-├── repositories/  única camada que conhece SQL
-├── services/      orquestração (coleta, conexão, autenticação, demo)
-├── routers/       endpoints HTTP
-└── models/        tabelas (SQLModel) · migrações em backend/migrations (Alembic)
+├── repositories/  única camada que conhece SQL (inclui oracle.py: pacote PL/SQL e versão do banco)
+├── services/      orquestração (coleta, conexão, autenticação, demo, criptografia do CPF)
+├── routers/       endpoints HTTP (42)
+└── models/        tabelas (SQLModel) e tipos que funcionam no SQLite e no Oracle
+backend/oracle/    pkg_plano_app.sql — o motor de quitação em PL/SQL
+backend/migrations Alembic (vale nos dois bancos)
+ops/oracle/        scripts para operar o Oracle pela OCI CLI (sem segredos)
 
 frontend/src/
 ├── routes/        uma pasta por tela
-├── components/    componentes de interface e do domínio (Money, LogoBanco, gráficos)
-└── lib/           cliente da API validado com Zod, dinheiro em centavos, datas, textos (copy.ts)
+├── components/    interface e componentes do domínio (Money, LogoBanco, gráficos, listas)
+└── lib/           cliente da API validado com Zod, dinheiro em centavos, datas, filtros, textos (copy.ts)
 ```
-
-**Banco de dados.** SQLite em um único arquivo (`backend/respira.db`), com 17 tabelas de domínio
-(usuário e sessão, consentimento e coleta, contas, faturas, transações, dívidas, planos, eventos,
-lições, log de webhooks). O esquema é versionado com Alembic e aplicado automaticamente na
-subida. Os nomes de tabelas e valores de enum seguem o esquema Oracle entregue na Fase 5, para
-que a migração futura seja mecânica.
 
 ---
 
-## 7. Stack
+## 7. Banco de dados: Oracle Autonomous AI Database
+
+| | |
+|---|---|
+| Serviço | Oracle Autonomous AI Database, **Always Free**, Transaction Processing |
+| Versão | 23.26 (26ai) |
+| Região | São Paulo (`sa-saopaulo-1`) |
+| Conexão | python-oracledb em **modo thin**, **mTLS pela wallet** (só `tnsnames.ora` e `ewallet.pem`; sem Instant Client) |
+| Schemas | `RESPIRA_APP` (aplicação) e `RESPIRA_TESTE` (suíte de testes), com privilégios mínimos e cota |
+| Tabelas | 17 (16 do modelo + `ALEMBIC_VERSION`) |
+
+**Como o app usa o Oracle:**
+
+- **Esquema criado na primeira subida.** Banco novo → o esquema é criado a partir dos modelos e
+  marcado na versão atual do Alembic; dali em diante, as migrações rodam nos dois bancos.
+- **Dinheiro como `NUMBER`** (exato, sem arredondar) e o restante dos tipos compatível com os dois
+  bancos — `backend/tests/test_oracle_ddl.py` compila o DDL de todas as tabelas para o Oracle.
+- **O motor de quitação em PL/SQL.** `backend/oracle/pkg_plano_app.sql` é o `PKG_PLANO` da Fase 5
+  adaptado às tabelas do app, instalado a cada subida (`CREATE OR REPLACE`).
+  `GET /plano/conferencia-oracle` roda o plano em Python e em PL/SQL; a tela mostra
+  **"✓ Conferido no Oracle"** só quando coincidem. Na Juliana, as três estratégias coincidem ao centavo.
+- **`/health`** faz uma consulta real e devolve banco, versão e região — é o que o workflow
+  "Manter ativo" usa para o Always Free não parar por inatividade.
+
+**Operação (OCI CLI).** `ops/oracle/` tem os scripts para validar a sessão da CLI, descobrir o
+banco, ver o estado, ligar/desligar, baixar e rotacionar a wallet (`respira_oci.sh`), criar os
+usuários e listar/contar tabelas (`respira_sql.py`), gravar o `backend/.env` sem exibir senhas
+(`configurar_env.py`) e rodar a suíte no schema de teste (`testes_oracle.py`). As senhas ficam em
+`~/.oracle/respira/` (fora do repositório) e nunca aparecem na tela.
+
+---
+
+## 8. Como publicar (Render + Vercel)
+
+**Backend — Render** (Blueprint em [`render.yaml`](render.yaml)):
+
+1. No painel do Render, **New → Blueprint** e escolha o repositório (branch `main`).
+2. Preencha as variáveis secretas: `ORACLE_PASSWORD`, `ORACLE_WALLET_PASSWORD`, `APP_PUBLIC_URL`
+   (a URL da Vercel), `CPF_CHAVE` e, para conexão real, `BELVO_SECRET_ID` e `BELVO_SECRET_PASSWORD`.
+3. Em **Environment → Secret Files**, suba `tnsnames.ora` e `ewallet.pem` (ficam em `/etc/secrets`).
+4. Deploy e confira `https://<serviço>.onrender.com/health` → `"banco": "oracle"`.
+
+**Frontend — Vercel:**
+
+1. **Add New → Project**, o mesmo repositório, **Root Directory: `frontend`** (Vite é detectado).
+2. Sem variáveis: o build já usa `VITE_API_URL=/api` (`frontend/.env.production`).
+3. Em `frontend/vercel.json`, o *rewrite* `/api/*` aponta para a URL do serviço no Render.
+
+**Manter ativo:** o workflow [`.github/workflows/manter-ativo.yml`](.github/workflows/manter-ativo.yml)
+faz `GET /health` às segundas e quintas (o Oracle Always Free para após 7 dias sem uso).
+
+**Variáveis da versão publicada:**
+
+| Variável | Valor | Para quê |
+|---|---|---|
+| `DATABASE_URL` | `oracle+oracledb://@` | usar o Oracle |
+| `ORACLE_*` | usuário, DSN, `/etc/secrets`, região, pool 3 | conexão (senhas como secretas) |
+| `DEMO_POR_VISITANTE` | `true` | uma Juliana por visitante, apagada em 24 h |
+| `MODO_PUBLICO` | `false` | `true` desliga a Belvo e o CPF (vitrine só com demo) |
+| `CPF_CHAVE` | chave Fernet (secreta) | CPF cifrado em repouso |
+| `BELVO_SECRET_ID` / `BELVO_SECRET_PASSWORD` | secretas | conexão real com bancos |
+| `APP_PUBLIC_URL` | `https://app-respira-startupone.vercel.app` | callbacks do widget e CORS |
+
+---
+
+## 9. Stack
 
 | Camada | Tecnologia |
 |---|---|
-| Frontend | React 18 + TypeScript (strict), Vite, Tailwind CSS, React Router, TanStack Query, React Hook Form + Zod, Recharts, date-fns (pt-BR) |
-| Backend | Python 3.12+, FastAPI, SQLModel/SQLAlchemy, Alembic, Pydantic v2, pydantic-settings, httpx, argon2-cffi |
-| Banco | SQLite (protótipo) — Oracle Autonomous Database planejado |
-| Integração | Belvo — Open Finance Brasil (OFDA): widget, `token`, `links`, `consents`, `accounts`, `transactions`, `bills`, `owners`, `institutions` e, quando habilitados na conta, `incomes` e `recurring-expenses` |
+| Frontend | React 18 + TypeScript (strict), Vite, Tailwind CSS, React Router, TanStack Query, React Hook Form + Zod, Recharts (carregado sob demanda), date-fns (pt-BR) |
+| Backend | Python 3.13, FastAPI, SQLModel/SQLAlchemy, Alembic, Pydantic v2, pydantic-settings, httpx, argon2-cffi, python-oracledb, cryptography |
+| Banco | **Oracle Autonomous AI Database** (produção) · SQLite (desenvolvimento e testes) |
+| Oracle | PL/SQL (`PKG_PLANO_APP`), OCI CLI, wallet mTLS |
+| Publicação | Vercel (frontend), Render com Docker (backend), GitHub Actions |
+| Integração | Belvo — Open Finance Brasil (OFDA) |
 | Testes | pytest (backend), Vitest + Testing Library (frontend) |
 
-**Dinheiro nunca é float.** O backend usa `Decimal` (gravado como texto exato no banco) e o
+**Dinheiro nunca é float.** O backend usa `Decimal` (`NUMBER` no Oracle, texto exato no SQLite) e o
 frontend trabalha em centavos inteiros.
+
+**Bundle inicial:** 120 KB gzip (orçamento: 250 KB). Cada tela é um pedaço carregado sob demanda.
 
 ---
 
-## 8. O motor de plano
+## 10. O motor de plano
 
 O núcleo do produto (`backend/app/domain/planner.py`) é um **porte fiel** do pacote PL/SQL
 `PKG_PLANO` validado na Fase 5:
 
-1. **Capacidade de pagamento** — calculada do histórico, não perguntada: mediana das entradas
-   menos mediana dos gastos essenciais dos últimos 6 meses, **com 10% de reserva** para
-   imprevistos. O usuário pode ajustar pelo *slider*.
+1. **Capacidade de pagamento** — calculada do histórico: mediana das entradas menos mediana dos
+   gastos essenciais dos últimos 6 meses, **com 10% de reserva** para imprevistos. A tela
+   "Ver de onde veio" mostra essa conta mês a mês.
 2. **Ordenação por estratégia** — Avalanche (maior taxa primeiro), Bola de neve (menor saldo
-   primeiro) ou Equilibrado (a menor dívida primeiro, para gerar tração, e depois por taxa).
-3. **Simulação mês a mês** — juros incidem antes do pagamento, arredondados a cada mês; paga-se o
-   mínimo de tudo e a sobra vai inteira para a dívida da vez.
+   primeiro) ou Equilibrado (a menor dívida primeiro e depois por taxa).
+3. **Simulação mês a mês** — juros antes do pagamento, arredondados a cada mês; paga-se o mínimo de
+   tudo e a sobra vai inteira para a dívida da vez.
 
-O teste `backend/tests/test_planner.py` reproduz **ao centavo** os números publicados na Fase 5
-para a Juliana (18 / 19 / 21 meses). A estratégia pré-selecionada é Avalanche — ou Equilibrado
-para quem já desistiu de um plano antes —, decisão marcada como provisória no código porque veio
-de uma pesquisa com apenas 10 respostas.
+**Duas execuções, um resultado.** O mesmo algoritmo existe em PL/SQL dentro do Oracle
+(`backend/oracle/pkg_plano_app.sql`). `test_planner.py` reproduz **ao centavo** os números publicados
+na Fase 5 (18 / 19 / 21 meses), e `test_oracle_motor.py` confere Python × PL/SQL nas três estratégias,
+inclusive com capacidade insuficiente e depois de meses simulados.
 
----
-
-## 9. Segurança e privacidade
-
-O protótipo lida com dados financeiros reais, então foi tratado como produção:
-
-- **Nenhum segredo no código nem no Git.** Chaves da Belvo e configuração ficam em `backend/.env`
-  (ignorado pelo Git); o `.env.example` traz só os nomes das variáveis.
-- **Nenhuma chamada à Belvo parte do navegador.**
-- **Senhas com argon2id**; sessão em cookie `HttpOnly`/`SameSite=Lax`, com o token guardado no
-  banco apenas como hash; limite de tentativas de login.
-- **CORS restrito** à origem do frontend e cabeçalho obrigatório nas requisições de escrita
-  (proteção contra CSRF).
-- **Minimização de dados**: o consentimento pede só as quatro permissões que o produto usa; do
-  cartão, guarda-se apenas o final (4 dígitos); CPF aparece sempre mascarado na interface; os logs
-  foram escritos para não registrar CPF, tokens, segredos nem saldos.
-- **Webhook autenticado** (token Bearer, comparação em tempo constante) e idempotente.
-- **Revogação real**: desconectar um banco apaga o vínculo na Belvo **e** os dados locais.
-  A pessoa também pode excluir a própria conta.
+A estratégia pré-selecionada é Avalanche — ou Equilibrado para quem já desistiu de um plano antes —,
+decisão marcada como provisória no código porque veio de uma pesquisa com 10 respostas.
 
 ---
 
-## 10. Testes
+## 11. Segurança e privacidade
+
+- **Nenhum segredo no código, no Git ou na imagem Docker.** Chaves da Belvo, senhas e wallet do
+  Oracle e a chave do CPF ficam no `backend/.env` (ignorado) e nas variáveis/arquivos secretos do
+  Render. O `.dockerignore` deixa de fora `.env`, banco local e wallet.
+- **CPF criptografado em repouso** (Fernet, chave `CPF_CHAVE` só no ambiente) e um hash com chave para
+  saber se já está em uso sem decifrar. Sem a chave, o cadastro com CPF é recusado. O CPF aparece
+  sempre mascarado e nunca vai para log.
+- **Senhas com argon2id**; sessão em cookie `HttpOnly; Secure; SameSite=Lax`, token guardado só como
+  hash; **limites de tentativa** no login, no cadastro e na criação de demos (por IP).
+- **Cabeçalhos de segurança** na Vercel: CSP restrita, HSTS, `X-Frame-Options`, `nosniff`,
+  `Referrer-Policy`, `Permissions-Policy`; `noindex` (não aparece em buscadores).
+- **CORS restrito** e cabeçalho obrigatório nas requisições de escrita (proteção contra CSRF).
+- **Nenhuma chamada à Belvo parte do navegador**; webhook autenticado e idempotente.
+- **Minimização de dados**: só as quatro permissões que o produto usa; do cartão, só o final.
+- **Revogação real**: desconectar um banco apaga o vínculo na Belvo **e** os dados locais; a pessoa
+  pode excluir a própria conta. Demos de visitante são apagadas com todos os dados em 24 h.
+- **Dependências auditadas**: `npm audit` e `pip-audit` sem vulnerabilidade conhecida.
+
+---
+
+## 12. Testes
 
 | Suíte | Quantidade | O que cobre |
 |---|---:|---|
-| `backend/tests/test_planner.py` | 20 | Os números da Fase 5 (R$ 8.260 em 5 dívidas: 18 / 19 / 21 meses, ao centavo), empates, uma dívida só, capacidade insuficiente, ausência de dívidas |
-| `backend/tests/test_mapping.py` | 45 | Belvo → domínio: modalidades, normalização da taxa de juros (inclusive pelo CET), cheque especial sem contagem dupla, contratos, faturas, transações, fuso horário, ids por link |
-| `backend/tests/test_api.py` | 10 | Jornada da Juliana pela API, autenticação, isolamento entre usuários, webhooks |
-| `backend/tests/test_belvo.py` e `test_instituicoes.py` | 8 | Cliente da Belvo (payload do token, paginação, erros) e catálogo de bancos |
-| Frontend (Vitest) | 30 | Dinheiro em centavos, validação de CPF/e-mail, textos, datas, cadastro |
+| `test_mapping.py` | 46 | Belvo → domínio: modalidades, taxa de juros (inclusive pelo CET), cheque especial, contratos, faturas, transações, fuso horário, nome curto do banco |
+| `test_oracle_ddl.py` | 36 | O esquema compila para o Oracle; PK com IDENTITY; dinheiro como `NUMBER` (e ida e volta exata, no Oracle) |
+| `test_planner.py` | 20 | Os números da Fase 5 ao centavo, empates, uma dívida, capacidade insuficiente, sem dívidas |
+| `test_api.py` | 13 | Jornada da Juliana, autenticação, isolamento entre usuários, webhooks, `/health`, `/config` |
+| `test_transacoes.py` | 13 | Todas as transações: cada filtro, somas, paginação, parâmetros inválidos, isolamento |
+| `test_alertas.py` | 12 | Alertas não se repetem e saem quando deixam de valer; conta nomeada; cheque especial atual |
+| `test_gastos.py` | 8 | Gastos por categoria, impacto no plano, fluxo mensal coerente com a capacidade |
+| `test_vencimentos.py` | 7 | Próximos vencimentos: datas, janela, status, cartão sem duplicar |
+| `test_belvo.py` + `test_instituicoes.py` | 8 | Cliente da Belvo (payload, paginação, erros) e catálogo de bancos |
+| `test_cpf_cifrado.py` | 5 | CPF nunca em texto no banco, "em uso" pelo hash, sem chave não grava, legado cifrado |
+| `test_publicacao.py` | 4 | Demo por visitante isolada, limites, limpeza, versão pública |
+| `test_consistencia.py` + `test_oracle_motor.py` | 4 | Mesma data e total entre telas; Python × PL/SQL (no Oracle) |
+| **Backend** | **176** | 173 rodam no SQLite; 3 só no Oracle (`@pytest.mark.oracle`) |
+| **Frontend (Vitest)** | **59** | Dinheiro, datas, textos, cadastro, filtros na URL (transações e dívidas), vencimentos, gastos, tela de erro |
+
+A suíte do backend também roda contra o Oracle, no schema `RESPIRA_TESTE`
+(`python3 ops/oracle/testes_oracle.py`). Na última rodada completa no Oracle, depois do motor em
+PL/SQL, **137 testes passaram** e nenhum falhou; os testes das telas novas foram rodados no SQLite.
 
 ---
 
-## 11. Limitações atuais
+## 13. Limitações atuais
 
-**Para rodar:**
+**Da publicação:**
 
-- **Conexão bancária real exige chaves próprias da Belvo** — as do projeto não são publicadas
-  (ver [§3](#o-que-funciona-para-quem-clona-o-repositório)). Quem clona avalia o produto pela
-  conta demo.
-- **Roda só localmente.** O protótipo não está publicado; publicar com dados financeiros reais
-  exigiria cofre de segredos, HTTPS e outra discussão de segurança.
-- **Webhooks exigem URL pública** (túnel ngrok/Cloudflare registrado no painel da Belvo). Sem
-  isso, a coleta usa *polling* — funciona, mas é menos eficiente.
+- **Planos gratuitos.** O Render dorme após 15 minutos sem uso (~1 minuto para acordar) e fica nos
+  EUA (Virginia, a região gratuita mais próxima de São Paulo); o Oracle Always Free tem sessões e
+  espaço limitados (por isso o limite de demos ativas).
+- **A conexão real com bancos está ligada na versão publicada**, para demonstração. Quem conectar um
+  banco ali tem os dados guardados no Oracle da equipe (CPF cifrado). É uma decisão consciente para a
+  apresentação, que contraria a orientação inicial de manter a versão pública só com dados fictícios.
+- **Uma instância do backend.** Coleta e limites de tentativa vivem em memória; escalar para mais de
+  uma instância exigiria movê-los para o banco.
 
 **Do produto e dos dados:**
 
-- **O Open Finance só traz o que a pessoa conectar.** Cada consentimento é de uma instituição;
-  um empréstimo no Banco X só aparece se o Banco X for conectado. Ficam de fora carnês e
-  crediários, dívidas com pessoas e — importante para a persona — **dívidas já cedidas a empresas
-  de cobrança**. O cadastro manual assistido cobre parte disso; o total exibido é sempre "das
-  instituições conectadas".
-- **Taxas de juros nem sempre vêm.** No Brasil, a Belvo devolve vazia a taxa do cartão e, nos
-  empréstimos, a parcela e o vencimento. Nos empréstimos, a taxa sai de `interest_rates[]` ou,
-  na falta, do CET informado pelo banco (que inclui tarifas e IOF, então fica um pouco acima da
-  taxa pura); a parcela é calculada pela tabela Price. No cartão e quando nada disso vem, o
-  sistema usa taxas de referência por modalidade. Toda estimativa **aparece com selo** na
-  interface. As referências ainda precisam ser conferidas contra a publicação mais recente do
-  Banco Central.
-- **Validação com dados reais ainda limitada.** O formato dos contratos de empréstimo e
-  financiamento foi conferido numa amostra anonimizada de dados reais da Belvo, mas a conexão
-  ponta a ponta foi testada com uma instituição só, sem empréstimo ativo — falta confirmar uma
-  taxa calculada contra um contrato real.
-- **Alertas só dentro do app** — não há notificação push nem e-mail.
-- **Copiloto de IA não implementado** (aparece desabilitado, como "em breve").
-- **CPF guardado em texto puro no banco local** (necessário para o consentimento na Belvo).
-  Em produção, deveria ser criptografado em repouso.
-- **Pesquisa de validação com n=10, fora do público-alvo.** Decisões derivadas dela (como a
-  estratégia pré-selecionada) estão marcadas como provisórias.
+- **O Open Finance só traz o que a pessoa conectar.** Ficam de fora carnês, dívidas com pessoas e
+  dívidas já cedidas a empresas de cobrança — o cadastro manual cobre parte disso.
+- **Taxas de juros nem sempre vêm.** Quando a Belvo não traz a taxa, o sistema usa a do contrato pelo
+  CET ou uma referência por modalidade — sempre com selo de **estimada** na interface.
+- **Parcelas de empréstimo:** o Open Finance não informa se a parcela do mês já foi paga; em
+  "Próximos vencimentos" elas ficam "pendente" até vencer.
+- **Alertas só dentro do app** — sem push nem e-mail. **Copiloto de IA não implementado.**
+- **Pesquisa de validação com n=10, fora do público-alvo.** Decisões derivadas dela estão marcadas
+  como provisórias. O teste do MVP da Fase 7 foi simulado com personas (método descrito no documento).
 
 ---
 
-## 12. Próximos passos
+## 14. Próximos passos
 
 | Item | Por quê |
 |---|---|
-| **Oracle Autonomous Database** | Retomar o esquema, o motor em PL/SQL e as JSON Relational Duality Views da Fase 5. A troca é preparada: só a camada `repositories/` conhece SQL, e os nomes já seguem o esquema Oracle. Passos: driver `python-oracledb` com wallet vindo de cofre, migrações Alembic adaptadas (JSON nativo, `NUMBER` para dinheiro) e comparação do `planner.py` com o `PKG_PLANO` sobre a mesma base. |
-| **Docker / Docker Compose** | Subir backend, frontend (e um Oracle local para desenvolvimento) com um único comando, sem instalar Python e Node — e ter a mesma imagem para um futuro deploy. Segredos entram em tempo de execução, nunca na imagem. |
-| **Copiloto de IA (F5)** | Perguntas em linguagem natural sobre a própria dívida, via serviços de IA da OCI, com os dados permanecendo na mesma instância — nenhum dado do usuário enviado a terceiros. |
-| **Webhooks em produção** | URL pública para receber as atualizações da Belvo em vez de *polling*. |
-| **Registrato (Banco Central)** | Orientar a pessoa a consultar o relatório gratuito de todas as operações de crédito no CPF dela, para descobrir em quais instituições tem dívida e conectá-las. |
+| **Copiloto de IA (F5)** | Perguntas em linguagem natural sobre a própria dívida, via serviços de IA da OCI, com os dados na mesma instância. |
+| **JSON Relational Duality View** | Servir o Raio-X a partir de uma Duality View no Oracle, como na Fase 5. |
+| **Webhooks em produção** | Com a URL pública, receber as atualizações da Belvo em vez de *polling*. |
 | **Notificações** | Push para alertas que passem na regra de parcimônia (ação concreta + valor em reais). |
-| **Criptografia de dados sensíveis** | CPF e dados financeiros criptografados em repouso; deploy com HTTPS e cofre de segredos. |
-| **Auditoria de dependências** | `npm audit` e `pip-audit` antes de cada entrega, sem vulnerabilidade alta ou crítica em aberto. |
+| **Registrato (Banco Central)** | Orientar a consultar o relatório de operações de crédito no CPF e conectar todos os bancos. |
+| **Teste com usuários do público-alvo** | Validar com pessoas endividadas de baixa renda, que a pesquisa da Fase 5 não alcançou. |
 
 Fora do escopo por decisão de produto (Fase 5): renegociação dentro do app, marketplace de
 crédito, iniciação de pagamento, investimentos, score de crédito e categorização manual de gastos.
 
 ---
 
-## 13. Documentação e referências
+## 15. Documentação e referências
 
 | Documento | Conteúdo |
 |---|---|
-| [`docs/contexto-produto.md`](docs/contexto-produto.md) | Especificação completa: persona, pesquisa, princípios, regras de negócio, integração Belvo campo a campo, modelo de dados, critérios de aceite. As referências `§N` nos comentários do código apontam para ela. |
+| [`docs/contexto-produto.md`](docs/contexto-produto.md) | Especificação completa: persona, pesquisa, princípios, regras de negócio, integração Belvo, modelo de dados, critérios de aceite. As referências `§N` no código apontam para ela. |
 | [`CLAUDE.md`](CLAUDE.md) | Instruções para o agente de IA (Claude Code) usado no desenvolvimento. |
+| [`backend/oracle/pkg_plano_app.sql`](backend/oracle/pkg_plano_app.sql) | O motor de quitação em PL/SQL. |
+| [`ops/oracle/`](ops/oracle/) | Scripts de operação do Oracle pela OCI CLI. |
 | [Vídeo da Fase 5](https://youtu.be/SqLT0RcDZTg) | Apresentação do conceito e da validação. |
 | [Documentação da Belvo](https://developers.belvo.com/products/aggregation_brazil/aggregation-brazil-introduction) | Open Finance Brasil (OFDA). |
 
-**Sobre o uso de IA no desenvolvimento.** O código deste protótipo foi escrito com apoio de um
-agente de IA (Claude Code), guiado pela especificação em `docs/contexto-produto.md`. Todo código
-gerado passa por revisão humana da equipe.
+**Sobre o uso de IA no desenvolvimento.** O código foi escrito com apoio de um agente de IA
+(Claude Code), guiado pela especificação em `docs/contexto-produto.md`. Todo código gerado passa por
+revisão humana da equipe antes do merge (pull requests no GitHub).
 
 **Avisos de integridade.** A persona Juliana é fictícia. A pesquisa primária teve 10 respostas e
 não alcançou o público-alvo (baixa renda, alto endividamento); as conclusões derivadas dela são
@@ -422,4 +522,4 @@ projeta — não recomenda contratar nem deixar de contratar crédito.
 
 ---
 
-**FIAP · Engenharia de Software (4º ano) · Enterprise Challenge / Startup One · Fase 6**
+**FIAP · Engenharia de Software (4º ano) · Enterprise Challenge / Startup One · Fase 7 — MVP final**
