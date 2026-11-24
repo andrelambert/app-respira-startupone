@@ -20,7 +20,7 @@ from app.models import (
 )
 from app.providers.base import ErroProvedor, IdentificacaoUsuario
 from app.repositories import consentimentos as repo_c
-from app.services import coleta, instituicoes
+from app.services import coleta, cripto, instituicoes
 from app.services.contexto import provider
 
 log = logging.getLogger("respira.conexao")
@@ -37,7 +37,8 @@ class ErroConexao(Exception):
 
 
 def _ident(u: Usuario) -> IdentificacaoUsuario:
-    return IdentificacaoUsuario(external_id=u.uuid_externo, nome_completo=u.nome_completo, cpf=u.cpf)
+    # O CPF decifrado só existe aqui, em memória, para o token da Belvo (M6).
+    return IdentificacaoUsuario(external_id=u.uuid_externo, nome_completo=u.nome_completo, cpf=cripto.decifrar(u.cpf))
 
 
 async def iniciar(s: Session, u: Usuario, instituicao: str | None = None) -> tuple[Consentimento, str]:

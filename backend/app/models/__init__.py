@@ -166,7 +166,9 @@ class Usuario(SQLModel, table=True):
     apelido: str = Field(max_length=60)
     # Necessários só para o token do widget (§7.2). Nunca logados, nunca devolvidos inteiros.
     nome_completo: str | None = Field(default=None, max_length=120)
-    cpf: str | None = Field(default=None, max_length=11)
+    # Token Fernet do CPF (M6) — nunca o número. Ver services/cripto.py.
+    cpf: str | None = Field(default=None, max_length=200)
+    cpf_hash: str | None = Field(default=None, index=True, max_length=64)  # HMAC, para "CPF já em uso"
     faixa_renda: str | None = Field(default=None, max_length=30)
     vinculo_renda: str | None = Field(default=None, max_length=30)
     nivel_familiaridade: NivelFamiliaridade | None = None

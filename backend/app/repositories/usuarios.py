@@ -31,8 +31,15 @@ def por_email(session: Session, email: str) -> Usuario | None:
     ).first()
 
 
-def por_cpf(session: Session, cpf: str) -> Usuario | None:
-    return session.exec(select(Usuario).where(Usuario.cpf == cpf, col(Usuario.excluido_em).is_(None))).first()
+def por_cpf_hash(session: Session, cpf_hash: str) -> Usuario | None:
+    return session.exec(
+        select(Usuario).where(Usuario.cpf_hash == cpf_hash, col(Usuario.excluido_em).is_(None))
+    ).first()
+
+
+def com_cpf_em_texto_puro(session: Session) -> list[Usuario]:
+    """Cadastros de antes da criptografia (M6): CPF com 11 caracteres."""
+    return [u for u in session.exec(select(Usuario).where(col(Usuario.cpf).is_not(None))) if u.cpf and len(u.cpf) == 11]
 
 
 def criar(session: Session, usuario: Usuario) -> Usuario:
