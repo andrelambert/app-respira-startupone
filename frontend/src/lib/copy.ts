@@ -167,7 +167,6 @@ export const conectar = {
   ctaOutro: 'Conectar outro banco',
   umPorVez: 'Um banco por vez. Depois você pode conectar outro.',
   manual: 'Tenho um carnê ou dívida que não aparece aqui',
-  seguir: 'Ver meu Raio-X',
   aguardando: {
     titulo: 'Continue na aba que abrimos',
     texto:
@@ -862,7 +861,6 @@ export const privacidade = {
   naoAcessamos: [
     'Senhas do banco — você autoriza no app do próprio banco',
     'Pagamentos ou transferências — este app não movimenta o seu dinheiro',
-    'Investimentos e previdência',
   ],
   conexoes: 'Bancos conectados',
   semConexoes: 'Nenhum banco conectado.',
@@ -988,6 +986,15 @@ export const transacoes = {
   contas: 'Banco e conta',
   tipo: 'Tipo',
   tipos: { ENTRADA: 'Entradas', SAIDA: 'Saídas' } as Record<string, string>,
+  tipoConta: 'Tipo de conta',
+  tiposConta: {
+    TUDO: 'Tudo',
+    CORRENTE: 'Conta corrente',
+    CARTAO: 'Cartão de crédito',
+    POUPANCA: 'Poupança',
+    INVESTIMENTOS: 'Investimentos',
+  } as Record<string, string>,
+  direcoes: 'Entradas e saídas',
   todos: 'Todos',
   categorias: 'Categoria',
   valor: 'Valor (R$)',

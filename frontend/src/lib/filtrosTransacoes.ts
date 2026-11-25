@@ -10,6 +10,9 @@ export type Ordem = 'recentes' | 'maior_valor';
 export type Direcao = 'ENTRADA' | 'SAIDA';
 /** As mesmas regras do gráfico de entradas e saídas: só renda / só gastos (sem dívida, transferência nem aplicação). */
 export type Fluxo = 'renda' | 'gasto';
+/** Tudo (null) · conta corrente · cartão · poupança · investimentos (aplicações e resgates). */
+export type TipoConta = 'CORRENTE' | 'CARTAO' | 'POUPANCA' | 'INVESTIMENTOS';
+export const TIPOS_CONTA: TipoConta[] = ['CORRENTE', 'CARTAO', 'POUPANCA', 'INVESTIMENTOS'];
 
 export type Filtros = {
   periodo: Periodo;
@@ -23,6 +26,7 @@ export type Filtros = {
   valorMax: string | null;
   soDivida: boolean;
   fluxo: Fluxo | null;
+  tipoConta: TipoConta | null;
   ordem: Ordem;
 };
 
@@ -38,6 +42,7 @@ export const FILTROS_VAZIOS: Filtros = {
   valorMax: null,
   soDivida: false,
   fluxo: null,
+  tipoConta: null,
   ordem: 'recentes',
 };
 
@@ -82,6 +87,7 @@ export function lerFiltros(p: URLSearchParams): Filtros {
     valorMin: valorDecimal(p.get('min')) ? p.get('min') : null,
     valorMax: valorDecimal(p.get('max')) ? p.get('max') : null,
     soDivida: p.get('divida') === '1',
+    tipoConta: TIPOS_CONTA.includes(p.get('conta_tipo') as TipoConta) ? (p.get('conta_tipo') as TipoConta) : null,
     fluxo: p.get('fluxo') === 'renda' || p.get('fluxo') === 'gasto' ? (p.get('fluxo') as Fluxo) : null,
     ordem: p.get('ordem') === 'maior_valor' ? 'maior_valor' : 'recentes',
   };
@@ -103,6 +109,7 @@ export function escreverFiltros(f: Filtros): URLSearchParams {
   if (f.valorMax) p.set('max', f.valorMax);
   if (f.soDivida) p.set('divida', '1');
   if (f.fluxo) p.set('fluxo', f.fluxo);
+  if (f.tipoConta) p.set('conta_tipo', f.tipoConta);
   if (f.ordem !== 'recentes') p.set('ordem', f.ordem);
   return p;
 }
@@ -143,6 +150,7 @@ export function paraApi(f: Filtros, hoje: string): Record<string, string> {
   if (max) r.valor_max = max;
   if (f.soDivida) r.so_divida = 'true';
   if (f.fluxo) r.fluxo = f.fluxo;
+  if (f.tipoConta) r.tipo_conta = f.tipoConta;
   if (f.ordem !== 'recentes') r.ordem = f.ordem;
   return r;
 }
@@ -159,7 +167,6 @@ export function chips(
     out.push({ chave: 'periodo', rotulo: nomes.periodo(f.periodo, f), remover: (x) => ({ ...x, periodo: 'tudo', desde: null, ate: null }) });
   for (const id of f.contas)
     out.push({ chave: `conta-${id}`, rotulo: nomes.conta(id), remover: (x) => ({ ...x, contas: x.contas.filter((c) => c !== id) }) });
-  if (f.direcao) out.push({ chave: 'tipo', rotulo: nomes.direcao(f.direcao), remover: (x) => ({ ...x, direcao: null }) });
   for (const c of f.categorias)
     out.push({ chave: `cat-${c}`, rotulo: nomes.categoria(c), remover: (x) => ({ ...x, categorias: x.categorias.filter((y) => y !== c) }) });
   if (f.busca.trim()) out.push({ chave: 'busca', rotulo: nomes.busca(f.busca.trim()), remover: (x) => ({ ...x, busca: '' }) });
@@ -168,4 +175,15 @@ export function chips(
   if (f.soDivida) out.push({ chave: 'divida', rotulo: nomes.soDivida, remover: (x) => ({ ...x, soDivida: false }) });
   if (f.fluxo) out.push({ chave: 'fluxo', rotulo: nomes.fluxo(f.fluxo), remover: (x) => ({ ...x, fluxo: null }) });
   return out;
+}
+
+/**
+ * Botões Entradas e Saídas: os dois ligados = sem filtro (``null``). Desligar um
+ * deixa só o outro; desligar o último não vale — a lista nunca fica vazia por isso.
+ */
+export function alternarDirecao(atual: Direcao | null, tocado: Direcao): Direcao | null {
+  const outro: Direcao = tocado === 'ENTRADA' ? 'SAIDA' : 'ENTRADA';
+  if (atual === null) return outro; // desliga o tocado
+  if (atual === tocado) return atual; // é o único ligado: continua
+  return null; // religa o tocado: os dois
 }

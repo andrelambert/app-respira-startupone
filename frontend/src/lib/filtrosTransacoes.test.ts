@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { chips, escreverFiltros, FILTROS_VAZIOS, intervalo, lerFiltros, paraApi, valorDecimal } from './filtrosTransacoes';
+import { alternarDirecao, chips, escreverFiltros, FILTROS_VAZIOS, intervalo, lerFiltros, paraApi, valorDecimal } from './filtrosTransacoes';
 
 const url = (q: string) => new URLSearchParams(q);
 
@@ -78,5 +78,20 @@ describe('filtros de "Todas as transações" na URL (N1)', () => {
     expect(lerFiltros(p).fluxo).toBe('gasto');
     expect(lerFiltros(new URLSearchParams('fluxo=x')).fluxo).toBeNull();
     expect(paraApi(f, '2026-11-23').fluxo).toBe('gasto');
+  });
+
+  it('tipo de conta vai e volta pela URL e chega à API', () => {
+    const f = { ...FILTROS_VAZIOS, tipoConta: 'INVESTIMENTOS' as const };
+    const p = escreverFiltros(f);
+    expect(p.get('conta_tipo')).toBe('INVESTIMENTOS');
+    expect(lerFiltros(p).tipoConta).toBe('INVESTIMENTOS');
+    expect(lerFiltros(new URLSearchParams('conta_tipo=CORRETORA')).tipoConta).toBeNull();
+    expect(paraApi(f, '2026-11-23').tipo_conta).toBe('INVESTIMENTOS');
+  });
+
+  it('Entradas e Saídas: as duas ligadas por padrão, nunca as duas desligadas', () => {
+    expect(alternarDirecao(null, 'ENTRADA')).toBe('SAIDA'); // desligou Entradas
+    expect(alternarDirecao('SAIDA', 'SAIDA')).toBe('SAIDA'); // é a única ligada: continua
+    expect(alternarDirecao('SAIDA', 'ENTRADA')).toBeNull(); // religou: as duas
   });
 });

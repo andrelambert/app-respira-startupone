@@ -143,3 +143,19 @@ def test_filtro_por_subcategoria_e_parcelas(demo_limpa):
     meses = [t["data"][:7] for t in geladeira]
     assert len(set(meses)) == 10  # uma parcela em cada mês, não todas no mês da compra
     assert all(t["data_compra"] in (None, min(meses) + "-09") for t in geladeira)
+
+
+def test_filtro_por_tipo_de_conta_e_investimentos(demo_limpa):
+    """Tudo · Conta corrente · Cartão de crédito · Poupança · Investimentos (Todas as transações)."""
+    api = demo_limpa
+    contas = {c["id"]: c["tipo"] for b in api.get("/pfm/visao-geral").json()["bancos"] for c in b["contas"]}
+    tudo = api.get("/transacoes", params={"por_pagina": 5}).json()["total"]
+    somas = 0
+    for filtro, tipos in (("CORRENTE", {"CORRENTE", "PAGAMENTO"}), ("CARTAO", {"CARTAO_CREDITO"}), ("POUPANCA", {"POUPANCA"})):
+        r = api.get("/transacoes", params={"tipo_conta": filtro, "por_pagina": 100}).json()
+        assert r["total"] > 0 and {contas[t["conta_id"]] for t in r["itens"]} <= tipos
+        somas += r["total"]
+    assert somas <= tudo
+    inv = api.get("/transacoes", params={"tipo_conta": "INVESTIMENTOS", "por_pagina": 100}).json()
+    assert inv["total"] > 0 and all(t["categoria"] == "Investments & Savings" for t in inv["itens"])
+    assert api.get("/transacoes", params={"tipo_conta": "CORRETORA"}).status_code == 422

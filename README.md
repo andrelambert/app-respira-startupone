@@ -193,8 +193,8 @@ variáveis secretas do Render.
 ### Testes
 
 ```bash
-cd backend && uv run pytest     # 189 testes (186 no SQLite + 3 que só rodam no Oracle)
-cd frontend && npm test         # 68 testes
+cd backend && uv run pytest     # 190 testes (187 no SQLite + 3 que só rodam no Oracle)
+cd frontend && npm test         # 70 testes
 python3 ops/oracle/testes_oracle.py   # a suíte do backend no schema de teste do Oracle
 ```
 
@@ -223,7 +223,7 @@ python3 ops/oracle/testes_oracle.py   # a suíte do backend no schema de teste d
 | **Contas** | `/contas` | Primeiro os bancos, com contas e cartões (toque para ver o detalhe); depois **Ver todas as transações**, **Entradas e saídas** (gráfico de 3, 6 ou 12 meses; passar o mouse mostra o valor exato e tocar na barra abre as transações daquele mês já filtradas), **Para onde foi o dinheiro** (gastos por categoria × média dos 3 meses, com a frase que liga o corte à data de saída — só a parte não essencial conta, e investimento nunca) e **Entradas, gastos e dívida, mês a mês**. |
 | **Detalhe da categoria** | `/gastos/:categoria` | Abre ao tocar numa categoria: total do período, gráfico dos últimos 12 meses (tocar numa barra escolhe o mês), seletor de mês ou datas à escolha, filtro por tipo de gasto (subcategoria da Belvo) e as transações. |
 | **Detalhe da conta** | `/contas/:id` | Conta: saldo e extrato com filtros. Cartão: faturas (atual e anteriores, "vence/venceu em") e extrato. |
-| **Todas as transações** | `/transacoes` | Extrato de todas as contas: período, banco, tipo, categoria, busca, faixa de valor e **Só pagamentos de dívida**; resumo de entradas, saídas e resultado. Cada transação mostra a categoria e, nas compras parceladas no cartão, "parcela 3/12" (o detalhe traz a data da compra e quando a parcela cai). Filtros na URL (o botão voltar e o link compartilhado funcionam). |
+| **Todas as transações** | `/transacoes` | Extrato de todas as contas. Sempre à vista: **Tudo · Conta corrente · Cartão de crédito · Poupança · Investimentos** (aplicações e resgates) e **Entradas / Saídas** (as duas ligadas por padrão). No painel: período, banco, categoria, busca, faixa de valor e **Só pagamentos de dívida**; resumo de entradas, saídas e resultado. Cada transação mostra a categoria e, nas compras parceladas no cartão, "parcela 3/12" (o detalhe traz a data da compra e quando a parcela cai). Filtros na URL (o botão voltar e o link compartilhado funcionam). |
 | **Próximos vencimentos** | `/vencimentos` | Faturas e parcelas nos próximos 7, 15 ou 30 dias, com status (pago, pendente, atrasado) e, com plano ativo, o valor do plano. |
 | **Raio-X** | `/raiox` | Quanto você deve, as dívidas da mais cara para a mais barata, a data de quitação, os juros do mês e o alerta do mínimo. |
 | **Dívidas** | `/dividas` | Cada dívida com contrato, atraso e selos de estimativa; ordenar (ordem do plano, maior taxa, maior saldo, próximo vencimento, por banco) e filtrar (banco, tipo, situação). |
@@ -452,7 +452,7 @@ decisão marcada como provisória no código porque veio de uma pesquisa com 10 
 | `test_oracle_ddl.py` | 36 | O esquema compila para o Oracle; PK com IDENTITY; dinheiro como `NUMBER` (e ida e volta exata, no Oracle) |
 | `test_planner.py` | 21 | Os números da Fase 5 ao centavo, empates, uma dívida, capacidade insuficiente, sem dívidas, renda da Belvo implausível |
 | `test_api.py` | 13 | Jornada da Juliana, autenticação, isolamento entre usuários, webhooks, `/health`, `/config` |
-| `test_transacoes.py` | 14 | Todas as transações: cada filtro (inclusive por subcategoria), somas, paginação, parâmetros inválidos, isolamento, parcelas da demo uma por mês |
+| `test_transacoes.py` | 15 | Todas as transações: cada filtro (inclusive por subcategoria e tipo de conta), somas, paginação, parâmetros inválidos, isolamento, parcelas da demo uma por mês |
 | `test_alertas.py` | 13 | Alertas não se repetem e saem quando deixam de valer; conta nomeada; cheque especial atual |
 | `test_gastos.py` | 13 | Gastos por categoria principal, selo de essencial, corte só na parte não essencial (nunca investimento), impacto no plano, detalhe da categoria, fluxo mensal coerente com a capacidade e com a reserva separada, barra de entradas/saídas = soma das transações filtradas |
 | `test_vencimentos.py` | 7 | Próximos vencimentos: datas, janela, status, cartão sem duplicar |
@@ -460,8 +460,8 @@ decisão marcada como provisória no código porque veio de uma pesquisa com 10 
 | `test_cpf_cifrado.py` | 5 | CPF nunca em texto no banco, "em uso" pelo hash, sem chave não grava, legado cifrado |
 | `test_publicacao.py` | 4 | Demo por visitante isolada, limites, limpeza, versão pública |
 | `test_consistencia.py` + `test_oracle_motor.py` | 4 | Mesma data e total entre telas; Python × PL/SQL (no Oracle) |
-| **Backend** | **189** | 186 rodam no SQLite; 3 só no Oracle (`@pytest.mark.oracle`) |
-| **Frontend (Vitest)** | **68** | Dinheiro, datas, textos e taxonomia, cadastro (com confirmação de senha), filtros na URL (transações, dívidas e detalhe da categoria), entradas e saídas, vencimentos, gastos, telas de erro |
+| **Backend** | **190** | 187 rodam no SQLite; 3 só no Oracle (`@pytest.mark.oracle`) |
+| **Frontend (Vitest)** | **70** | Dinheiro, datas, textos e taxonomia, cadastro (com confirmação de senha), filtros na URL (transações, dívidas e detalhe da categoria), entradas e saídas, vencimentos, gastos, telas de erro |
 
 A suíte do backend também roda contra o Oracle, no schema `RESPIRA_TESTE`
 (`python3 ops/oracle/testes_oracle.py`). Na última rodada completa no Oracle, depois do motor em

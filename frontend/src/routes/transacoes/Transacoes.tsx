@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router';
 
 import { LinhaTransacao } from '@/components/respira/LinhaTransacao';
-import { Button, Carregando, EstadoErro, cx } from '@/components/ui';
+import { Button, Carregando, Chip, EstadoErro, cx } from '@/components/ui';
 import { useHoje, useVisaoGeral } from '@/hooks/queries';
 import { useDebounced } from '@/hooks/useDebounced';
 import { api } from '@/lib/api';
@@ -14,7 +14,9 @@ import {
   escreverFiltros,
   FILTROS_VAZIOS,
   lerFiltros,
+  alternarDirecao,
   paraApi,
+  TIPOS_CONTA,
   type Direcao,
   type Filtros,
   type Ordem,
@@ -97,6 +99,25 @@ export default function Transacoes() {
           className="min-h-toque rounded-xl border border-line bg-white px-3 text-base outline-none focus:border-blue"
         />
       </label>
+
+      {/* Sempre à vista: tipo de conta (um por vez) e entradas/saídas (as duas ligadas = tudo). */}
+      <nav aria-label={copy.tipoConta} className="flex flex-wrap gap-2">
+        <Chip ativo={!filtros.tipoConta} onClick={() => aplicar({ ...filtros, tipoConta: null })}>
+          {copy.tiposConta.TUDO}
+        </Chip>
+        {TIPOS_CONTA.map((t) => (
+          <Chip key={t} ativo={filtros.tipoConta === t} onClick={() => aplicar({ ...filtros, tipoConta: t })}>
+            {copy.tiposConta[t]}
+          </Chip>
+        ))}
+      </nav>
+      <div role="group" aria-label={copy.direcoes} className="flex gap-2">
+        {(['ENTRADA', 'SAIDA'] as Direcao[]).map((d) => (
+          <Chip key={d} ativo={filtros.direcao === null || filtros.direcao === d} onClick={() => aplicar({ ...filtros, direcao: alternarDirecao(filtros.direcao, d) })}>
+            {copy.tipos[d]}
+          </Chip>
+        ))}
+      </div>
 
       <div className="flex flex-wrap items-center gap-2">
         <button
@@ -281,17 +302,6 @@ function PainelFiltros({
           </label>
         </div>
       )}
-
-      <Grupo titulo={copy.tipo}>
-        <Opcao ativo={filtros.direcao === null} onClick={() => aplicar({ ...filtros, direcao: null })}>
-          {copy.todos}
-        </Opcao>
-        {(['ENTRADA', 'SAIDA'] as Direcao[]).map((d) => (
-          <Opcao key={d} ativo={filtros.direcao === d} onClick={() => aplicar({ ...filtros, direcao: d })}>
-            {copy.tipos[d]}
-          </Opcao>
-        ))}
-      </Grupo>
 
       {contas.length > 0 && (
         <Grupo titulo={copy.contas}>
