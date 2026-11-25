@@ -1,4 +1,5 @@
 import { NaoMovimenta } from '@/components/respira';
+import { DemoJuliana } from '@/components/respira/DemoJuliana';
 import { LinkBotao } from '@/components/ui';
 import { useUsuario } from '@/hooks/queries';
 import { landing } from '@/lib/copy';
@@ -34,6 +35,7 @@ export default function Landing() {
             <LinkBotao to="/entrar" variante="secundario" largo>
               {landing.entrar}
             </LinkBotao>
+            <DemoJuliana />
           </>
         )}
         <p className="text-center text-sm text-slate">{landing.gratuito}</p>

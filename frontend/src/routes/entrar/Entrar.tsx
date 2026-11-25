@@ -5,8 +5,9 @@ import { useForm } from 'react-hook-form';
 import { Link, Navigate, useNavigate, useSearchParams } from 'react-router';
 import { z } from 'zod';
 
-import { BotaoVerSenha, Button, Campo, Card, Carregando, Icone } from '@/components/ui';
-import { chaves, useConfig, useUsuario } from '@/hooks/queries';
+import { DemoJuliana } from '@/components/respira/DemoJuliana';
+import { BotaoVerSenha, Button, Campo, Carregando, Icone } from '@/components/ui';
+import { chaves, useUsuario } from '@/hooks/queries';
 import { api, ApiError, type Usuario } from '@/lib/api';
 import { entrar as copy, erroConexao } from '@/lib/copy';
 import { comMascara, semEspacos } from '@/lib/entrada';
@@ -24,7 +25,6 @@ function destinoSeguro(volta: string | null): string {
 
 export default function Entrar() {
   const { data: usuario, isLoading } = useUsuario();
-  const { data: config } = useConfig();
   const [params] = useSearchParams();
   const destino = destinoSeguro(params.get('volta'));
   const navigate = useNavigate();
@@ -42,16 +42,6 @@ export default function Entrar() {
     navigate(destino, { replace: true });
   };
   const login = useMutation({ mutationFn: (d: Dados) => api.entrar(d.email, d.senha), onSuccess: aoEntrar });
-  // A demo vai direto ao Raio-X: os dados dela chegam em segundo plano e a
-  // tela de espera mostra o progresso (sem "volta", que tem prioridade).
-  const demo = useMutation({
-    mutationFn: api.entrarDemo,
-    onSuccess: (u: Usuario) => {
-      qc.clear();
-      qc.setQueryData(chaves.usuario, u);
-      navigate(params.get('volta') ? destino : '/raiox', { replace: true });
-    },
-  });
 
   if (isLoading) return <Carregando />;
   if (usuario) return <Navigate to={destino} replace />;
@@ -98,15 +88,8 @@ export default function Entrar() {
         </p>
       </form>
 
-      {config?.demo_disponivel && (
-        <Card as="div" className="flex flex-col gap-2 border-dashed">
-          <h2 className="font-semibold text-navy">{copy.demoTitulo}</h2>
-          <p className="text-sm text-slate">{copy.demoTexto}</p>
-          <Button variante="secundario" onClick={() => demo.mutate()} disabled={demo.isPending}>
-            {copy.demo}
-          </Button>
-        </Card>
-      )}
+      {/* Um "volta" na URL tem prioridade sobre o Raio-X. */}
+      <DemoJuliana destino={params.get('volta') ? destino : undefined} />
     </div>
   );
 }

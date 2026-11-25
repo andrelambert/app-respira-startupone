@@ -16,12 +16,13 @@ A unidade de valor do produto é **uma data**, não um gráfico: todo app financ
 | **Aplicativo** | **https://app-respira-startupone.vercel.app** |
 | API (saúde do serviço) | https://respira-api-qo4n.onrender.com/health |
 
-Na tela de entrar, toque em **"Entrar como Juliana (demonstração)"**: cada visitante ganha uma
+Na página inicial (ou na tela de entrar), toque em **"Entrar como Juliana (demonstração)"**: cada visitante ganha uma
 Juliana só sua, com dados fictícios, apagada depois de 24 horas. Dá para simular meses, ativar um
 plano e reiniciar à vontade sem atrapalhar ninguém.
 
-> O backend roda no plano gratuito do Render, que **dorme após 15 minutos sem uso**. O primeiro
-> acesso depois disso pode levar cerca de um minuto para acordar; os seguintes são imediatos.
+> O backend roda no plano gratuito do Render, que **dorme após 15 minutos sem uso**. Um workflow
+> chama o servidor a cada 10 minutos para mantê-lo acordado; se ainda assim ele tiver dormido, o
+> primeiro acesso pode levar cerca de um minuto, e os seguintes são imediatos.
 
 ### Sobre este projeto
 
@@ -204,7 +205,7 @@ python3 ops/oracle/testes_oracle.py   # a suíte do backend no schema de teste d
 ### Navegação
 
 - **Antes de entrar:** a página inicial (`/`) leva a **Entrar** (`/entrar`) ou **Criar conta**
-  (`/cadastro`). Na tela de entrar está **"Entrar como Juliana (demonstração)"**.
+  (`/cadastro`). As duas telas têm **"Entrar como Juliana (demonstração)"**.
 - **Depois de entrar:** a barra fixa na parte de baixo leva a **Início · Contas · Raio-X · Dívidas ·
   Plano · Configurações**.
 - **Primeira vez de uma conta nova:** Criar conta → Conectar banco → (autorização no banco, em
@@ -214,7 +215,7 @@ python3 ops/oracle/testes_oracle.py   # a suíte do backend no schema de teste d
 
 | Tela | Rota | Para que serve e como usar |
 |---|---|---|
-| **Página inicial** | `/` | O produto em três passos e o aviso "Este app não movimenta o seu dinheiro". |
+| **Página inicial** | `/` | O produto em três passos, o aviso "Este app não movimenta o seu dinheiro" e o atalho **Entrar como Juliana (demonstração)**. |
 | **Entrar** | `/entrar` | E-mail e senha, ou **Entrar como Juliana (demonstração)**. |
 | **Criar conta** | `/cadastro` | E-mail, senha, nome completo e CPF (só quando a conexão com a Belvo está ligada; gravado cifrado). Pergunta opcional sobre planos anteriores, que muda a estratégia sugerida. |
 | **Conectar banco** | `/conectar` | O que é lido e o que não é feito; **Conectar outro banco** abre a autorização em nova aba e mostra o progresso da coleta. Na Juliana, a autorização é simulada. |
@@ -270,7 +271,7 @@ flowchart LR
     R -- "Basic auth (chaves só no backend)" --> B["Belvo API<br/>Open Finance Brasil"]
     U -. "nova aba" .-> W["Widget da Belvo<br/>→ app do banco"]
     W -. "callback /conectar/sucesso" .-> U
-    G["GitHub Actions<br/>Manter ativo"] -. "GET /health 2x/semana" .-> R
+    G["GitHub Actions<br/>Manter ativo"] -. "GET /health a cada 10 min" .-> R
 ```
 
 **Decisões principais:**
@@ -332,7 +333,7 @@ frontend/src/
   `GET /plano/conferencia-oracle` roda o plano em Python e em PL/SQL; a tela mostra
   **"✓ Conferido no Oracle"** só quando coincidem. Na Juliana, as três estratégias coincidem ao centavo.
 - **`/health`** faz uma consulta real e devolve banco, versão e região — é o que o workflow
-  "Manter ativo" usa para o Always Free não parar por inatividade.
+  "Manter ativo" usa para o Render não dormir e o Always Free não parar por inatividade.
 
 **Operação (OCI CLI).** `ops/oracle/` tem os scripts para validar a sessão da CLI, descobrir o
 banco, ver o estado, ligar/desligar, baixar e rotacionar a wallet (`respira_oci.sh`), criar os
@@ -359,7 +360,10 @@ usuários e listar/contar tabelas (`respira_sql.py`), gravar o `backend/.env` se
 3. Em `frontend/vercel.json`, o *rewrite* `/api/*` aponta para a URL do serviço no Render.
 
 **Manter ativo:** o workflow [`.github/workflows/manter-ativo.yml`](.github/workflows/manter-ativo.yml)
-faz `GET /health` às segundas e quintas (o Oracle Always Free para após 7 dias sem uso).
+faz `GET /health` a cada 10 minutos: o Render gratuito dorme após 15 minutos sem tráfego e o Oracle
+Always Free para após 7 dias sem uso. Custo zero (repositório público; um serviço 24 h cabe nas 750 h
+mensais do Render gratuito). O GitHub pode atrasar o agendamento alguns minutos e o desliga após 60
+dias sem commits.
 
 **Variáveis da versão publicada:**
 
@@ -469,7 +473,7 @@ PL/SQL, **137 testes passaram** e nenhum falhou; os testes das telas novas foram
 
 **Da publicação:**
 
-- **Planos gratuitos.** O Render dorme após 15 minutos sem uso (~1 minuto para acordar) e fica nos
+- **Planos gratuitos.** O Render dorme após 15 minutos sem uso (~1 minuto para acordar; o workflow "Manter ativo" evita isso na maior parte do tempo) e fica nos
   EUA (Virginia, a região gratuita mais próxima de São Paulo); o Oracle Always Free tem sessões e
   espaço limitados (por isso o limite de demos ativas).
 - **A conexão real com bancos está ligada na versão publicada**, para demonstração. Quem conectar um

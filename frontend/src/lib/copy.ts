@@ -105,6 +105,8 @@ export const entrar = {
   erros: {
     credenciais_invalidas: 'E-mail ou senha não conferem.',
     muitas_tentativas: 'Muitas tentativas seguidas. Espere 15 minutos e tente de novo.',
+    muitas_demos: 'Muitas demonstrações abertas daqui. Espere uma hora e tente de novo.',
+    demos_esgotadas: 'A demonstração está cheia agora. Tente de novo em alguns minutos.',
     email: 'Digite um e-mail válido.',
     senha: 'Digite sua senha.',
   } as Record<string, string>,

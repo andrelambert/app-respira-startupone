@@ -1,13 +1,16 @@
 # Mantém a versão pública acordada (M5, §7.6 do briefing).
 # O Oracle Always Free para após 7 dias sem uso (e pode ser apagado após 90
-# dias parado); o Render gratuito dorme após 15 min sem tráfego. Duas vezes por
-# semana, um GET no /health acorda o Render e faz uma consulta real no Oracle.
+# dias parado); o Render gratuito dorme após 15 min sem tráfego. A cada 10 min,
+# um GET no /health mantém o Render acordado e faz uma consulta real no Oracle.
+# Custo zero: repositório público (minutos grátis) e um serviço 24 h cabe nas
+# 750 h/mês do Render gratuito. O GitHub pode atrasar o agendamento alguns
+# minutos e o desliga após 60 dias sem commits no repositório.
 # Sem segredos: o /health é público e não devolve dado de usuário.
 name: Manter ativo
 
 on:
   schedule:
-    - cron: "17 11 * * 1,4" # segunda e quinta, 08:17 em Brasília
+    - cron: "*/10 * * * *" # a cada 10 min (o Render dorme após 15)
   workflow_dispatch: {}
 
 permissions: {}
@@ -15,7 +18,7 @@ permissions: {}
 jobs:
   ping:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 5 # menor que o intervalo: execuções não se sobrepõem
     steps:
       - name: GET /health (com espera para o Render acordar)
         env:
