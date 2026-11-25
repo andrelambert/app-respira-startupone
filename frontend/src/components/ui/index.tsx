@@ -264,6 +264,23 @@ export function BarraIndeterminada({ rotulo }: { rotulo: string }) {
   );
 }
 
+/** Botão de alternar (banco, tipo de gasto…): aria-pressed diz qual está ativo. */
+export function Chip({ ativo, onClick, children }: { ativo: boolean; onClick: () => void; children: ReactNode }) {
+  return (
+    <button
+      type="button"
+      aria-pressed={ativo}
+      onClick={onClick}
+      className={cx(
+        'inline-flex min-h-toque shrink-0 items-center gap-2 rounded-full border px-4 text-sm font-semibold',
+        ativo ? 'border-navy bg-navy text-white' : 'border-line bg-white text-navy',
+      )}
+    >
+      {children}
+    </button>
+  );
+}
+
 export function EstadoVazio({
   titulo,
   texto,

@@ -21,6 +21,7 @@ import {
   Money,
   cx,
 } from '@/components/ui';
+import { SemDividas } from '@/components/respira/SemDividas';
 import { EsperaColeta } from '@/components/respira/EsperaColeta';
 import { chaves, useConsentimentos, useUsuario } from '@/hooks/queries';
 import { api, type Consentimento, type Divida, type RaioX as TRaioX } from '@/lib/api';
@@ -33,7 +34,6 @@ import {
   divida as copyDivida,
   fraseRaioX,
   metodoNome,
-  pfm,
   raiox as copy,
 } from '@/lib/copy';
 import { percentual, sub } from '@/lib/money';
@@ -73,18 +73,7 @@ export default function RaioX() {
   }
   if (r.qtd_dividas === 0) {
     return lista.some((c) => c.status === 'ATIVO') ? (
-      <EstadoVazio
-        titulo={copy.vazio.titulo}
-        texto={copy.vazio.texto}
-        acao={
-          <div className="flex flex-wrap gap-2">
-            <LinkBotao to="/contas">{pfm.verContas}</LinkBotao>
-            <LinkBotao to="/dividas/nova" variante="secundario">
-              {conectar.manual}
-            </LinkBotao>
-          </div>
-        }
-      />
+      <SemDividas />
     ) : (
       <EstadoVazio
         titulo={copy.semConexao.titulo}

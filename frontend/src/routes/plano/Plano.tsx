@@ -4,8 +4,9 @@ import { Navigate, useNavigate } from 'react-router';
 
 import { JurosEvitados } from '@/components/respira';
 import { FluxoMensal } from '@/components/respira/FluxoMensal';
+import { SemDividas } from '@/components/respira/SemDividas';
 import { Badge, Button, Card, Carregando, EstadoErro, EstadoVazio, Icone, LinkBotao, Money, cx } from '@/components/ui';
-import { chaves, chavesFinanceiras, useConfig, usePlanoAtivo, useUsuario } from '@/hooks/queries';
+import { chaves, chavesFinanceiras, useConfig, useConsentimentos, usePlanoAtivo, useUsuario } from '@/hooks/queries';
 import { useDebounced } from '@/hooks/useDebounced';
 import { api, ApiError, type Estrategia, type Metodo, type Simulacoes } from '@/lib/api';
 import { COR_METODO } from '@/lib/cores';
@@ -33,12 +34,14 @@ export default function Plano() {
     enabled: Boolean(usuario),
   });
   const ativo = usePlanoAtivo();
+  const consentimentos = useConsentimentos();
 
   if (isLoading) return <Carregando />;
   if (!usuario) return <Navigate to="/entrar" replace />;
-  if (base.isLoading || ativo.isLoading) return <Carregando />;
+  if (base.isLoading || ativo.isLoading || consentimentos.isLoading) return <Carregando />;
   if (base.isError || !base.data) return <EstadoErro onTentar={() => void base.refetch()} />;
   if (base.data.estrategias.every((e) => e.itens.length === 0)) {
+    if ((consentimentos.data ?? []).some((c) => c.status === 'ATIVO')) return <SemDividas />;
     return (
       <EstadoVazio
         titulo={copyRaioX.semConexao.titulo}

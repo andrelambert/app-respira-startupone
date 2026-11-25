@@ -23,7 +23,10 @@ from app.schemas import (
     FaturaOut,
     FluxoMensalOut,
     FluxoMesOut,
+    GastoMesOut,
     GastosCategoriaOut,
+    GastoSubcategoriaOut,
+    HistoricoCategoriaOut,
     ImpactoPlanoOut,
     PagamentoFaturaOut,
     TodasTransacoesOut,
@@ -274,6 +277,26 @@ def gastos_por_categoria(
         ],
         total=sum((c.total for c in cats), Decimal("0.00")),
         impacto_plano=ImpactoPlanoOut(**impacto.__dict__) if impacto else None,
+    )
+
+
+@router.get("/pfm/categorias/historico", response_model=HistoricoCategoriaOut)
+def historico_categoria(
+    u: UsuarioDep,
+    s: SessionDep,
+    categoria: Annotated[str, Query(min_length=1, max_length=80)],
+    meses: Annotated[int, Query(ge=3, le=12)] = 12,
+    subcategoria: Annotated[str | None, Query(max_length=80)] = None,
+) -> HistoricoCategoriaOut:
+    """Detalhe de uma categoria de gasto: evolução (da categoria ou de uma
+    subcategoria) e as subcategorias para filtrar."""
+    from app.services import analise
+
+    serie, subs = analise.historico_categoria(s, u, categoria, meses, subcategoria)
+    return HistoricoCategoriaOut(
+        categoria=categoria,
+        meses=[GastoMesOut(mes=m, total=v) for m, v in serie],
+        subcategorias=[GastoSubcategoriaOut(subcategoria=n, total=v) for n, v in subs],
     )
 
 

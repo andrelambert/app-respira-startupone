@@ -21,8 +21,9 @@ describe('gastos por categoria (N2)', () => {
   });
 
   it('a frase liga o corte à data de saída', () => {
-    expect(copy.impacto('delivery', 'R$ 220,00', 2, 'janeiro de 2028', 'março de 2028')).toBe(
-      'Se delivery voltasse à sua média, sobrariam R$ 220,00 por mês — sua data de saída chegaria 2 meses antes: janeiro de 2028 em vez de março de 2028.',
+    // Categoria principal; só a parte não essencial (o delivery, não o mercado).
+    expect(copy.impacto('alimentação', 'R$ 220,00', 2, 'janeiro de 2028', 'março de 2028')).toBe(
+      'Se o que não é essencial em alimentação voltasse à sua média, sobrariam R$ 220,00 por mês — sua data de saída chegaria 2 meses antes: janeiro de 2028 em vez de março de 2028.',
     );
     expect(copy.impacto('x', 'R$ 50,00', 1, 'a', 'b')).toContain('1 mês antes');
   });

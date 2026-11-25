@@ -29,9 +29,15 @@ const esquemaCadastro = (pedeCpf: boolean) =>
   z.object({
     email: z.string().max(254).regex(EMAIL_RE, cadastro.erros.email),
     senha: z.string().min(SENHA_MINIMO, cadastro.erros.senha).max(128),
+    confirmar_senha: z.string().max(128),
     nome_completo: z.string().max(120).refine(nomeCompletoValido, cadastro.erros.nome),
     cpf: pedeCpf ? z.string().refine(cpfValido, cadastro.erros.cpf) : z.string().max(14),
     tentativa: z.enum(['sim', 'nao', 'pular']),
+  }).refine((d) => d.confirmar_senha === d.senha, {
+    path: ['confirmar_senha'],
+    message: cadastro.erros.confirmarSenha,
+    // O Zod 4 pula a checagem do objeto quando outro campo está inválido; esta roda sempre.
+    when: (p) => typeof (p.value as { confirmar_senha?: unknown } | undefined)?.confirmar_senha === 'string',
   });
 type Dados = z.infer<ReturnType<typeof esquemaCadastro>>;
 type CampoTexto = Exclude<keyof Dados, 'tentativa'>;
@@ -56,7 +62,7 @@ export default function Cadastro() {
   } = useForm<Dados>({
     resolver: zodResolver(esquemaCadastro(pedeCpf)),
     mode: 'onChange', // valida a cada tecla
-    defaultValues: { email: '', senha: '', nome_completo: '', cpf: '', tentativa: 'pular' },
+    defaultValues: { email: '', senha: '', confirmar_senha: '', nome_completo: '', cpf: '', tentativa: 'pular' },
   });
   const criar = useMutation({
     mutationFn: (d: Dados) =>
@@ -73,6 +79,8 @@ export default function Cadastro() {
     },
   });
 
+  const senha = watch('senha');
+
   if (isLoading) return <Carregando />;
   // Logado ao chegar aqui → início. Logado porque acabou de criar a conta → conexão.
   if (usuario) return <Navigate to={criar.isSuccess ? '/conectar' : '/inicio'} replace />;
@@ -83,7 +91,8 @@ export default function Cadastro() {
    */
   function estado(campo: CampoTexto): EstadoCampo {
     const valor = watch(campo);
-    const erro = Boolean(errors[campo]);
+    // A confirmação depende de outro campo: confere direto, não pelo último erro guardado.
+    const erro = campo === 'confirmar_senha' ? valor !== senha : Boolean(errors[campo]);
     // Envio com erro foca o primeiro campo inválido: vazio, ele precisa aparecer vermelho.
     if (foco === campo) return valor ? (erro ? 'invalido' : 'valido') : isSubmitted && erro ? 'invalido' : 'neutro';
     return isSubmitted && erro ? 'invalido' : 'neutro';
@@ -103,13 +112,13 @@ export default function Cadastro() {
     };
   }
 
-  const senha = watch('senha');
   const cpfDigitos = somenteDigitos(watch('cpf'));
   const mensagens: Record<CampoTexto, string | undefined> = {
     email: errors.email && cadastro.erros.email,
     senha:
       errors.senha &&
       (senha.length < SENHA_MINIMO ? cadastro.faltamCaracteres(SENHA_MINIMO - senha.length) : cadastro.erros.senha),
+    confirmar_senha: estado('confirmar_senha') === 'invalido' ? cadastro.erros.confirmarSenha : undefined,
     nome_completo: errors.nome_completo && cadastro.erros.nome,
     cpf: errors.cpf && (cpfDigitos.length < 11 ? cadastro.faltamDigitos(11 - cpfDigitos.length) : cadastro.erros.cpf),
   };
@@ -142,6 +151,15 @@ export default function Cadastro() {
         mensagem={mensagens.senha}
         sufixo={<BotaoVerSenha visivel={verSenha} onAlternar={() => setVerSenha((v) => !v)} />}
         {...campo('senha')}
+      />
+      <Campo
+        rotulo={cadastro.confirmarSenha}
+        type={verSenha ? 'text' : 'password'}
+        autoComplete="new-password"
+        maxLength={128}
+        estado={estado('confirmar_senha')}
+        mensagem={mensagens.confirmar_senha}
+        {...campo('confirmar_senha')}
       />
       <Campo
         rotulo={cadastro.nome}

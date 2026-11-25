@@ -116,6 +116,7 @@ export const cadastro = {
   email: 'E-mail',
   senha: 'Crie uma senha',
   senhaAjuda: 'Pelo menos 8 caracteres.',
+  confirmarSenha: 'Confirme a senha',
   nome: 'Nome completo',
   nomeAjuda: 'Igual ao do seu banco.',
   cpf: 'CPF',
@@ -132,6 +133,7 @@ export const cadastro = {
   erros: {
     email: 'Digite um e-mail completo, como nome@dominio.com.',
     senha: 'Use pelo menos 8 caracteres.',
+    confirmarSenha: 'As duas senhas não são iguais.',
     nome: 'Escreva nome e sobrenome, só com letras.',
     cpf: 'Esse CPF não é válido. Confira os números.',
     email_em_uso: 'Já existe uma conta com esse e-mail. Tente entrar.',
@@ -343,6 +345,9 @@ export const divida = {
 
 export const dividas = {
   titulo: 'Suas dívidas',
+  // O Raio-X responde "quanto e quando"; esta tela, "o quê, onde e em que ordem".
+  explicacao: 'Cada dívida em detalhe: contrato, parcelas e a ordem no plano. O resumo, com a data de saída, fica no ',
+  explicacaoLink: 'Raio-X',
   resumo: (qtd: number, credores: number, parcelas: Centavos) =>
     `${qtd} ${plural(qtd, 'compromisso', 'compromissos')} em ${credores} ${plural(credores, 'credor', 'credores')} · ${r$(parcelas)} de parcelas por mês`,
   livreEm: (mesAno: string) => `Seguindo o seu plano, você fica livre em ${mesAno}.`,
@@ -577,7 +582,7 @@ const TAXONOMIA: Taxonomia = {
     },
   },
   'Investments & Savings': {
-    nome: 'Investimentos e poupança',
+    nome: 'Investimentos',
     subs: {
       Savings: 'Poupança',
       'Fixed Income': 'Renda fixa',
@@ -733,20 +738,14 @@ export function subcategoriaNome(categoria: string | null | undefined, sub: stri
 }
 
 /**
- * Nome de um grupo de gasto. O backend agrupa por "Categoria::Subcategoria"
- * (ou só "Categoria" quando não há subcategoria): mostra a subcategoria quando
- * ela é conhecida, senão a categoria.
+ * Nome de um grupo de gasto: a categoria principal. As subcategorias da Belvo
+ * erram demais para ficar à vista (teste com conta real, Fase 7) — só viram
+ * filtro no detalhe da categoria. Chaves antigas "Categoria::Subcategoria"
+ * (alertas e links de antes) também caem na categoria.
  */
 export function nomeGasto(chave: string | null | undefined): string {
   if (!chave) return 'Outros';
-  const [cat, sub] = chave.split('::');
-  return subcategoriaNome(cat, sub) ?? categoriaNome(cat);
-}
-
-/** A chave de agrupamento de uma transação (a mesma do backend). */
-export function chaveGasto(categoria: string | null | undefined, sub: string | null | undefined): string {
-  const cat = categoria || 'Unknown';
-  return sub ? `${cat}::${sub}` : cat;
+  return categoriaNome(chave.split('::')[0]);
 }
 
 /** "EMPRESTIMOS" → "Empréstimo". Fora do dicionário: o código, legível, sem inglês. */
@@ -806,7 +805,7 @@ export function mensagemEvento(e: Evento, { temPlano }: { temPlano: boolean }): 
       const cat = nomeGasto(s('categoria')).toLowerCase();
       return {
         tom: 'atencao',
-        titulo: `Em ${nomeMes(s('mes'))}, ${cat} somou ${r$s(c.gasto)}`,
+        titulo: `Em ${nomeMes(s('mes'))}, o que não é essencial em ${cat} somou ${r$s(c.gasto)}`,
         texto: `São ${r$s(c.excesso)} acima do normal (${r$s(c.normal)}). Se voltar ao normal, esse valor pode ir para o plano.`,
       };
     }
@@ -1010,11 +1009,30 @@ export const gastos = {
   abaixoDaMedia: (pct: number) => `${pct}% abaixo da média`,
   essencial: 'essencial',
   semDados: 'Ainda não há gastos para mostrar neste mês.',
-  verTransacoes: (cat: string) => `Ver as transações de ${cat}`,
+  verTransacoes: (cat: string) => `Ver a evolução e as transações de ${cat}`,
   foraDaConta: 'Fora da conta: pagamentos de dívida e transferências.',
   impacto: (cat: string, valor: string, meses: number, nova: string, atual: string) =>
-    `Se ${cat} voltasse à sua média, sobrariam ${valor} por mês — sua data de saída chegaria ${meses} ${meses === 1 ? 'mês' : 'meses'} antes: ${nova} em vez de ${atual}.`,
+    `Se o que não é essencial em ${cat} voltasse à sua média, sobrariam ${valor} por mês — sua data de saída chegaria ${meses} ${meses === 1 ? 'mês' : 'meses'} antes: ${nova} em vez de ${atual}.`,
+  verDetalhes: 'Toque numa categoria para ver a evolução e as transações.',
   impactoAviso: 'Projeção com o valor que você coloca por mês nas dívidas. O app organiza e projeta; a escolha é sua.',
+};
+
+// Detalhe de uma categoria de gasto (feedback do teste com conta real, Fase 7).
+export const gastoCategoria = {
+  voltar: '← Suas contas',
+  evolucao: 'Últimos 12 meses',
+  evolucaoAria: (cat: string) => `Gasto com ${cat} nos últimos 12 meses`,
+  periodo: 'Período',
+  personalizado: 'Escolher datas…',
+  de: 'De',
+  ate: 'Até',
+  subcategoria: 'Tipo de gasto',
+  todas: 'Todos',
+  subAviso: 'Os tipos vêm da classificação do banco e às vezes erram.',
+  totalPeriodo: (periodo: string) => `Total em ${periodo}`,
+  noPeriodo: 'no período escolhido',
+  semGastos: 'Nenhum gasto nesta categoria no período.',
+  verTodas: 'Ver em todas as transações',
 };
 
 // N5 (Fase 7): de onde vem o valor do plano — F-7.
@@ -1141,7 +1159,9 @@ export const pfm = {
   voltar: '← Suas contas',
   verContas: 'Ver minhas contas',
   semDividas: {
-    titulo: 'Nenhuma dívida nas contas conectadas',
-    texto: 'Nada para quitar por aqui. Acompanhe saldos, faturas e extrato em Contas.',
+    titulo: 'Parabéns: você não tem dívidas',
+    texto:
+      'Nas contas conectadas não aparece nenhuma dívida — nada para quitar. Se tiver um carnê ou uma dívida com alguém que não aparece aqui, dá para incluir.',
   },
+  toqueParaDetalhes: 'Toque numa conta ou cartão para ver os detalhes.',
 };

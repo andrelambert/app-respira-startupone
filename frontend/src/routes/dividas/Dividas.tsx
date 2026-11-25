@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { Link, useSearchParams } from 'react-router';
 
 import { LogoBanco } from '@/components/respira';
+import { SemDividas } from '@/components/respira/SemDividas';
 import {
   Badge,
   BarraProgresso,
@@ -15,7 +16,7 @@ import {
   Money,
   cx,
 } from '@/components/ui';
-import { chaves, useHoje, usePlanoAtivo } from '@/hooks/queries';
+import { chaves, useConsentimentos, useHoje, usePlanoAtivo } from '@/hooks/queries';
 import { api, type Divida, type PlanoAtivo } from '@/lib/api';
 import { conectar, divida as copyDivida, dividas as copy, modalidade } from '@/lib/copy';
 import { inicioDoMesMais, mesAno } from '@/lib/datas';
@@ -44,16 +45,18 @@ export default function Dividas() {
   // Abertas e quitadas: o filtro "Quitadas" (N4) usa as segundas.
   const dividas = useQuery({ queryKey: [...chaves.dividas, 'todas'], queryFn: () => api.dividas(true) });
   const plano = usePlanoAtivo();
+  const consentimentos = useConsentimentos();
   const hoje = useHoje();
   const [params, setParams] = useSearchParams();
   const filtros = lerFiltrosDividas(params);
   const aplicar = (f: FiltrosDividas) => setParams(escreverFiltrosDividas(f), { replace: true });
 
-  if (dividas.isLoading) return <Carregando />;
+  if (dividas.isLoading || consentimentos.isLoading) return <Carregando />;
   if (dividas.isError || !dividas.data) return <EstadoErro onTentar={() => void dividas.refetch()} />;
 
   const lista = dividas.data.filter((d) => d.saldo > 0);
   if (lista.length === 0 && filtros.situacao !== 'quitadas') {
+    if ((consentimentos.data ?? []).some((c) => c.status === 'ATIVO')) return <SemDividas />;
     return (
       <EstadoVazio
         titulo={copy.vazio.titulo}
@@ -90,6 +93,13 @@ export default function Dividas() {
         </p>
         <p className="mt-1 text-sm text-slate">
           {copy.resumo(lista.length, new Set(lista.map((d) => d.instituicao)).size, soma(lista.map((d) => d.parcela_minima)))}
+        </p>
+        <p className="mt-2 text-sm text-slate">
+          {copy.explicacao}
+          <Link to="/raiox" className="font-semibold text-blue underline">
+            {copy.explicacaoLink}
+          </Link>
+          .
         </p>
       </section>
 

@@ -11,6 +11,15 @@
   body {
     @apply bg-light font-sans text-ink antialiased;
   }
+  /* Tailwind 4 deixa o cursor padrão em botões; no computador, a mãozinha
+     avisa que dá para clicar (teste com conta real, Fase 7). */
+  button:not(:disabled),
+  [role='button']:not([aria-disabled='true']),
+  summary,
+  select,
+  label:has(> input[type='checkbox'], > input[type='radio']) {
+    cursor: pointer;
+  }
   :focus-visible {
     outline: 3px solid var(--color-blue);
     outline-offset: 2px;

@@ -6,7 +6,7 @@ from decimal import Decimal as D
 import pytest
 from fastapi.testclient import TestClient
 
-from app.domain.gastos import Gasto, candidata_a_corte, por_categoria
+from app.domain.gastos import Gasto, GastoDetalhado, candidata_a_corte, historico_categoria, por_categoria
 from app.main import app
 from tests.test_api import H
 
@@ -38,14 +38,19 @@ def test_mes_sem_dado_nao_entra_na_media():
     assert c.media_3m == D("300.00")
 
 
-def test_transferencias_ficam_de_fora_e_essencial_pela_maior_parte_do_valor():
+def test_transferencias_ficam_de_fora_e_selo_essencial_so_quando_tudo_e_essencial():
+    """Teste com conta real: "bebidas" e "loja de conveniência" levavam o selo de
+    essencial. Agora a categoria só leva o selo quando todo o gasto nela é essencial."""
     gastos = [
         g(OUT, "Transfers", "1000"),
-        g(OUT, "Home & Life", "1200", True),  # aluguel
-        g(OUT, "Home & Life", "100", False),
+        g(OUT, "Bills & Utilities", "150", True),
+        g(OUT, "Food & Groceries", "1200", True),  # mercado
+        g(OUT, "Food & Groceries", "100", False),  # bebida
     ]
-    cats = por_categoria(gastos, OUT, MESES)
-    assert [c.categoria for c in cats] == ["Home & Life"] and cats[0].essencial
+    cats = {c.categoria: c for c in por_categoria(gastos, OUT, MESES)}
+    assert set(cats) == {"Bills & Utilities", "Food & Groceries"}
+    assert cats["Bills & Utilities"].essencial and not cats["Food & Groceries"].essencial
+    assert cats["Food & Groceries"].nao_essencial == D("100.00")
 
 
 def test_candidata_e_a_nao_essencial_com_maior_excesso():
@@ -59,6 +64,35 @@ def test_candidata_e_a_nao_essencial_com_maior_excesso():
     assert candidata_a_corte(por_categoria([g(OUT, "Delivery", "100"), g(SET, "Delivery", "200")], OUT, {OUT, SET})) is None
 
 
+def test_candidata_olha_so_a_parte_nao_essencial_e_nunca_investimento():
+    gastos = [
+        # Alimentação: o mercado caiu, o delivery subiu 220 — é o delivery que conta.
+        g(OUT, "Food & Groceries", "1300", True), g(SET, "Food & Groceries", "1400", True),
+        g(OUT, "Food & Groceries", "430"), g(SET, "Food & Groceries", "210"),
+        # Investimento muito acima da média: dinheiro guardado não é corte.
+        g(OUT, "Investments & Savings", "10000"), g(SET, "Investments & Savings", "5000"),
+    ]
+    c = candidata_a_corte(por_categoria(gastos, OUT, {OUT, SET}))
+    assert c is not None and c.categoria == "Food & Groceries"
+    assert (c.nao_essencial, c.media_nao_essencial) == (D("430.00"), D("210.00"))
+    so_invest = [g(OUT, "Investments & Savings", "10000"), g(SET, "Investments & Savings", "5000")]
+    assert candidata_a_corte(por_categoria(so_invest, OUT, {OUT, SET})) is None
+
+
+def test_historico_da_categoria_por_mes_e_subcategoria():
+    meses = [AGO, SET, OUT]
+    gastos = [
+        GastoDetalhado(date(2026, 10, 3), "Delivery", D("30")),
+        GastoDetalhado(date(2026, 10, 9), "Groceries", D("200")),
+        GastoDetalhado(date(2026, 9, 9), "Groceries", D("150")),
+        GastoDetalhado(date(2026, 9, 10), None, D("5")),  # sem subcategoria: só no total
+        GastoDetalhado(date(2026, 7, 9), "Groceries", D("999")),  # fora da janela
+    ]
+    serie, subs = historico_categoria(gastos, meses)
+    assert serie == [(AGO, D("0.00")), (SET, D("155.00")), (OUT, D("230.00"))]
+    assert subs == [("Groceries", D("350.00")), ("Delivery", D("30.00"))]
+
+
 def test_api_gastos_e_impacto_no_plano(demo_limpa):
     api = demo_limpa
     r = api.get("/pfm/categorias")  # padrão: último mês completo, onde a demo tem o pico
@@ -68,7 +102,11 @@ def test_api_gastos_e_impacto_no_plano(demo_limpa):
     assert "Credits & Loans" not in nomes and "Transfers" not in nomes  # dívida e transferência fora
     assert D(v["total"]) == sum(D(c["total"]) for c in v["categorias"])
     imp = v["impacto_plano"]
-    assert imp["categoria"] == "Food & Groceries::Delivery" and imp["meses_antecipados"] >= 1  # subcategoria V2
+    # Categoria principal; o valor é só o excesso do delivery (não essencial), não do mercado.
+    assert imp["categoria"] == "Food & Groceries" and imp["meses_antecipados"] >= 1
+    assert D(imp["valor_mensal"]) == D("220.00")
+    alim = next(c for c in v["categorias"] if c["categoria"] == "Food & Groceries")
+    assert not alim["essencial"]  # mercado + delivery: não leva o selo
     assert imp["data_nova"] < imp["data_atual"]
     assert v["meses_disponiveis"] == sorted(v["meses_disponiveis"]) and len(v["meses_disponiveis"]) <= 12
 
@@ -81,9 +119,27 @@ def test_api_gastos_e_impacto_no_plano(demo_limpa):
         assert api.get("/pfm/categorias", params={"mes": invalido}).status_code == 422
 
 
+def test_api_historico_da_categoria(demo_limpa):
+    api = demo_limpa
+    r = api.get("/pfm/categorias/historico", params={"categoria": "Food & Groceries"})
+    assert r.status_code == 200
+    v = r.json()
+    assert len(v["meses"]) == 12 and [m["mes"] for m in v["meses"]] == sorted(m["mes"] for m in v["meses"])
+    subs = [s["subcategoria"] for s in v["subcategorias"]]
+    assert {"Groceries", "Delivery"} <= set(subs)
+    # Com um tipo de gasto escolhido, o gráfico segue o filtro; a lista de tipos não muda.
+    so = api.get("/pfm/categorias/historico", params={"categoria": "Food & Groceries", "subcategoria": "Delivery"}).json()
+    assert [s["subcategoria"] for s in so["subcategorias"]] == subs
+    assert all(D(a["total"]) <= D(b["total"]) for a, b in zip(so["meses"], v["meses"]))
+    assert any(D(a["total"]) < D(b["total"]) for a, b in zip(so["meses"], v["meses"]))
+    assert api.get("/pfm/categorias/historico", params={"categoria": "Food & Groceries", "meses": "13"}).status_code == 422
+    assert api.get("/pfm/categorias/historico").status_code == 422
+
+
 def test_gastos_exigem_login(api):
     api.cookies.clear()
     assert api.get("/pfm/categorias").status_code == 401
+    assert api.get("/pfm/categorias/historico", params={"categoria": "Food & Groceries"}).status_code == 401
 
 
 def test_fluxo_mensal_usa_a_base_da_capacidade():

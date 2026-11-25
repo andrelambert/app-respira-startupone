@@ -29,7 +29,7 @@ from app.domain.events import (
     detectar,
     resolvidos,
 )
-from app.domain.gastos import CATEGORIAS_FORA, chave_gasto
+from app.domain.gastos import CATEGORIAS_FORA, CATEGORIAS_SEM_CORTE, chave_gasto
 from app.domain.planner import adicionar_meses
 from app.models import (
     RECURSOS_ESSENCIAIS,
@@ -117,10 +117,17 @@ def detectar_e_registrar(
         (d.saldo for d in atuais if d.modalidade == "CHEQUE_ESPECIAL" and d.saldo > 0), Decimal(0)
     )
     desde = adicionar_meses(hoje.replace(day=1), -8)
+    # Pico de gasto só faz sentido para quem tem dívida ("esse valor pode ir para o
+    # plano") e só na parte que dá para cortar: sem o essencial e sem investimento.
+    tem_divida = any(d.saldo > 0 for d in atuais)
     gastos = [
-        GastoCategoria(t.data_mov, chave_gasto(t.categoria, t.subcategoria), -t.valor)
-        for t in repo_f.transacoes(s, usuario.id, desde)
-        if t.valor < 0 and t.categoria and not t.pagamento_divida and t.categoria not in CATEGORIAS_FORA
+        GastoCategoria(t.data_mov, chave_gasto(t.categoria), -t.valor)
+        for t in (repo_f.transacoes(s, usuario.id, desde) if tem_divida else [])
+        if t.valor < 0
+        and t.categoria
+        and not t.essencial
+        and not t.pagamento_divida
+        and t.categoria not in CATEGORIAS_FORA | CATEGORIAS_SEM_CORTE
     ]
     detectados = detectar(
         hoje=hoje,
