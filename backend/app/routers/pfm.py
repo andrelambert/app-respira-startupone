@@ -23,7 +23,10 @@ from app.schemas import (
     FaturaOut,
     FluxoMensalOut,
     FluxoMesOut,
+    GastoMesOut,
     GastosCategoriaOut,
+    GastoSubcategoriaOut,
+    HistoricoCategoriaOut,
     ImpactoPlanoOut,
     PagamentoFaturaOut,
     TodasTransacoesOut,
@@ -185,6 +188,8 @@ def todas_transacoes(
     valor_min: Annotated[Decimal | None, Query(ge=0, le=Decimal("1000000000"))] = None,
     valor_max: Annotated[Decimal | None, Query(ge=0, le=Decimal("1000000000"))] = None,
     so_divida: bool = False,
+    fluxo: Literal["renda", "gasto"] | None = None,
+    tipo_conta: Literal["CORRENTE", "CARTAO", "POUPANCA", "INVESTIMENTOS"] | None = None,
     ordem: Literal["recentes", "maior_valor"] = "recentes",
 ) -> TodasTransacoesOut:
     """Extrato unificado de todas as contas e cartões, com filtros (N1, F-1/F-2)."""
@@ -205,6 +210,8 @@ def todas_transacoes(
         valor_min=valor_min,
         valor_max=valor_max,
         so_divida=so_divida,
+        fluxo=fluxo,
+        tipo_conta=tipo_conta,
         ordem=ordem,
     )
     itens, total, entradas, saidas = repo.transacoes_filtradas(s, u.id, filtro, pagina=pagina, por_pagina=por_pagina)
@@ -274,6 +281,26 @@ def gastos_por_categoria(
         ],
         total=sum((c.total for c in cats), Decimal("0.00")),
         impacto_plano=ImpactoPlanoOut(**impacto.__dict__) if impacto else None,
+    )
+
+
+@router.get("/pfm/categorias/historico", response_model=HistoricoCategoriaOut)
+def historico_categoria(
+    u: UsuarioDep,
+    s: SessionDep,
+    categoria: Annotated[str, Query(min_length=1, max_length=80)],
+    meses: Annotated[int, Query(ge=3, le=12)] = 12,
+    subcategoria: Annotated[str | None, Query(max_length=80)] = None,
+) -> HistoricoCategoriaOut:
+    """Detalhe de uma categoria de gasto: evolução (da categoria ou de uma
+    subcategoria) e as subcategorias para filtrar."""
+    from app.services import analise
+
+    serie, subs = analise.historico_categoria(s, u, categoria, meses, subcategoria)
+    return HistoricoCategoriaOut(
+        categoria=categoria,
+        meses=[GastoMesOut(mes=m, total=v) for m, v in serie],
+        subcategorias=[GastoSubcategoriaOut(subcategoria=n, total=v) for n, v in subs],
     )
 
 

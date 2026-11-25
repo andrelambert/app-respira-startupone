@@ -186,3 +186,13 @@ def test_medianas_mensais_usam_seis_meses_completos_anteriores():
     med_e, med_s, n = medianas_mensais(movs, HOJE)
     assert (med_e, med_s, n) == (D("4800.00"), D("3800.00"), 6)
     assert capacidade_de_pagamento(med_e, med_s) == D("900.00")
+
+
+def test_renda_da_belvo_absurda_cai_nas_transacoes():
+    """Teste com conta real: INCOMES em R$ 23 com R$ 5 mil entrando por mês."""
+    from app.domain.planner import renda_plausivel
+
+    assert not renda_plausivel(D("23.00"), D("5000.00"), 6)
+    assert renda_plausivel(D("4800.00"), D("5000.00"), 6)
+    assert renda_plausivel(D("23.00"), D("5000.00"), 2)  # pouco histórico: não há base para duvidar
+    assert renda_plausivel(D("23.00"), D("0.00"), 6)

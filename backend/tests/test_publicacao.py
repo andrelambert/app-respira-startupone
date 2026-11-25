@@ -61,8 +61,10 @@ def _aguardar(c):
     import time
 
     for _ in range(200):
+        # O mesmo sinal da tela: a coleta dos bancos E o carnê manual, que a demo
+        # cadastra depois (só olhar os consentimentos deixava o teste intermitente).
         cs = [x for x in c.get("/consentimentos").json() if x["status"] == "ATIVO"]
-        if cs and all(x["coleta_concluida"] for x in cs):
+        if cs and all(x["coleta_concluida"] for x in cs) and not c.get("/raiox").json()["coleta_em_andamento"]:
             return
         time.sleep(0.05)
     raise AssertionError("coleta não concluiu")

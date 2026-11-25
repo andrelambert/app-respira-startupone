@@ -8,7 +8,17 @@ from typing import Any
 from sqlalchemy import func, or_
 from sqlmodel import Session, col, select
 
-from app.models import Consentimento, Conta, Direcao, Fatura, StatusConsentimento, Transacao
+from app.domain.gastos import CATEGORIAS_FORA
+from app.providers.mapping import CATEGORIA_INVESTIMENTO
+from app.models import Consentimento, Conta, Direcao, Fatura, StatusConsentimento, TipoConta, Transacao
+
+
+# Filtro por tipo de conta: a conta de pagamento (ex.: Nubank) é a "conta corrente" de quem a usa.
+TIPOS_DE_CONTA = {
+    "CORRENTE": (TipoConta.CORRENTE, TipoConta.PAGAMENTO),
+    "CARTAO": (TipoConta.CARTAO_CREDITO,),
+    "POUPANCA": (TipoConta.POUPANCA,),
+}
 
 
 def contas(session: Session, usuario_id: int, consentimento_id: int | None = None) -> list[Conta]:
@@ -116,6 +126,13 @@ class FiltroTransacoes:
     valor_min: Decimal | None = None  # sobre o valor absoluto
     valor_max: Decimal | None = None
     so_divida: bool = False
+    # "renda": as entradas que contam como renda; "gasto": as saídas que são gasto
+    # (sem pagamento de dívida, transferência nem aplicação). As mesmas regras do
+    # gráfico de entradas e saídas — tocar na barra mostra exatamente o que ela soma.
+    fluxo: str | None = None
+    # Tipo de conta (tela "Todas as transações"). "INVESTIMENTOS" não é um tipo de
+    # conta: são as aplicações e resgates que chegam pelas contas de depósito.
+    tipo_conta: str | None = None
     ordem: str = "recentes"  # "recentes" | "maior_valor"
 
 
@@ -137,6 +154,18 @@ def _condicoes(usuario_id: int, f: FiltroTransacoes) -> list[Any]:
         cond.append(or_(*alternativas))
     if f.so_divida:
         cond.append(Transacao.pagamento_divida == True)
+    if f.tipo_conta == "INVESTIMENTOS":
+        cond.append(or_(Transacao.reserva == True, Transacao.categoria == CATEGORIA_INVESTIMENTO))
+    elif f.tipo_conta in TIPOS_DE_CONTA:
+        ids = select(Conta.id).where(Conta.usuario_id == usuario_id, col(Conta.tipo).in_(TIPOS_DE_CONTA[f.tipo_conta]))
+        cond.append(col(Transacao.conta_id).in_(ids))
+    if f.fluxo == "renda":
+        cond.append(Transacao.entrada_renda == True)
+    elif f.fluxo == "gasto":
+        cond.append(Transacao.direcao == Direcao.SAIDA)
+        cond.append(Transacao.pagamento_divida == False)
+        cond.append(Transacao.reserva == False)
+        cond.append(or_(col(Transacao.categoria).is_(None), col(Transacao.categoria).not_in(sorted(CATEGORIAS_FORA))))
     if f.desde is not None:
         cond.append(col(Transacao.data_mov) >= f.desde)
     if f.ate is not None:

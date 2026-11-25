@@ -27,6 +27,7 @@ from app.domain.planner import (
     arredondar,
     capacidade_de_pagamento,
     medianas_mensais,
+    renda_plausivel,
 )
 from app.domain.xray import DividaXray, RaioX, raio_x, taxa_anual
 from app.models import (
@@ -77,6 +78,11 @@ def capacidade(s: Session, u: Usuario, hoje: date) -> Capacidade:
     entradas_tx, essenciais, meses = medianas_mensais(movs, hoje)
 
     rendas = [r.entradas_mediana for r in repo_f.rendas(s, u.id) if r.entradas_mediana is not None]
+    if rendas and not renda_plausivel(sum(rendas, Decimal(0)), entradas_tx, meses):
+        # Teste com conta real (Sicredi): a renda detectada pela Belvo veio em R$ 23
+        # com R$ 4–6 mil entrando por mês. Sem sanidade, o plano sairia absurdo.
+        log.warning("renda_incomes_descartada origem=TRANSACOES meses=%s", meses)
+        rendas = []
     if rendas:
         entradas, origem = sum(rendas, Decimal(0)), CapacidadeOrigem.INCOMES
     else:
@@ -511,7 +517,7 @@ def gastos_por_categoria(
     s: Session, u: Usuario, mes: date | None
 ) -> tuple[date, list[gastos_dom.CategoriaMes], ImpactoPlano | None, list[date]]:
     """N2: gasto do mês por categoria × média dos 3 anteriores, e quanto a
-    maior categoria não essencial acima da média anteciparia a data de saída.
+    parte não essencial que mais passou da média anteciparia a data de saída.
 
     Mês padrão: o último mês completo (o corrente ainda está pela metade e
     pareceria sempre abaixo da média).
@@ -524,12 +530,34 @@ def gastos_por_categoria(
     desde = adicionar_meses(mes, -gastos_dom.MESES_MEDIA)
     ate = adicionar_meses(mes, 1)
     gastos = [
-        gastos_dom.Gasto(t.data_mov, gastos_dom.chave_gasto(t.categoria, t.subcategoria), -t.valor, t.essencial)
+        gastos_dom.Gasto(t.data_mov, gastos_dom.chave_gasto(t.categoria), -t.valor, t.essencial)
         for t in todas
-        if t.valor < 0 and not t.pagamento_divida and desde <= t.data_mov < ate
+        if t.valor < 0 and not t.pagamento_divida and not t.reserva and desde <= t.data_mov < ate
     ]
     categorias = gastos_dom.por_categoria(gastos, mes, set(meses_com_dado))
     return mes, categorias, _impacto(s, u, gastos_dom.candidata_a_corte(categorias)), meses_com_dado
+
+
+def historico_categoria(
+    s: Session, u: Usuario, categoria: str, meses: int, subcategoria: str | None = None
+) -> tuple[list[tuple[date, Decimal]], list[tuple[str, Decimal]]]:
+    """Detalhe de uma categoria: os últimos ``meses`` meses (o atual incluso, pela
+    metade) e as subcategorias, com o mesmo critério de gasto do N2. Com
+    ``subcategoria``, a evolução é só dela; a lista de subcategorias segue completa."""
+    assert u.id is not None
+    hoje = hoje_do_usuario(u)
+    inicio = adicionar_meses(hoje.replace(day=1), -(meses - 1))
+    lista_meses = [adicionar_meses(inicio, i) for i in range(meses)]
+    gastos = [
+        gastos_dom.GastoDetalhado(t.data_mov, t.subcategoria, -t.valor)
+        for t in repo_f.transacoes(s, u.id, inicio)
+        if t.valor < 0 and not t.pagamento_divida and not t.reserva and gastos_dom.chave_gasto(t.categoria) == categoria
+        and t.data_mov <= hoje
+    ]
+    serie, subs = gastos_dom.historico_categoria(gastos, lista_meses)
+    if subcategoria:
+        serie, _ = gastos_dom.historico_categoria([g for g in gastos if g.subcategoria == subcategoria], lista_meses)
+    return serie, subs
 
 
 def fluxo_mensal(s: Session, u: Usuario, meses: int) -> tuple[list[gastos_dom.FluxoMes], Capacidade]:
@@ -539,7 +567,9 @@ def fluxo_mensal(s: Session, u: Usuario, meses: int) -> tuple[list[gastos_dom.Fl
     inicio = adicionar_meses(hoje.replace(day=1), -meses)
     lista_meses = [adicionar_meses(inicio, i) for i in range(meses)]
     movs = [
-        gastos_dom.Movimento(t.data_mov, t.valor, t.essencial, t.pagamento_divida, t.entrada_renda, t.categoria)
+        gastos_dom.Movimento(
+            t.data_mov, t.valor, t.essencial, t.pagamento_divida, t.entrada_renda, t.categoria, t.reserva
+        )
         for t in repo_f.transacoes(s, u.id, inicio)
     ]
     return gastos_dom.fluxo_mensal(movs, lista_meses), capacidade(s, u, hoje)
@@ -548,7 +578,7 @@ def fluxo_mensal(s: Session, u: Usuario, meses: int) -> tuple[list[gastos_dom.Fl
 def _impacto(s: Session, u: Usuario, cat: gastos_dom.CategoriaMes | None) -> ImpactoPlano | None:
     """Simula o plano com a capacidade atual e com ela + o excesso da categoria.
     Só devolve quando antecipa pelo menos 1 mês (parcimônia)."""
-    if cat is None or cat.media_3m is None:
+    if cat is None or cat.media_nao_essencial is None:
         return None
     assert u.id is not None
     hoje = hoje_do_usuario(u)
@@ -561,7 +591,7 @@ def _impacto(s: Session, u: Usuario, cat: gastos_dom.CategoriaMes | None) -> Imp
     else:
         cap, metodo = capacidade(s, u, hoje).valor, planner.metodo_pre_selecionado(u.ja_desistiu_de_plano)
     # Valor mensal em reais inteiros: é uma estimativa, não um centavo exato.
-    extra = arredondar(cat.total - cat.media_3m).to_integral_value()
+    extra = arredondar(gastos_dom.excesso_nao_essencial(cat)).to_integral_value()
     if cap <= 0 or extra <= 0:
         return None
     atual = planner.simular(entradas, cap, metodo, hoje)

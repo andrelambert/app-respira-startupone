@@ -1,9 +1,9 @@
 import { useQuery } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
-import { Link, Navigate, useNavigate, useSearchParams } from 'react-router';
+import { Navigate, useNavigate, useSearchParams } from 'react-router';
 
 import { LogoBanco, NaoMovimenta } from '@/components/respira';
-import { Button, Card, Carregando, Icone, LinkBotao } from '@/components/ui';
+import { Button, Card, Carregando, Icone } from '@/components/ui';
 import { useConfig, useConsentimentos, useUsuario } from '@/hooks/queries';
 import { api, ApiError } from '@/lib/api';
 import { abrirAbaVazia, ouvirConexao } from '@/lib/conexao';
@@ -144,17 +144,9 @@ function Fluxo({ demo }: { demo: boolean }) {
           {ativos.length ? conectar.ctaOutro : conectar.cta}
         </Button>
         <p className="text-center text-sm text-slate">{conectar.umPorVez}</p>
-        {ativos.length > 0 && (
-          <LinkBotao to="/raiox" variante="secundario" largo>
-            {conectar.seguir}
-          </LinkBotao>
-        )}
       </div>
-
-      {/* Sempre presente: o que não trafega pelo banco entra por cadastro assistido. */}
-      <Link to="/dividas/nova" className="min-h-toque text-center text-sm font-semibold text-blue underline">
-        {conectar.manual}
-      </Link>
+      {/* Esta tela só conecta banco (teste com conta real): o Raio-X está na barra de
+          baixo, e o carnê fora do banco entra por Dívidas e pelo Raio-X. */}
     </div>
   );
 }

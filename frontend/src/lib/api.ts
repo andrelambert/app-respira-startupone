@@ -398,6 +398,14 @@ const gastosCategoriaSchema = z.object({
 });
 export type GastosCategoria = z.infer<typeof gastosCategoriaSchema>;
 
+// Detalhe de uma categoria: evolução de 12 meses e as subcategorias para filtrar.
+const historicoCategoriaSchema = z.object({
+  categoria: z.string().max(80),
+  meses: z.array(z.object({ mes: data, total: dinheiro })).max(12),
+  subcategorias: z.array(z.object({ subcategoria: z.string().max(80), total: dinheiro })).max(100),
+});
+export type HistoricoCategoria = z.infer<typeof historicoCategoriaSchema>;
+
 // N5: de onde vem a capacidade do plano.
 const fluxoMensalSchema = z.object({
   meses: z
@@ -409,6 +417,7 @@ const fluxoMensalSchema = z.object({
         outros_gastos: dinheiro,
         pagamentos_divida: dinheiro,
         sobra: dinheiro,
+        reserva: dinheiro, // aplicações − resgates (aplicação automática): > 0 guardou
       }),
     )
     .max(12),
@@ -545,7 +554,12 @@ export const api = {
   },
   gastosCategoria: (mes?: string) =>
     chamar(`/pfm/categorias${mes ? `?mes=${mes}` : ''}`, gastosCategoriaSchema),
-  fluxoMensal: () => chamar('/pfm/fluxo-mensal?meses=6', fluxoMensalSchema),
+  fluxoMensal: (meses = 6) => chamar(`/pfm/fluxo-mensal?meses=${meses}`, fluxoMensalSchema),
+  historicoCategoria: (categoria: string, subcategoria?: string | null) =>
+    chamar(
+      `/pfm/categorias/historico?${new URLSearchParams({ categoria, ...(subcategoria ? { subcategoria } : {}) }).toString()}`,
+      historicoCategoriaSchema,
+    ),
   vencimentos: (dias: number) => chamar(`/vencimentos?dias=${dias}`, vencimentosSchema),
   categoriasTransacoes: () => chamar('/transacoes/categorias', z.array(z.string().max(80)).max(200)),
   dividas: (quitadas = false) => chamar(`/dividas${quitadas ? '?quitadas=true' : ''}`, z.array(dividaSchema)),

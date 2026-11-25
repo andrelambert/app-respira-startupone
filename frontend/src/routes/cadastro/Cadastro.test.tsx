@@ -45,6 +45,23 @@ describe('cadastro — validação inline', () => {
     expect(neutro(email)).toBe(true);
   });
 
+  it('confirmação de senha: vermelha enquanto difere, verde quando bate', async () => {
+    montar();
+    const u = userEvent.setup();
+    const senha = await waitFor(() => campo(/crie uma senha/i));
+    const confirmar = campo(/confirme a senha/i);
+    await u.type(senha, 'segredo123');
+    await u.type(confirmar, 'segredo12');
+    expect(vermelho(confirmar)).toBe(true);
+    expect(screen.getByText(/as duas senhas não são iguais/i)).toBeInTheDocument();
+    await u.type(confirmar, '3');
+    expect(verde(confirmar)).toBe(true);
+    // Mudou a senha depois: a confirmação volta a não bater.
+    await u.type(senha, '4');
+    await u.click(confirmar);
+    expect(vermelho(confirmar)).toBe(true);
+  });
+
   it('senha fica verde só com 8 caracteres, dizendo quantos faltam', async () => {
     montar();
     const u = userEvent.setup();

@@ -31,6 +31,7 @@ import {
 } from '@/hooks/queries';
 import { api, type PlanoAtivo } from '@/lib/api';
 import { ListaVencimentos } from '@/components/respira/ListaVencimentos';
+import { SemDividas } from '@/components/respira/SemDividas';
 import { fraseAcompanhamento, inicio as copy, pfm as copyPfm, raiox as copyRaioX, vencimentos as copyVencimentos } from '@/lib/copy';
 import { nomeMes } from '@/lib/datas';
 
@@ -61,11 +62,7 @@ export default function Inicio() {
       {plano.data ? (
         <ComPlano p={plano.data} />
       ) : visao.data && visao.data.bancos.length > 0 && visao.data.qtd_dividas === 0 ? (
-        <EstadoVazio
-          titulo={copyPfm.semDividas.titulo}
-          texto={copyPfm.semDividas.texto}
-          acao={<LinkBotao to="/contas">{copyPfm.verContas}</LinkBotao>}
-        />
+        <SemDividas />
       ) : (
         <EstadoVazio
           titulo={copy.semPlano.titulo}

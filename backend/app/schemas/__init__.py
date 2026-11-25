@@ -540,6 +540,24 @@ class GastosCategoriaOut(BaseModel):
     impacto_plano: ImpactoPlanoOut | None
 
 
+class GastoMesOut(BaseModel):
+    mes: date
+    total: Dinheiro
+
+
+class GastoSubcategoriaOut(BaseModel):
+    subcategoria: str  # nome da Belvo; a tela traduz
+    total: Dinheiro
+
+
+class HistoricoCategoriaOut(BaseModel):
+    """Detalhe de uma categoria: evolução mês a mês e as subcategorias para filtrar."""
+
+    categoria: str
+    meses: list[GastoMesOut]
+    subcategorias: list[GastoSubcategoriaOut]
+
+
 class FluxoMesOut(BaseModel):
     mes: date
     entradas: Dinheiro
@@ -547,6 +565,7 @@ class FluxoMesOut(BaseModel):
     outros_gastos: Dinheiro
     pagamentos_divida: Dinheiro
     sobra: Dinheiro
+    reserva: Dinheiro  # aplicações − resgates: > 0 guardou, < 0 usou da reserva
 
 
 class FluxoMensalOut(BaseModel):

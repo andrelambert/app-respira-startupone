@@ -49,8 +49,10 @@ function MenuConta() {
 }
 
 function Logo() {
+  // Logado, o logo leva ao Início; antes de entrar, à página inicial.
+  const { data: usuario } = useUsuario();
   return (
-    <Link to="/" className="flex min-h-toque items-center gap-2 font-bold text-navy" aria-label="Respira — início">
+    <Link to={usuario ? '/inicio' : '/'} className="flex min-h-toque items-center gap-2 font-bold text-navy" aria-label="Respira — início">
       <img src="/icon.svg" alt="" width={28} height={28} />
       {marca.nome}
     </Link>

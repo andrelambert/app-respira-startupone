@@ -10,8 +10,11 @@ Regras:
   vezes) e transferências (dinheiro que muda de conta, não gasto);
 - média dos 3 meses anteriores ao mês escolhido; mês sem nenhuma transação
   não entra (é falta de histórico, não gasto zero);
-- categoria é essencial quando a maior parte do valor é de transações
-  marcadas como essenciais (§7.7).
+- agrupa pela categoria principal da Belvo: as subcategorias erram demais
+  (teste com conta real, Fase 7) e só aparecem como filtro no detalhe;
+- a categoria leva o selo de essencial só quando todo o gasto nela é essencial
+  (§7.7); onde cortar olha só a parte não essencial — em Alimentação, o
+  delivery, não o mercado — e nunca investimento ou poupança.
 """
 
 from __future__ import annotations
@@ -25,16 +28,15 @@ from typing import Sequence
 from app.domain.planner import adicionar_meses, arredondar
 
 CATEGORIAS_FORA = {"Transfers"}
+# Dinheiro guardado não é gasto a cortar: nunca vira sugestão nem alerta de pico.
+CATEGORIAS_SEM_CORTE = {"Investments & Savings"}
 MESES_MEDIA = 3
 SEP = "::"
 
 
-def chave_gasto(categoria: str | None, subcategoria: str | None) -> str:
-    """Onde agrupar um gasto: a subcategoria da taxonomia V2 quando existe
-    ("Food & Groceries::Restaurants"), senão a categoria. Separa delivery de
-    mercado, que na mesma categoria esconderiam um do outro."""
-    cat = categoria or "Unknown"
-    return f"{cat}{SEP}{subcategoria}" if subcategoria else cat
+def chave_gasto(categoria: str | None) -> str:
+    """Onde agrupar um gasto: a categoria principal da taxonomia V2."""
+    return categoria or "Unknown"
 
 
 def categoria_da_chave(chave: str) -> str:
@@ -55,7 +57,9 @@ class CategoriaMes:
     total: Decimal
     media_3m: Decimal | None  # None: sem histórico suficiente
     variacao: Decimal | None  # fração: 0.38 = 38% acima da média
-    essencial: bool
+    essencial: bool  # todo o gasto da categoria é essencial
+    nao_essencial: Decimal  # parte não essencial no mês
+    media_nao_essencial: Decimal | None
 
 
 def por_categoria(gastos: Sequence[Gasto], mes: date, meses_com_dado: set[date]) -> list[CategoriaMes]:
@@ -64,22 +68,23 @@ def por_categoria(gastos: Sequence[Gasto], mes: date, meses_com_dado: set[date])
     anteriores = [adicionar_meses(mes, -i) for i in range(1, MESES_MEDIA + 1)]
     base = [m for m in anteriores if m in meses_com_dado]
     soma: dict[str, dict[date, Decimal]] = defaultdict(lambda: defaultdict(Decimal))
-    essencial_valor: dict[str, Decimal] = defaultdict(Decimal)
-    total_valor: dict[str, Decimal] = defaultdict(Decimal)
+    livre: dict[str, dict[date, Decimal]] = defaultdict(lambda: defaultdict(Decimal))  # não essencial
     for g in gastos:
         cat = g.categoria or "Unknown"
         if categoria_da_chave(cat) in CATEGORIAS_FORA:
             continue
         m = g.data.replace(day=1)
         soma[cat][m] += g.valor
-        total_valor[cat] += g.valor
-        if g.essencial:
-            essencial_valor[cat] += g.valor
+        if not g.essencial:
+            livre[cat][m] += g.valor
+
+    def media_de(por_mes: dict[date, Decimal]) -> Decimal | None:
+        return arredondar(sum((por_mes.get(m, Decimal(0)) for m in base), Decimal(0)) / len(base)) if base else None
 
     out = []
     for cat, por_mes in soma.items():
         total = arredondar(por_mes.get(mes, Decimal(0)))
-        media = arredondar(sum((por_mes.get(m, Decimal(0)) for m in base), Decimal(0)) / len(base)) if base else None
+        media = media_de(por_mes)
         if total == 0 and not media:
             continue
         variacao = ((total - media) / media).quantize(Decimal("0.01")) if media else None
@@ -89,7 +94,9 @@ def por_categoria(gastos: Sequence[Gasto], mes: date, meses_com_dado: set[date])
                 total=total,
                 media_3m=media,
                 variacao=variacao,
-                essencial=essencial_valor[cat] * 2 > total_valor[cat],
+                essencial=not livre[cat],
+                nao_essencial=arredondar(livre[cat].get(mes, Decimal(0))),
+                media_nao_essencial=media_de(livre[cat]),
             )
         )
     return sorted(out, key=lambda c: (-c.total, c.categoria))
@@ -103,6 +110,7 @@ class Movimento:
     pagamento_divida: bool
     entrada_renda: bool
     categoria: str | None
+    reserva: bool = False  # aplicação/resgate (sweep): nem renda nem gasto
 
 
 @dataclass(frozen=True)
@@ -117,6 +125,8 @@ class FluxoMes:
     # pagamento da fatura está na dívida — somar os dois contaria o mesmo
     # dinheiro duas vezes.
     sobra: Decimal
+    # Aplicações − resgates no mês: > 0 guardou, < 0 usou da reserva.
+    reserva: Decimal = Decimal("0.00")
 
 
 def fluxo_mensal(movimentos: Sequence[Movimento], meses: Sequence[date]) -> list[FluxoMes]:
@@ -127,7 +137,9 @@ def fluxo_mensal(movimentos: Sequence[Movimento], meses: Sequence[date]) -> list
         m = mv.data.replace(day=1)
         if m not in soma:
             continue
-        if mv.valor > 0:
+        if mv.reserva:
+            soma[m]["reserva"] += -mv.valor  # saída para a aplicação soma; resgate subtrai
+        elif mv.valor > 0:
             if mv.entrada_renda:
                 soma[m]["entradas"] += mv.valor
         elif mv.pagamento_divida:
@@ -140,11 +152,44 @@ def fluxo_mensal(movimentos: Sequence[Movimento], meses: Sequence[date]) -> list
     for m in meses:
         s = soma[m]
         e, ess, o, d = (arredondar(s[k]) for k in ("entradas", "essenciais", "outros", "divida"))
-        out.append(FluxoMes(m, e, ess, o, d, e - ess))
+        out.append(FluxoMes(m, e, ess, o, d, e - ess, arredondar(s["reserva"])))
     return out
 
 
+def excesso_nao_essencial(c: CategoriaMes) -> Decimal:
+    """Quanto a parte não essencial passou da própria média (0 se não passou)."""
+    if c.media_nao_essencial is None or c.categoria in CATEGORIAS_SEM_CORTE:
+        return Decimal(0)
+    return max(c.nao_essencial - c.media_nao_essencial, Decimal(0))
+
+
 def candidata_a_corte(categorias: Sequence[CategoriaMes]) -> CategoriaMes | None:
-    """A maior categoria NÃO essencial acima da média: é onde cortar dói menos."""
-    acima = [c for c in categorias if not c.essencial and c.media_3m is not None and c.total > c.media_3m]
-    return max(acima, key=lambda c: (c.total - (c.media_3m or 0), c.categoria), default=None)
+    """A categoria cuja parte NÃO essencial mais passou da média: é onde cortar dói menos."""
+    acima = [c for c in categorias if excesso_nao_essencial(c) > 0]
+    return max(acima, key=lambda c: (excesso_nao_essencial(c), c.categoria), default=None)
+
+
+@dataclass(frozen=True)
+class GastoDetalhado:
+    data: date
+    subcategoria: str | None
+    valor: Decimal  # positivo
+
+
+def historico_categoria(
+    gastos: Sequence[GastoDetalhado], meses: Sequence[date]
+) -> tuple[list[tuple[date, Decimal]], list[tuple[str, Decimal]]]:
+    """Detalhe de uma categoria: total por mês (para o gráfico de evolução) e
+    total por subcategoria no período (para o filtro), da maior para a menor."""
+    por_mes: dict[date, Decimal] = {m: Decimal(0) for m in meses}
+    por_sub: dict[str, Decimal] = defaultdict(Decimal)
+    for g in gastos:
+        m = g.data.replace(day=1)
+        if m not in por_mes:
+            continue
+        por_mes[m] += g.valor
+        if g.subcategoria:
+            por_sub[g.subcategoria] += g.valor
+    serie = [(m, arredondar(por_mes[m])) for m in meses]
+    subs = sorted(((s, arredondar(v)) for s, v in por_sub.items()), key=lambda x: (-x[1], x[0]))
+    return serie, subs

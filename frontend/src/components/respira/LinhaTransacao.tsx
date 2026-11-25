@@ -2,7 +2,7 @@ import { useState } from 'react';
 
 import { cx } from '@/components/ui';
 import type { Transacao } from '@/lib/api';
-import { categoriaNome, chaveGasto, nomeFatura, nomeGasto, pfm as copy, subcategoriaNome } from '@/lib/copy';
+import { categoriaNome, nomeFatura, pfm as copy, subcategoriaNome } from '@/lib/copy';
 import { dataCompleta, dataHoraLocal, diaMesComAno } from '@/lib/datas';
 import { brl } from '@/lib/money';
 
@@ -40,7 +40,7 @@ export function LinhaTransacao({
             {/* A parcela antes da categoria: o nome da categoria pode ser longo e cortar o resto. */}
             {parcela ? ` · ${copy.parcelaCurta(t.parcela_numero!, t.parcelas_total!)}` : ''}
             {' · '}
-            {t.categoria ? nomeGasto(chaveGasto(t.categoria, t.subcategoria)) : copy.semCategoria}
+            {t.categoria ? categoriaNome(t.categoria) : copy.semCategoria}
             {banco?.nome ? ` · ${banco.nome}` : ''}
           </p>
         </div>

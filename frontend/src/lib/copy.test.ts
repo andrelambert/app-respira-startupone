@@ -4,7 +4,6 @@ import type { Evento } from './api';
 import {
   alertaMinimo,
   categoriaNome,
-  chaveGasto,
   erroConexao,
   fraseAcompanhamento,
   fraseComparacao,
@@ -174,9 +173,10 @@ describe('rótulos da Belvo em pt-BR (A6)', () => {
     expect(subcategoriaNome('Bills & Utilities', 'Rent')).toBe('Aluguel');
     expect(subcategoriaNome('Income & Payments', 'Rent')).toBe('Aluguel recebido');
     expect(subcategoriaNome('Food & Groceries', 'Nova')).toBeNull();
-    expect(nomeGasto(chaveGasto('Food & Groceries', 'Delivery'))).toBe('Delivery');
-    expect(nomeGasto(chaveGasto('Food & Groceries', null))).toBe('Alimentação');
-    expect(nomeGasto('Food & Groceries::Desconhecida')).toBe('Alimentação');
+    // O app mostra a categoria principal; chaves antigas "Cat::Sub" caem nela.
+    expect(nomeGasto('Food & Groceries')).toBe('Alimentação');
+    expect(nomeGasto('Food & Groceries::Delivery')).toBe('Alimentação');
+    expect(categoriaNome('Investments & Savings')).toBe('Investimentos');
   });
 
   it('tipos de produto e nome de fatura', () => {

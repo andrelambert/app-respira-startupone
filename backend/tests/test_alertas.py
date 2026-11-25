@@ -94,12 +94,19 @@ def test_atraso_confirmado_sai_quando_o_atraso_zera():
 
 
 def test_pico_sai_quando_fecha_outro_mes_e_cheque_quando_zera():
-    pico = EventoPendente(12, "PICO_CATEGORIA", None, {"categoria": "Delivery", "mes": "2026-10-01"})
-    assert _resolve(date(2026, 11, 20), pico, []) == []
-    assert _resolve(date(2026, 12, 2), pico, []) == [12]
+    pico = EventoPendente(12, "PICO_CATEGORIA", None, {"categoria": "Food & Groceries", "mes": "2026-10-01"})
+    assert _resolve(date(2026, 11, 20), pico, [_divida()]) == []
+    assert _resolve(date(2026, 12, 2), pico, [_divida()]) == [12]
     ce = EventoPendente(13, "CHEQUE_ESPECIAL", 3, {})
     assert _resolve(date(2026, 11, 20), ce, [], usado=D("500.00")) == []
     assert _resolve(date(2026, 11, 20), ce, [], usado=D(0)) == [13]
+
+
+def test_pico_sai_quando_nao_ha_mais_divida():
+    """Sem dívida, "esse valor pode ir para o plano" não faz sentido (teste com conta real)."""
+    pico = EventoPendente(15, "PICO_CATEGORIA", None, {"categoria": "Food & Groceries", "mes": "2026-10-01"})
+    assert _resolve(date(2026, 11, 20), pico, []) == [15]
+    assert _resolve(date(2026, 11, 20), pico, [_divida(saldo=D(0))]) == [15]
 
 
 def test_marco_de_quitacao_nunca_sai():

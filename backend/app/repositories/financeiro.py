@@ -224,6 +224,7 @@ def upsert_transacoes(
         t.essencial = m.essencial
         t.pagamento_divida = m.pagamento_divida
         t.entrada_renda = m.conta_como_renda
+        t.reserva = m.reserva
         t.data_compra = m.data_compra
         t.parcela_numero = m.parcela_numero
         t.parcelas_total = m.parcelas_total

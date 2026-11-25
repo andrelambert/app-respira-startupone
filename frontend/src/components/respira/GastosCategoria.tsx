@@ -8,15 +8,9 @@ import { gastos as copy, nomeGasto } from '@/lib/copy';
 import { mesAno } from '@/lib/datas';
 import { escreverFiltros, FILTROS_VAZIOS } from '@/lib/filtrosTransacoes';
 import { brl, type Centavos } from '@/lib/money';
+import { fimDoMes, linkCategoria } from '@/lib/periodoCategoria';
 
-/** Último dia do mês de uma data ISO "yyyy-mm-01". */
-function fimDoMes(iso: string): string {
-  const [a, m] = iso.split('-').map(Number) as [number, number];
-  const ultimo = new Date(Date.UTC(a, m, 0)).getUTCDate();
-  return `${iso.slice(0, 8)}${String(ultimo).padStart(2, '0')}`;
-}
-
-/** Link para "Todas as transações" já filtrado na categoria e no mês (N2 → N1). */
+/** Link para "Todas as transações" já filtrado na categoria e no mês (detalhe da categoria → N1). */
 export function linkTransacoes(categoria: string, mes: string): string {
   const p = escreverFiltros({
     ...FILTROS_VAZIOS,
@@ -66,6 +60,7 @@ export function GastosCategoria() {
         </label>
       </div>
       <p className="text-sm text-slate">{copy.subtitulo(mesAno(d.mes))}</p>
+      {d.categorias.length > 0 && <p className="text-xs text-slate">{copy.verDetalhes}</p>}
 
       {imp && (
         <Card tom="plano" className="flex flex-col gap-1">
@@ -93,7 +88,7 @@ export function GastosCategoria() {
             return (
               <li key={c.categoria}>
                 <Link
-                  to={linkTransacoes(c.categoria, d.mes)}
+                  to={linkCategoria(c.categoria, d.mes)}
                   aria-label={`${nome}: ${brl(c.total)}${c.media_3m !== null ? `, ${copy.media(brl(c.media_3m))}` : ''}${acima ? `, ${copy.acimaDaMedia(pct)}` : ''}. ${copy.verTransacoes(nome)}`}
                   className="flex flex-col gap-1 rounded-xl px-2 py-2 hover:bg-light"
                 >

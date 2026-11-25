@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { chips, escreverFiltros, FILTROS_VAZIOS, intervalo, lerFiltros, paraApi, valorDecimal } from './filtrosTransacoes';
+import { alternarDirecao, chips, escreverFiltros, FILTROS_VAZIOS, intervalo, lerFiltros, paraApi, valorDecimal } from './filtrosTransacoes';
 
 const url = (q: string) => new URLSearchParams(q);
 
@@ -58,14 +58,40 @@ describe('filtros de "Todas as transações" na URL (N1)', () => {
   });
 
   it('um chip por filtro, e remover tira só aquele', () => {
-    const f = { ...FILTROS_VAZIOS, contas: [1, 2], soDivida: true, busca: 'pix' };
+    const f = { ...FILTROS_VAZIOS, contas: [1, 2], soDivida: true, busca: 'pix', fluxo: 'renda' as const };
     const nomes = {
       periodo: () => 'p', conta: (id: number) => `conta ${id}`, categoria: (c: string) => c,
-      direcao: (d: string) => d, valor: () => 'v', soDivida: 'só dívida', busca: (b: string) => `"${b}"`,
+      direcao: (d: string) => d, valor: () => 'v', soDivida: 'só dívida', fluxo: (x: string) => `só ${x}`,
+      busca: (b: string) => `"${b}"`,
     };
     const lista = chips(f, nomes);
-    expect(lista.map((c) => c.rotulo)).toEqual(['conta 1', 'conta 2', '"pix"', 'só dívida']);
+    expect(lista.map((c) => c.rotulo)).toEqual(['conta 1', 'conta 2', '"pix"', 'só dívida', 'só renda']);
     expect(lista[0]!.remover(f).contas).toEqual([2]);
     expect(lista[3]!.remover(f).soDivida).toBe(false);
+    expect(lista[4]!.remover(f).fluxo).toBeNull();
+  });
+
+  it('o fluxo (renda/gasto) vai e volta pela URL e chega à API', () => {
+    const f = { ...FILTROS_VAZIOS, fluxo: 'gasto' as const, direcao: 'SAIDA' as const };
+    const p = escreverFiltros(f);
+    expect(p.get('fluxo')).toBe('gasto');
+    expect(lerFiltros(p).fluxo).toBe('gasto');
+    expect(lerFiltros(new URLSearchParams('fluxo=x')).fluxo).toBeNull();
+    expect(paraApi(f, '2026-11-23').fluxo).toBe('gasto');
+  });
+
+  it('tipo de conta vai e volta pela URL e chega à API', () => {
+    const f = { ...FILTROS_VAZIOS, tipoConta: 'INVESTIMENTOS' as const };
+    const p = escreverFiltros(f);
+    expect(p.get('conta_tipo')).toBe('INVESTIMENTOS');
+    expect(lerFiltros(p).tipoConta).toBe('INVESTIMENTOS');
+    expect(lerFiltros(new URLSearchParams('conta_tipo=CORRETORA')).tipoConta).toBeNull();
+    expect(paraApi(f, '2026-11-23').tipo_conta).toBe('INVESTIMENTOS');
+  });
+
+  it('Entradas e Saídas: as duas ligadas por padrão, nunca as duas desligadas', () => {
+    expect(alternarDirecao(null, 'ENTRADA')).toBe('SAIDA'); // desligou Entradas
+    expect(alternarDirecao('SAIDA', 'SAIDA')).toBe('SAIDA'); // é a única ligada: continua
+    expect(alternarDirecao('SAIDA', 'ENTRADA')).toBeNull(); // religou: as duas
   });
 });

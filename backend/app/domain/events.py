@@ -199,7 +199,9 @@ def contexto_cheque_especial(usado: Decimal, taxa_mes: Decimal | None) -> dict[s
 
 
 def _picos(hoje: date, gastos: Sequence[GastoCategoria]) -> list[EventoDetectado]:
-    """PICO_CATEGORIA: último mês completo > 1,5 × mediana dos 6 meses anteriores."""
+    """PICO_CATEGORIA: último mês completo > 1,5 × mediana dos 6 meses anteriores.
+
+    Quem chama passa só o gasto não essencial, agrupado pela categoria principal."""
     alvo = adicionar_meses(hoje.replace(day=1), -1)
     anteriores = [adicionar_meses(alvo, -i) for i in range(1, 7)]
     por_mes: dict[str, dict[date, Decimal]] = defaultdict(lambda: defaultdict(Decimal))
@@ -291,8 +293,11 @@ def resolvidos(
             sai = usado_cheque_especial <= 0
         elif p.tipo == "PICO_CATEGORIA":
             # O pico é de um mês fechado; quando outro mês fecha, ele perde o sentido.
+            # Sem dívida, não há plano para onde o dinheiro ir.
             mes = p.contexto.get("mes")
-            sai = mes is not None and date.fromisoformat(mes) < ultimo_mes_completo
+            sai = (mes is not None and date.fromisoformat(mes) < ultimo_mes_completo) or not any(
+                x.saldo > 0 for x in dividas
+            )
         else:
             sai = False  # DIVIDA_QUITADA é marco; DESVIO_PLANO sai por substituição
         if sai:

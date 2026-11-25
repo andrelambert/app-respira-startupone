@@ -7,6 +7,7 @@ import {
   Button,
   Card,
   Carregando,
+  Chip,
   EstadoErro,
   EstadoVazio,
   Icone,
@@ -16,6 +17,7 @@ import {
 } from '@/components/ui';
 import { LogoBanco } from '@/components/respira';
 import { FluxoMensal } from '@/components/respira/FluxoMensal';
+import { EntradasSaidas } from '@/components/respira/EntradasSaidas';
 import { GastosCategoria } from '@/components/respira/GastosCategoria';
 import { chavesFinanceiras, useHoje, useVisaoGeral } from '@/hooks/queries';
 import { api, type Banco, type ContaBancaria } from '@/lib/api';
@@ -89,37 +91,26 @@ export default function Contas() {
         </Card>
       </div>
 
+      {/* Primeiro o que está conectado (teste com conta real): contas e cartões. */}
+      <p className="-mb-2 text-xs text-slate">{copy.toqueParaDetalhes}</p>
+      {bancos.map((b) => (
+        <SecaoBanco key={b.consentimento_id} banco={b} />
+      ))}
+
       {/* N1: extrato unificado, com filtros. */}
       <LinkBotao to="/transacoes" variante="secundario">
         {copyTransacoes.verTodas}
       </LinkBotao>
+
+      {/* Entradas e saídas, mês a mês: tocar na barra abre as transações daquele mês. */}
+      <EntradasSaidas />
 
       {/* N2: para onde foi o dinheiro, ligado ao plano. */}
       <GastosCategoria />
 
       {/* N5: de onde vem o valor do plano. */}
       <FluxoMensal id="fluxo-mensal" />
-
-      {bancos.map((b) => (
-        <SecaoBanco key={b.consentimento_id} banco={b} />
-      ))}
     </div>
-  );
-}
-
-function Chip({ ativo, onClick, children }: { ativo: boolean; onClick: () => void; children: React.ReactNode }) {
-  return (
-    <button
-      type="button"
-      aria-pressed={ativo}
-      onClick={onClick}
-      className={cx(
-        'inline-flex min-h-toque shrink-0 items-center gap-2 rounded-full border px-4 text-sm font-semibold',
-        ativo ? 'border-navy bg-navy text-white' : 'border-line bg-white text-navy',
-      )}
-    >
-      {children}
-    </button>
   );
 }
 
