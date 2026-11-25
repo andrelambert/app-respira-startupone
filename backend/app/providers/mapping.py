@@ -19,8 +19,10 @@ v1.223.0, ``AccountOpenFinanceBrazil``, ``TransactionOpenFinanceBrazil``,
 
 from __future__ import annotations
 
+import calendar
 import logging
 import re
+from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import date, datetime, timezone
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
@@ -93,6 +95,8 @@ CATEGORIAS_CONTA_SEM_RENDA = frozenset(
 # descrição vistos em conta real; a categoria de investimento é a rede de segurança
 # para outros bancos.
 OPERACAO_RESGATE = "RESGATE_APLIC_FINANCEIRA"
+# Pagamento da fatura, visto do lado do cartão (entra no cartão o que saiu da conta).
+OPERACAO_PAGAMENTO_FATURA = "PAGAMENTO_FATURA"
 PREFIXOS_APLICACAO = ("APLICACAO", "APLIC AUT", "APLIC.")
 PREFIXOS_RESGATE = ("RESG", "RES APLIC", "RESGATE")
 CATEGORIA_INVESTIMENTO = "Investments & Savings"
@@ -208,6 +212,7 @@ class TransacaoMapeada:
     data_compra: date | None = None
     parcela_numero: int | None = None
     parcelas_total: int | None = None
+    lancamento: date | None = None  # accounting_date bruto (só para distribuir as parcelas)
 
 
 @dataclass
@@ -825,6 +830,7 @@ def mapear_transacoes(transacoes: Iterable[Json]) -> list[TransacaoMapeada]:
         # transacted_at) e cada uma tem o seu accounting_date — o mês em que cai.
         # Conta corrente não manda accounting_date.
         data_compra = None
+        data_original = data_mov
         e_cartao = isinstance(cartao, dict) or categoria_conta == "CREDIT_CARD"
         lancamento = _data(t.get("accounting_date")) if e_cartao else None
         if lancamento is not None and data_mov is not None and lancamento != data_mov:
@@ -882,12 +888,81 @@ def mapear_transacoes(transacoes: Iterable[Json]) -> list[TransacaoMapeada]:
                 fatura_nome=(str(cartao.get("bill_name") or "").strip()[:60] or None)
                 if isinstance(cartao, dict)
                 else None,
-                data_compra=data_compra,
-                parcela_numero=_inteiro(cartao.get("installment_identifier")) if parcelado and isinstance(cartao, dict) else None,
+                data_compra=data_compra or (data_original if parcelado else None),
+                parcela_numero=numero_parcela(cartao.get("installment_identifier"), descricao, total_parcelas)
+                if parcelado and isinstance(cartao, dict) and total_parcelas
+                else None,
                 parcelas_total=total_parcelas if parcelado else None,
+                lancamento=lancamento if parcelado else None,
             )
         )
-    return saida
+    return distribuir_parcelas(saida)
+
+
+# Parcela no texto: "3/12", "03 de 12", "PARCELA 3/12".
+_N_DE_M = re.compile(r"(\d{1,3})\s*(?:/|de)\s*(\d{1,3})", re.IGNORECASE)
+_SUFIXO_PARCELA = re.compile(r"\s*-?\s*(?:parcela\s*)?\d{1,3}\s*(?:/|de)\s*\d{1,3}\s*$", re.IGNORECASE)
+
+
+def numero_parcela(identificador: Any, descricao: str, total: int) -> int | None:
+    """Qual parcela é esta (1..total). A Belvo não tem um campo numérico para isso:
+    ``installment_identifier`` é "um identificador, segundo a instituição" (a doc
+    mostra "PARCELA_896"). Vale um número, "3/12", "PARCELA_3" ou o "3/12" da
+    descrição — e só se couber em 1..total (um id como 896 não passa)."""
+
+    def ok(n: int) -> int | None:
+        return n if 1 <= n <= total else None
+
+    s = str(identificador if identificador is not None else "").strip()
+    if s.isdigit():
+        return ok(int(s))
+    for texto in (s, descricao or ""):
+        m = _N_DE_M.search(texto)
+        if m and int(m.group(2)) == total:
+            return ok(int(m.group(1)))
+    m = re.search(r"parcela\D{0,3}(\d{1,3})$", s, re.IGNORECASE)
+    return ok(int(m.group(1))) if m else None
+
+
+def _mais_meses(d: date, meses: int) -> date:
+    total = d.month - 1 + meses
+    ano, mes = d.year + total // 12, total % 12 + 1
+    return date(ano, mes, min(d.day, calendar.monthrange(ano, mes)[1]))
+
+
+def distribuir_parcelas(itens: list[TransacaoMapeada]) -> list[TransacaoMapeada]:
+    """Cada parcela de uma compra no cartão no mês em que cai.
+
+    O normal é o ``accounting_date`` de cada parcela já ser o mês dela. Teste com
+    conta Nubank real: as 12 parcelas de uma compra chegaram juntas, no mesmo mês
+    — somadas como gasto de um mês só. Quando as parcelas de uma mesma compra
+    (mesma conta, loja, valor, data e número de parcelas) não têm datas
+    distintas, a parcela N vai para N−1 meses depois da primeira data. O número
+    vem da instituição ou, se faltar, da ordem do id (as parcelas têm o mesmo
+    valor, então a ordem não muda nenhuma soma)."""
+    grupos: dict[tuple[Any, ...], list[TransacaoMapeada]] = defaultdict(list)
+    for t in itens:
+        if t.parcelas_total and t.data_compra:
+            chave = (t.conta_id_externo, _SUFIXO_PARCELA.sub("", t.descricao).strip().upper(), t.valor, t.data_compra, t.parcelas_total)
+            grupos[chave].append(t)
+    for membros in grupos.values():
+        datas = [t.lancamento for t in membros]
+        sozinha = len(membros) == 1
+        if None not in datas and len(set(datas)) == len(membros) and (not sozinha or datas[0] != membros[0].data_compra):
+            continue  # cada parcela já tem o seu mês
+        total = membros[0].parcelas_total or 0
+        numeros = [t.parcela_numero for t in membros]
+        unicos = {n for n in numeros if n is not None and numeros.count(n) == 1}
+        livres = iter(n for n in range(1, total + 1) if n not in unicos)
+        for t in sorted(membros, key=lambda x: x.id_externo):
+            if t.parcela_numero not in unicos:
+                t.parcela_numero = next(livres, None)
+        base = min((d for d in datas if d is not None), default=membros[0].data_compra)
+        assert base is not None
+        for t in membros:
+            if t.parcela_numero is not None:
+                t.data_mov = _mais_meses(base, t.parcela_numero - 1)
+    return itens
 
 
 # --- enriquecimento (add-ons, §7.8) -------------------------------------------

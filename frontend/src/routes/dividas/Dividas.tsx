@@ -127,7 +127,7 @@ export default function Dividas() {
               <h2 className="min-w-0 flex-1 truncate font-semibold text-navy">{g.credor}</h2>
               <Money valor={g.total} semCentavos className="shrink-0 font-semibold text-navy" />
             </div>
-            <ul className="flex flex-col gap-3">
+            <ul className="grid gap-3 md:grid-cols-2">
               {g.dividas.map((d) => (
                 <CartaoDivida key={d.id} d={d} plano={p} />
               ))}
@@ -135,7 +135,7 @@ export default function Dividas() {
           </section>
         ))
       ) : (
-        <ul className="flex flex-col gap-3" aria-label={copy.ordens[ordem]}>
+        <ul className="grid gap-3 md:grid-cols-2" aria-label={copy.ordens[ordem]}>
           {filtradas.map((d) => (
             <CartaoDivida key={d.id} d={d} plano={p} mostrarBanco />
           ))}

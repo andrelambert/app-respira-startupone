@@ -10,6 +10,7 @@ from app.providers import fixture
 from app.providers.mapping import (
     mapear_contas,
     mapear_transacoes,
+    numero_parcela,
     modalidade_de_cartao,
     modalidade_de_emprestimo,
     normalizar_taxa,
@@ -491,3 +492,56 @@ def test_essencial_pela_subcategoria_v2():
     assert not essencial("Online Platforms & Leisure", "Movie & Video")
     assert essencial("Food & Groceries", None)  # sem subcategoria: vale a categoria
     assert not essencial(None, None)
+
+
+
+def _parcela(id_, descricao, ident, *, lancamento="2026-10-15", compra="2026-10-03T15:00:00Z", total=12):
+    return {
+        "id": id_, "type": "OUTFLOW", "amount": "49.90", "description": descricao, "status": "BOOKED",
+        "transacted_at": compra, "value_date": compra[:10], "accounting_date": lancamento,
+        "category": "Food & Groceries", "account": {"id": "cartao", "category": "CREDIT_CARD"},
+        "credit_card_data": {"installment_identifier": ident, "number_of_installments": total, "card_number": "1234"},
+    }
+
+
+def test_parcelas_com_a_mesma_data_vao_cada_uma_para_o_seu_mes():
+    """Teste com conta Nubank real: as 12 parcelas da Evino chegaram com a mesma
+    data e entravam todas em outubro. Cada uma vai para o seu mês."""
+    ts = mapear_transacoes([_parcela(f"ev{i:02d}", f"EVINO {i}/12", f"PARCELA_{900 + i}") for i in range(12, 0, -1)])
+    por_parcela = {t.parcela_numero: t for t in ts}
+    assert sorted(por_parcela) == list(range(1, 13))  # o número veio da descrição ("3/12")
+    assert por_parcela[1].data_mov == date(2026, 10, 15) and por_parcela[3].data_mov == date(2026, 12, 15)
+    assert por_parcela[12].data_mov == date(2027, 9, 15)
+    assert {t.data_compra for t in ts} == {date(2026, 10, 3)}
+    assert len({(t.data_mov.year, t.data_mov.month) for t in ts}) == 12  # uma por mês
+
+
+def test_parcelas_sem_numero_algum_usam_a_ordem_e_somam_igual():
+    ts = mapear_transacoes([_parcela(f"x{i}", "LOJA", None, total=3) for i in range(3)])
+    assert sorted((t.parcela_numero, t.data_mov.month) for t in ts) == [(1, 10), (2, 11), (3, 12)]
+
+
+def test_parcelas_com_datas_proprias_nao_mudam():
+    ts = mapear_transacoes([
+        _parcela("a", "LOJA", "1", lancamento="2026-10-15", total=2),
+        _parcela("b", "LOJA", "2", lancamento="2026-11-15", total=2),
+    ])
+    assert sorted(t.data_mov for t in ts) == [date(2026, 10, 15), date(2026, 11, 15)]
+
+
+@pytest.mark.parametrize(
+    ("ident", "descricao", "total", "esperado"),
+    [
+        ("3", "LOJA", 12, 3),
+        (3, "LOJA", 12, 3),
+        ("03/12", "LOJA", 12, 3),
+        ("PARCELA_3", "LOJA", 12, 3),
+        ("PARCELA_896", "LOJA", 12, None),  # id da instituição, não o número da parcela
+        (None, "EVINO 3/12", 12, 3),
+        (None, "EVINO 3 DE 12", 12, 3),
+        (None, "EVINO 3/10", 12, None),  # o total do texto não bate
+        ("13", "LOJA", 12, None),
+    ],
+)
+def test_numero_da_parcela(ident, descricao, total, esperado):
+    assert numero_parcela(ident, descricao, total) == esperado

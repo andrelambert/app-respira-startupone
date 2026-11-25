@@ -28,7 +28,7 @@ describe('entradas e saídas (Contas)', () => {
       desde: '2026-02-01',
       ate: '2026-02-28',
       direcao: 'ENTRADA',
-      fluxo: 'renda',
+      fluxo: null, // entradas: todas as do mês, sem "só renda"
       contas: [3, 7],
     });
     const saidas = lerFiltros(new URLSearchParams(linkDaBarra('2026-10-01', 'saidas', []).split('?')[1]));

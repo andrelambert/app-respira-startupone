@@ -24,6 +24,7 @@ export function LinhaTransacao({
   const abs = Math.abs(t.valor) as typeof t.valor;
   const valor = `${entrada ? '+' : '−'}${brl(abs)}`;
   const parcela = Boolean(t.parcela_numero && t.parcelas_total);
+  const parcelada = Boolean(t.parcelas_total && t.parcelas_total > 1);
   return (
     <li>
       <button
@@ -38,7 +39,11 @@ export function LinhaTransacao({
           <p className="truncate text-xs text-slate">
             {diaMesComAno(t.data)}
             {/* A parcela antes da categoria: o nome da categoria pode ser longo e cortar o resto. */}
-            {parcela ? ` · ${copy.parcelaCurta(t.parcela_numero!, t.parcelas_total!)}` : ''}
+            {parcela
+              ? ` · ${copy.parcelaCurta(t.parcela_numero!, t.parcelas_total!)}`
+              : parcelada
+                ? ` · ${copy.parceladoEm(t.parcelas_total!)}`
+                : ''}
             {' · '}
             {t.categoria ? categoriaNome(t.categoria) : copy.semCategoria}
             {banco?.nome ? ` · ${banco.nome}` : ''}
@@ -49,6 +54,26 @@ export function LinhaTransacao({
       </button>
       {aberta && (
         <dl id={`tx-${t.id}`} className="grid grid-cols-2 gap-x-3 gap-y-2 bg-light px-4 py-3 text-sm">
+          {parcelada && (
+            <div className="col-span-2 rounded-xl border border-purple/30 bg-white p-3">
+              <p className="font-semibold text-purple">{copy.parcelaTitulo(t.parcela_numero ?? null, t.parcelas_total!)}</p>
+              {t.parcela_numero && (
+                <div className="mt-2 flex gap-0.5" aria-hidden="true">
+                  {Array.from({ length: t.parcelas_total! }, (_, i) => (
+                    <span key={i} className={cx('h-1.5 flex-1 rounded-full', i < t.parcela_numero! ? 'bg-purple' : 'bg-line')} />
+                  ))}
+                </div>
+              )}
+              <p className="mt-2 text-sm text-slate">
+                {copy.parcelaResumo(
+                  t.parcelas_total!,
+                  brl(abs),
+                  brl((abs * t.parcelas_total!) as typeof abs),
+                  dataCompleta(t.data_compra ?? t.data),
+                )}
+              </p>
+            </div>
+          )}
           <Detalhe rotulo={copy.detalhe.descricao} valor={t.descricao} largo />
           {parcela ? (
             <>

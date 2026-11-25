@@ -6,6 +6,9 @@ import { brl, centavos, type Centavos } from '@/lib/money';
 
 import type { TipoFluxo } from './EntradasSaidas';
 
+// Entradas em verde, saídas em vermelho — como os botões (teste com conta real).
+const COR_SAIDAS = '#E11D48';
+
 /** Gráfico de entradas ou saídas (carregado sob demanda: Recharts fica fora do bundle inicial). */
 export default function EntradasSaidasChart({
   valores,
@@ -55,7 +58,7 @@ export default function EntradasSaidasChart({
           />
           <Bar
             dataKey="valor"
-            fill={tipo === 'entradas' ? COR_FLUXO.entradas : COR_FLUXO.essenciais}
+            fill={tipo === 'entradas' ? COR_FLUXO.entradas : COR_SAIDAS}
             radius={[3, 3, 0, 0]}
             className="cursor-pointer"
             onClick={(d) => onEscolher(String((d as unknown as { mes: string }).mes))}

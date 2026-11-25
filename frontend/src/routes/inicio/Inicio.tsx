@@ -14,6 +14,7 @@ import {
   Button,
   Card,
   Carregando,
+  Colunas,
   EstadoErro,
   EstadoVazio,
   Icone,
@@ -59,84 +60,94 @@ export default function Inicio() {
       <AvisosConsentimento consentimentos={lista} />
       <h1 className="text-xl font-semibold text-navy">{copy.saudacao(usuario.apelido)}</h1>
 
-      {plano.data ? (
-        <ComPlano p={plano.data} />
-      ) : visao.data && visao.data.bancos.length > 0 && visao.data.qtd_dividas === 0 ? (
-        <SemDividas />
-      ) : (
-        <EstadoVazio
-          titulo={copy.semPlano.titulo}
-          texto={copy.semPlano.texto}
-          acao={<LinkBotao to="/raiox">{copy.semPlano.cta}</LinkBotao>}
-        />
-      )}
+      {/* No computador: o plano e o mês à esquerda; alertas, marcos e o resto à direita. */}
+      <Colunas
+        principal={
+          <>
+            {plano.data ? (
+              <ComPlano p={plano.data} />
+            ) : visao.data && visao.data.bancos.length > 0 && visao.data.qtd_dividas === 0 ? (
+              <SemDividas />
+            ) : (
+              <EstadoVazio
+                titulo={copy.semPlano.titulo}
+                texto={copy.semPlano.texto}
+                acao={<LinkBotao to="/raiox">{copy.semPlano.cta}</LinkBotao>}
+              />
+            )}
 
-      {visao.data && visao.data.bancos.length > 0 && (
-        <Link to="/contas" className="grid grid-cols-2 gap-3">
-          <Card as="div">
-            <p className="text-sm text-slate">{copyPfm.emConta}</p>
-            <Money valor={visao.data.saldo_em_contas} className="text-xl font-bold text-navy" />
-          </Card>
-          <Card as="div">
-            <p className="text-sm text-slate">{copyPfm.faturasAbertas}</p>
-            <Money valor={visao.data.faturas_em_aberto} className="text-xl font-bold text-navy" />
-          </Card>
-        </Link>
-      )}
+            {visao.data && visao.data.bancos.length > 0 && (
+              <Link to="/contas" className="grid grid-cols-2 gap-3">
+                <Card as="div">
+                  <p className="text-sm text-slate">{copyPfm.emConta}</p>
+                  <Money valor={visao.data.saldo_em_contas} className="text-xl font-bold text-navy" />
+                </Card>
+                <Card as="div">
+                  <p className="text-sm text-slate">{copyPfm.faturasAbertas}</p>
+                  <Money valor={visao.data.faturas_em_aberto} className="text-xl font-bold text-navy" />
+                </Card>
+              </Link>
+            )}
 
-      <ProximosVencimentos />
+            <ProximosVencimentos />
+          </>
+        }
+        lateral={
+          <>
+            {pendentes.length > 0 && (
+              <section className="flex flex-col gap-2">
+                <h2 className="font-semibold text-navy">{copy.alertas}</h2>
+                <ul className="flex flex-col gap-2">
+                  {pendentes.map((e) => (
+                    <AlertBanner key={e.id} evento={e} temPlano={Boolean(plano.data)} />
+                  ))}
+                </ul>
+              </section>
+            )}
 
-      {pendentes.length > 0 && (
-        <section className="flex flex-col gap-2">
-          <h2 className="font-semibold text-navy">{copy.alertas}</h2>
-          <ul className="flex flex-col gap-2">
-            {pendentes.map((e) => (
-              <AlertBanner key={e.id} evento={e} temPlano={Boolean(plano.data)} />
-            ))}
-          </ul>
-        </section>
-      )}
+            {plano.data && (
+              <section className="flex flex-col gap-2">
+                <h2 className="font-semibold text-navy">{copy.marcos}</h2>
+                {marcos.length ? (
+                  <ul className="flex flex-col gap-2">
+                    {marcos.map((e) => (
+                      <MilestoneBadge key={e.id} evento={e} />
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="text-sm text-slate">{copy.semMarcos}</p>
+                )}
+              </section>
+            )}
 
-      {plano.data && (
-        <section className="flex flex-col gap-2">
-          <h2 className="font-semibold text-navy">{copy.marcos}</h2>
-          {marcos.length ? (
-            <ul className="flex flex-col gap-2">
-              {marcos.map((e) => (
-                <MilestoneBadge key={e.id} evento={e} />
-              ))}
-            </ul>
-          ) : (
-            <p className="text-sm text-slate">{copy.semMarcos}</p>
-          )}
-        </section>
-      )}
+            {plano.data && plano.data.acompanhamentos.length > 0 && (
+              <section className="flex flex-col gap-2">
+                <h2 className="font-semibold text-navy">{copy.historico}</h2>
+                <ul className="flex flex-col divide-y divide-line rounded-2xl border border-line bg-white">
+                  {[...plano.data.acompanhamentos].reverse().map((a) => (
+                    <li key={a.mes_referencia} className="flex items-center justify-between gap-3 px-4 py-3 text-sm">
+                      <span className="font-medium capitalize text-ink">{nomeMes(a.mes_referencia)}</span>
+                      <span className="text-slate">{copy.previstoRealizado(a.realizado, a.previsto)}</span>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
 
-      {plano.data && plano.data.acompanhamentos.length > 0 && (
-        <section className="flex flex-col gap-2">
-          <h2 className="font-semibold text-navy">{copy.historico}</h2>
-          <ul className="flex flex-col divide-y divide-line rounded-2xl border border-line bg-white">
-            {[...plano.data.acompanhamentos].reverse().map((a) => (
-              <li key={a.mes_referencia} className="flex items-center justify-between gap-3 px-4 py-3 text-sm">
-                <span className="font-medium capitalize text-ink">{nomeMes(a.mes_referencia)}</span>
-                <span className="text-slate">{copy.previstoRealizado(a.realizado, a.previsto)}</span>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
+            {usuario.demo && <PainelDemo comPlano={Boolean(plano.data && plano.data.divida_atual > 0)} />}
 
-      {usuario.demo && <PainelDemo comPlano={Boolean(plano.data && plano.data.divida_atual > 0)} />}
-
-      <Card as="div" className="flex flex-col gap-1 opacity-80">
-        <p className="flex items-center gap-2 font-semibold text-navy">
-          {copy.copiloto} <Badge>em breve</Badge>
-        </p>
-        <p className="text-sm text-slate">{copy.copilotoEmBreve}</p>
-        <Button variante="secundario" disabled={!COPILOTO_LIGADO} className="mt-2 self-start">
-          Perguntar
-        </Button>
-      </Card>
+            <Card as="div" className="flex flex-col gap-1 opacity-80">
+              <p className="flex items-center gap-2 font-semibold text-navy">
+                {copy.copiloto} <Badge>em breve</Badge>
+              </p>
+              <p className="text-sm text-slate">{copy.copilotoEmBreve}</p>
+              <Button variante="secundario" disabled={!COPILOTO_LIGADO} className="mt-2 self-start">
+                Perguntar
+              </Button>
+            </Card>
+          </>
+        }
+      />
 
       <AtualizadoEm iso={syncs[0]} />
     </div>

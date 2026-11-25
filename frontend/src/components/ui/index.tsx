@@ -264,8 +264,48 @@ export function BarraIndeterminada({ rotulo }: { rotulo: string }) {
   );
 }
 
+/**
+ * Duas colunas a partir de telas largas (computador); no celular, uma só, na
+ * mesma ordem: primeiro ``principal``, depois ``lateral``.
+ */
+export function Colunas({
+  principal,
+  lateral,
+  proporcao = '3-2',
+  className,
+}: {
+  principal: ReactNode;
+  lateral: ReactNode;
+  proporcao?: '3-2' | '1-1' | 'filtros';
+  className?: string;
+}) {
+  const grade = {
+    '3-2': 'lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]',
+    '1-1': 'lg:grid-cols-2',
+    filtros: 'lg:grid-cols-[20rem_minmax(0,1fr)]',
+  }[proporcao];
+  return (
+    <div className={cx('flex flex-col gap-5 lg:grid lg:items-start lg:gap-8', grade, className)}>
+      <div className="flex min-w-0 flex-col gap-5">{principal}</div>
+      <div className="flex min-w-0 flex-col gap-5">{lateral}</div>
+    </div>
+  );
+}
+
 /** Botão de alternar (banco, tipo de gasto…): aria-pressed diz qual está ativo. */
-export function Chip({ ativo, onClick, children }: { ativo: boolean; onClick: () => void; children: ReactNode }) {
+export function Chip({
+  ativo,
+  onClick,
+  children,
+  tom = 'neutro',
+}: {
+  ativo: boolean;
+  onClick: () => void;
+  children: ReactNode;
+  /** Entradas em verde e saídas em vermelho, em todas as telas (teste com conta real). */
+  tom?: 'neutro' | 'entrada' | 'saida';
+}) {
+  const ligado = { neutro: 'border-navy bg-navy', entrada: 'border-green-ink bg-green-ink', saida: 'border-rose bg-rose' }[tom];
   return (
     <button
       type="button"
@@ -273,7 +313,7 @@ export function Chip({ ativo, onClick, children }: { ativo: boolean; onClick: ()
       onClick={onClick}
       className={cx(
         'inline-flex min-h-toque shrink-0 items-center gap-2 rounded-full border px-4 text-sm font-semibold',
-        ativo ? 'border-navy bg-navy text-white' : 'border-line bg-white text-navy',
+        ativo ? `${ligado} text-white` : 'border-line bg-white text-navy',
       )}
     >
       {children}

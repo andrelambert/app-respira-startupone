@@ -962,6 +962,7 @@ export const transacoes = {
   voltar: 'Suas contas',
   buscar: 'Buscar por descrição ou loja',
   filtros: 'Filtros',
+  maisFiltros: 'Mais filtros',
   limpar: 'Limpar filtros',
   carregarMais: 'Carregar mais',
   entradas: 'Entradas',
@@ -994,7 +995,7 @@ export const transacoes = {
     POUPANCA: 'Poupança',
     INVESTIMENTOS: 'Investimentos',
   } as Record<string, string>,
-  direcoes: 'Entradas e saídas',
+  direcoes: 'Movimento',
   todos: 'Todos',
   categorias: 'Categoria',
   valor: 'Valor (R$)',
@@ -1181,6 +1182,11 @@ export const pfm = {
     compraEm: 'Compra em',
   },
   parcelaCurta: (n: number, total: number) => `parcela ${n}/${total}`,
+  parceladoEm: (total: number) => `parcelado em ${total}x`,
+  // Destaque da parcela no detalhe (teste com conta Nubank real).
+  parcelaTitulo: (n: number | null, total: number) => (n ? `Parcela ${n} de ${total}` : `Compra parcelada em ${total}x`),
+  parcelaResumo: (total: number, parcela: string, compra: string, quando: string) =>
+    `${total}x de ${parcela} = ${compra} · comprado em ${quando}`,
   filtros: { TODAS: 'Todas', ENTRADA: 'Entradas', SAIDA: 'Saídas' },
   buscar: 'Buscar no extrato',
   buscarExemplo: 'ex.: mercado, pix, salário',

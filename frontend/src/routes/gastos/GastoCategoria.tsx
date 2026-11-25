@@ -163,7 +163,7 @@ export default function GastoCategoria() {
       {h.subcategorias.length > 1 && (
         <div className="flex flex-col gap-1">
           <p className="text-sm text-slate">{copy.subcategoria}</p>
-          <nav aria-label={copy.subcategoria} className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 [scrollbar-width:none]">
+          <nav aria-label={copy.subcategoria} className="flex flex-wrap gap-2">
             <Chip ativo={!sub} onClick={() => aplicar(periodo, null)}>
               {copy.todas}
             </Chip>
