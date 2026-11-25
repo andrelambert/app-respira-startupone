@@ -188,6 +188,7 @@ def todas_transacoes(
     valor_min: Annotated[Decimal | None, Query(ge=0, le=Decimal("1000000000"))] = None,
     valor_max: Annotated[Decimal | None, Query(ge=0, le=Decimal("1000000000"))] = None,
     so_divida: bool = False,
+    fluxo: Literal["renda", "gasto"] | None = None,
     ordem: Literal["recentes", "maior_valor"] = "recentes",
 ) -> TodasTransacoesOut:
     """Extrato unificado de todas as contas e cartões, com filtros (N1, F-1/F-2)."""
@@ -208,6 +209,7 @@ def todas_transacoes(
         valor_min=valor_min,
         valor_max=valor_max,
         so_divida=so_divida,
+        fluxo=fluxo,
         ordem=ordem,
     )
     itens, total, entradas, saidas = repo.transacoes_filtradas(s, u.id, filtro, pagina=pagina, por_pagina=por_pagina)

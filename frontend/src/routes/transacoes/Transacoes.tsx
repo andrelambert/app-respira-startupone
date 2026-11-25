@@ -73,6 +73,7 @@ export default function Transacoes() {
     direcao: (d) => copy.tipos[d] ?? d,
     valor: copy.chipValor,
     soDivida: copy.soDivida,
+    fluxo: (f) => copy.fluxos[f] ?? f,
     busca: copy.chipBusca,
   });
 

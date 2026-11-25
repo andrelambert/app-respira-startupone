@@ -970,6 +970,7 @@ export const transacoes = {
   quantidade: (n: number) => (n === 1 ? '1 transação' : `${n} transações`),
   vazio: 'Nenhuma transação com esses filtros.',
   soDivida: 'Só pagamentos de dívida',
+  fluxos: { renda: 'Só renda', gasto: 'Só gastos' } as Record<string, string>,
   soDividaAjuda: 'Quanto você pagou de dívida no período.',
   periodo: 'Período',
   periodos: {
@@ -1043,12 +1044,37 @@ export const fluxo = {
   conta: (entradas: string, essenciais: string, reserva: number, capacidade: string) =>
     `Nos últimos 6 meses, num mês típico entraram ${entradas} e os gastos essenciais foram ${essenciais}. ` +
     `A diferença, menos ${reserva}% de reserva para imprevistos, dá ${capacidade} por mês para as dívidas.`,
+  // Renda vinda do add-on INCOMES da Belvo: não é a mesma conta das barras.
+  contaRendaDetectada: (entradas: string, essenciais: string, reserva: number, capacidade: string) =>
+    `Pela renda que o seu banco identificou, entram ${entradas} por mês; os gastos essenciais num mês típico foram ${essenciais}. ` +
+    `A diferença, menos ${reserva}% de reserva para imprevistos, dá ${capacidade} por mês para as dívidas.`,
+  aplicacoes:
+    'Aplicações e resgates automáticos ficam fora de entradas e gastos: é o seu dinheiro mudando de lugar, não renda nem gasto.',
   mediana:
     'Usamos o mês típico (a mediana), não a média: um mês fora da curva — um bônus, uma despesa rara — não puxa o valor para cima nem para baixo.',
   cartao: 'Compras no cartão contam como gasto; o pagamento da fatura aparece em dívida.',
   semHistorico: 'Ainda não há meses completos suficientes para mostrar.',
   series: { entradas: 'Entradas', essenciais: 'Gastos essenciais', outros: 'Outros gastos', divida: 'Pagamentos de dívida', sobra: 'Sobra (entradas − essenciais)' },
+  reservaColuna: 'Guardou (usou)',
   tabela: 'Ver em tabela',
+};
+
+// Entradas e saídas, mês a mês (feedback do teste com conta real, Fase 7).
+export const entradasSaidas = {
+  titulo: 'Entradas e saídas',
+  entradas: 'Entradas',
+  saidas: 'Saídas',
+  meses: (n: number) => `${n} meses`,
+  periodo: 'Período do gráfico',
+  tipo: 'Mostrar',
+  media: (tipo: string, n: number, valor: string) => `${tipo}: em média ${valor} por mês nos últimos ${n} meses.`,
+  toque: 'Toque numa barra para ver as transações daquele mês.',
+  aria: (tipo: string, n: number) => `${tipo} nos últimos ${n} meses`,
+  oQueConta: {
+    entradas: 'Entradas: o que conta como renda — sem empréstimo recebido, estorno, transferência entre as suas contas nem resgate de aplicação.',
+    saidas: 'Saídas: os gastos — sem pagamento de dívida, transferência entre as suas contas nem aplicação.',
+  },
+  semDados: 'Ainda não há meses completos para mostrar.',
 };
 
 // N3 (Fase 7): próximos vencimentos — organiza o que existe, sem alerta novo.

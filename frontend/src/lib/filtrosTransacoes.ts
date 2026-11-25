@@ -8,6 +8,8 @@ import { addDays, endOfMonth, format, parseISO, startOfMonth, subMonths } from '
 export type Periodo = 'tudo' | 'mes' | 'mes_passado' | '30' | '90' | 'personalizado';
 export type Ordem = 'recentes' | 'maior_valor';
 export type Direcao = 'ENTRADA' | 'SAIDA';
+/** As mesmas regras do gráfico de entradas e saídas: só renda / só gastos (sem dívida, transferência nem aplicação). */
+export type Fluxo = 'renda' | 'gasto';
 
 export type Filtros = {
   periodo: Periodo;
@@ -20,6 +22,7 @@ export type Filtros = {
   valorMin: string | null; // reais, como digitado ("100" ou "100,50")
   valorMax: string | null;
   soDivida: boolean;
+  fluxo: Fluxo | null;
   ordem: Ordem;
 };
 
@@ -34,6 +37,7 @@ export const FILTROS_VAZIOS: Filtros = {
   valorMin: null,
   valorMax: null,
   soDivida: false,
+  fluxo: null,
   ordem: 'recentes',
 };
 
@@ -78,6 +82,7 @@ export function lerFiltros(p: URLSearchParams): Filtros {
     valorMin: valorDecimal(p.get('min')) ? p.get('min') : null,
     valorMax: valorDecimal(p.get('max')) ? p.get('max') : null,
     soDivida: p.get('divida') === '1',
+    fluxo: p.get('fluxo') === 'renda' || p.get('fluxo') === 'gasto' ? (p.get('fluxo') as Fluxo) : null,
     ordem: p.get('ordem') === 'maior_valor' ? 'maior_valor' : 'recentes',
   };
 }
@@ -97,6 +102,7 @@ export function escreverFiltros(f: Filtros): URLSearchParams {
   if (f.valorMin) p.set('min', f.valorMin);
   if (f.valorMax) p.set('max', f.valorMax);
   if (f.soDivida) p.set('divida', '1');
+  if (f.fluxo) p.set('fluxo', f.fluxo);
   if (f.ordem !== 'recentes') p.set('ordem', f.ordem);
   return p;
 }
@@ -136,6 +142,7 @@ export function paraApi(f: Filtros, hoje: string): Record<string, string> {
   if (min) r.valor_min = min;
   if (max) r.valor_max = max;
   if (f.soDivida) r.so_divida = 'true';
+  if (f.fluxo) r.fluxo = f.fluxo;
   if (f.ordem !== 'recentes') r.ordem = f.ordem;
   return r;
 }
@@ -145,7 +152,7 @@ export type Chip = { chave: string; rotulo: string; remover: (f: Filtros) => Fil
 /** Um chip removível por filtro ativo. ``nomes`` traduz conta e categoria para a tela. */
 export function chips(
   f: Filtros,
-  nomes: { periodo: (p: Periodo, f: Filtros) => string; conta: (id: number) => string; categoria: (c: string) => string; direcao: (d: Direcao) => string; valor: (min: string | null, max: string | null) => string; soDivida: string; busca: (b: string) => string },
+  nomes: { periodo: (p: Periodo, f: Filtros) => string; conta: (id: number) => string; categoria: (c: string) => string; direcao: (d: Direcao) => string; valor: (min: string | null, max: string | null) => string; soDivida: string; fluxo: (f: Fluxo) => string; busca: (b: string) => string },
 ): Chip[] {
   const out: Chip[] = [];
   if (f.periodo !== 'tudo')
@@ -159,5 +166,6 @@ export function chips(
   if (f.valorMin || f.valorMax)
     out.push({ chave: 'valor', rotulo: nomes.valor(f.valorMin, f.valorMax), remover: (x) => ({ ...x, valorMin: null, valorMax: null }) });
   if (f.soDivida) out.push({ chave: 'divida', rotulo: nomes.soDivida, remover: (x) => ({ ...x, soDivida: false }) });
+  if (f.fluxo) out.push({ chave: 'fluxo', rotulo: nomes.fluxo(f.fluxo), remover: (x) => ({ ...x, fluxo: null }) });
   return out;
 }

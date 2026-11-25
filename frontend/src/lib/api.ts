@@ -417,6 +417,7 @@ const fluxoMensalSchema = z.object({
         outros_gastos: dinheiro,
         pagamentos_divida: dinheiro,
         sobra: dinheiro,
+        reserva: dinheiro, // aplicações − resgates (aplicação automática): > 0 guardou
       }),
     )
     .max(12),
@@ -553,7 +554,7 @@ export const api = {
   },
   gastosCategoria: (mes?: string) =>
     chamar(`/pfm/categorias${mes ? `?mes=${mes}` : ''}`, gastosCategoriaSchema),
-  fluxoMensal: () => chamar('/pfm/fluxo-mensal?meses=6', fluxoMensalSchema),
+  fluxoMensal: (meses = 6) => chamar(`/pfm/fluxo-mensal?meses=${meses}`, fluxoMensalSchema),
   historicoCategoria: (categoria: string, subcategoria?: string | null) =>
     chamar(
       `/pfm/categorias/historico?${new URLSearchParams({ categoria, ...(subcategoria ? { subcategoria } : {}) }).toString()}`,

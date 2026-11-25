@@ -110,6 +110,7 @@ class Movimento:
     pagamento_divida: bool
     entrada_renda: bool
     categoria: str | None
+    reserva: bool = False  # aplicação/resgate (sweep): nem renda nem gasto
 
 
 @dataclass(frozen=True)
@@ -124,6 +125,8 @@ class FluxoMes:
     # pagamento da fatura está na dívida — somar os dois contaria o mesmo
     # dinheiro duas vezes.
     sobra: Decimal
+    # Aplicações − resgates no mês: > 0 guardou, < 0 usou da reserva.
+    reserva: Decimal = Decimal("0.00")
 
 
 def fluxo_mensal(movimentos: Sequence[Movimento], meses: Sequence[date]) -> list[FluxoMes]:
@@ -134,7 +137,9 @@ def fluxo_mensal(movimentos: Sequence[Movimento], meses: Sequence[date]) -> list
         m = mv.data.replace(day=1)
         if m not in soma:
             continue
-        if mv.valor > 0:
+        if mv.reserva:
+            soma[m]["reserva"] += -mv.valor  # saída para a aplicação soma; resgate subtrai
+        elif mv.valor > 0:
             if mv.entrada_renda:
                 soma[m]["entradas"] += mv.valor
         elif mv.pagamento_divida:
@@ -147,7 +152,7 @@ def fluxo_mensal(movimentos: Sequence[Movimento], meses: Sequence[date]) -> list
     for m in meses:
         s = soma[m]
         e, ess, o, d = (arredondar(s[k]) for k in ("entradas", "essenciais", "outros", "divida"))
-        out.append(FluxoMes(m, e, ess, o, d, e - ess))
+        out.append(FluxoMes(m, e, ess, o, d, e - ess, arredondar(s["reserva"])))
     return out
 
 

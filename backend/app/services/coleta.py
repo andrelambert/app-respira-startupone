@@ -127,6 +127,7 @@ def detectar_e_registrar(
         and t.categoria
         and not t.essencial
         and not t.pagamento_divida
+        and not t.reserva
         and t.categoria not in CATEGORIAS_FORA | CATEGORIAS_SEM_CORTE
     ]
     detectados = detectar(

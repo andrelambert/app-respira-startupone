@@ -86,6 +86,36 @@ CATEGORIAS_CONTA_SEM_RENDA = frozenset(
     {"CREDIT_CARD", "LOAN_ACCOUNT", "FINANCING_ACCOUNT", "ADVANCE_DEPOSIT_ACCOUNT"}
 )
 
+# Aplicação automática (sweep): todo dia útil o banco aplica o que sobrou na conta
+# corrente e resgata o que faltou. Chega como INFLOW/OUTFLOW comuns; somar tudo
+# quase dobra entradas e saídas (teste com conta Sicredi real, Fase 7). É dinheiro
+# da própria pessoa mudando de lugar — reserva, não renda nem gasto. Prefixos de
+# descrição vistos em conta real; a categoria de investimento é a rede de segurança
+# para outros bancos.
+OPERACAO_RESGATE = "RESGATE_APLIC_FINANCEIRA"
+PREFIXOS_APLICACAO = ("APLICACAO", "APLIC AUT", "APLIC.")
+PREFIXOS_RESGATE = ("RESG", "RES APLIC", "RESGATE")
+CATEGORIA_INVESTIMENTO = "Investments & Savings"
+# Devolução e estorno não são renda: o dinheiro já era da pessoa.
+PREFIXOS_ESTORNO = ("DEVOLUCAO PIX", "ESTORNO")
+
+
+def movimento_de_reserva(
+    *, entrada: bool, descricao: str, tipo_operacao: str | None, categoria: str | None, tem_contraparte: bool
+) -> bool:
+    """Aplicação (saída para a reserva) ou resgate (volta da reserva) numa conta
+    de depósito. Em ordem: tipo de operação, descrição sem contraparte, categoria."""
+    if tipo_operacao == OPERACAO_RESGATE:
+        return True
+    d = descricao.upper().strip()
+    if not tem_contraparte and d.startswith(PREFIXOS_RESGATE if entrada else PREFIXOS_APLICACAO):
+        return True
+    return categoria == CATEGORIA_INVESTIMENTO
+
+
+def e_estorno(descricao: str) -> bool:
+    return descricao.upper().strip().startswith(PREFIXOS_ESTORNO)
+
 
 # --- saída do mapeamento -----------------------------------------------------
 
@@ -165,6 +195,7 @@ class TransacaoMapeada:
     essencial: bool
     pagamento_divida: bool
     conta_como_renda: bool
+    reserva: bool = False  # aplicação/resgate entre a conta e a aplicação da própria pessoa
     estabelecimento: str | None = None
     estabelecimento_site: str | None = None
     subcategoria: str | None = None
@@ -808,25 +839,43 @@ def mapear_transacoes(transacoes: Iterable[Json]) -> list[TransacaoMapeada]:
         categoria = t.get("category")
         subcategoria = t.get("subcategory") or None
         merchant = t.get("merchant") or {}
+        descricao = (t.get("description") or "")[:200]
+        tipo_operacao = str(t.get("operation_type") or "").strip()[:60] or None
+        contraparte = t.get("counterparty") if isinstance(t.get("counterparty"), dict) else {}
+        # Só em conta de depósito: no cartão e no empréstimo não existe aplicação automática.
+        reserva = (
+            not e_cartao
+            and categoria_conta not in CATEGORIAS_CONTA_SEM_RENDA
+            and movimento_de_reserva(
+                entrada=valor > 0,
+                descricao=descricao,
+                tipo_operacao=tipo_operacao,
+                categoria=categoria,
+                tem_contraparte=bool(contraparte.get("document_number") or contraparte.get("name")),
+            )
+        )
         saida.append(
             TransacaoMapeada(
                 id_externo=t["id"],
                 conta_id_externo=conta.get("id") if isinstance(conta, dict) else conta,
                 data_mov=data_mov,
                 valor=arredondar(valor),
-                descricao=(t.get("description") or "")[:200],
+                descricao=descricao,
                 categoria=categoria,
-                essencial=valor < 0 and essencial(categoria, subcategoria),
+                essencial=valor < 0 and not reserva and essencial(categoria, subcategoria),
                 pagamento_divida=valor < 0 and categoria == CATEGORIA_PAGAMENTO_DIVIDA,
                 # Entrada no cartão ou no empréstimo é pagamento/estorno, não renda.
                 conta_como_renda=valor > 0
+                and not reserva
+                and not e_estorno(descricao)
                 and categoria not in CATEGORIAS_ENTRADA_NAO_RENDA
                 and categoria_conta not in CATEGORIAS_CONTA_SEM_RENDA,
+                reserva=reserva,
                 estabelecimento=(merchant.get("merchant_name") or None) if isinstance(merchant, dict) else None,
                 estabelecimento_site=_url_https(merchant.get("website")) if isinstance(merchant, dict) else None,
                 subcategoria=subcategoria,
                 transacionado_em=transacionado_em,
-                tipo_operacao=(str(t.get("operation_type") or "").strip()[:60] or None),
+                tipo_operacao=tipo_operacao,
                 # Já vem só com o final no Brasil; _final garante que nunca passe de 4.
                 final_cartao=_final(cartao.get("card_number")) if isinstance(cartao, dict) else None,
                 # null quando a compra ainda não entrou numa fatura fechada

@@ -27,6 +27,7 @@ from app.domain.planner import (
     arredondar,
     capacidade_de_pagamento,
     medianas_mensais,
+    renda_plausivel,
 )
 from app.domain.xray import DividaXray, RaioX, raio_x, taxa_anual
 from app.models import (
@@ -77,6 +78,11 @@ def capacidade(s: Session, u: Usuario, hoje: date) -> Capacidade:
     entradas_tx, essenciais, meses = medianas_mensais(movs, hoje)
 
     rendas = [r.entradas_mediana for r in repo_f.rendas(s, u.id) if r.entradas_mediana is not None]
+    if rendas and not renda_plausivel(sum(rendas, Decimal(0)), entradas_tx, meses):
+        # Teste com conta real (Sicredi): a renda detectada pela Belvo veio em R$ 23
+        # com R$ 4–6 mil entrando por mês. Sem sanidade, o plano sairia absurdo.
+        log.warning("renda_incomes_descartada origem=TRANSACOES meses=%s", meses)
+        rendas = []
     if rendas:
         entradas, origem = sum(rendas, Decimal(0)), CapacidadeOrigem.INCOMES
     else:
@@ -526,7 +532,7 @@ def gastos_por_categoria(
     gastos = [
         gastos_dom.Gasto(t.data_mov, gastos_dom.chave_gasto(t.categoria), -t.valor, t.essencial)
         for t in todas
-        if t.valor < 0 and not t.pagamento_divida and desde <= t.data_mov < ate
+        if t.valor < 0 and not t.pagamento_divida and not t.reserva and desde <= t.data_mov < ate
     ]
     categorias = gastos_dom.por_categoria(gastos, mes, set(meses_com_dado))
     return mes, categorias, _impacto(s, u, gastos_dom.candidata_a_corte(categorias)), meses_com_dado
@@ -545,7 +551,7 @@ def historico_categoria(
     gastos = [
         gastos_dom.GastoDetalhado(t.data_mov, t.subcategoria, -t.valor)
         for t in repo_f.transacoes(s, u.id, inicio)
-        if t.valor < 0 and not t.pagamento_divida and gastos_dom.chave_gasto(t.categoria) == categoria
+        if t.valor < 0 and not t.pagamento_divida and not t.reserva and gastos_dom.chave_gasto(t.categoria) == categoria
         and t.data_mov <= hoje
     ]
     serie, subs = gastos_dom.historico_categoria(gastos, lista_meses)
@@ -561,7 +567,9 @@ def fluxo_mensal(s: Session, u: Usuario, meses: int) -> tuple[list[gastos_dom.Fl
     inicio = adicionar_meses(hoje.replace(day=1), -meses)
     lista_meses = [adicionar_meses(inicio, i) for i in range(meses)]
     movs = [
-        gastos_dom.Movimento(t.data_mov, t.valor, t.essencial, t.pagamento_divida, t.entrada_renda, t.categoria)
+        gastos_dom.Movimento(
+            t.data_mov, t.valor, t.essencial, t.pagamento_divida, t.entrada_renda, t.categoria, t.reserva
+        )
         for t in repo_f.transacoes(s, u.id, inicio)
     ]
     return gastos_dom.fluxo_mensal(movs, lista_meses), capacidade(s, u, hoje)

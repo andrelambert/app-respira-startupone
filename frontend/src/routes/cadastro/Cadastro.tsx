@@ -5,6 +5,7 @@ import { useForm } from 'react-hook-form';
 import { Link, Navigate } from 'react-router';
 import { z } from 'zod';
 
+import { NaoMovimenta } from '@/components/respira';
 import { BotaoVerSenha, Button, Campo, Carregando, Icone, type EstadoCampo } from '@/components/ui';
 import { chaves, useConfig, useUsuario } from '@/hooks/queries';
 import { api, ApiError } from '@/lib/api';
@@ -130,6 +131,8 @@ export default function Cadastro() {
         <h1 className="text-3xl font-bold text-navy">{cadastro.titulo}</h1>
         <p className="mt-1 text-slate">{cadastro.subtitulo}</p>
       </div>
+      {/* Medo nº 1 da pesquisa (9 de 10) e do teste com conta real: dito antes de pedir qualquer dado. */}
+      <NaoMovimenta />
       <Campo
         rotulo={cadastro.email}
         type="email"

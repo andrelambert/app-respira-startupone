@@ -27,12 +27,13 @@ def upgrade() -> None:
 
     t = sa.table(
         "transacao",
-        sa.column("valor", sa.Numeric),
+        sa.column("direcao", sa.String),
         sa.column("categoria", sa.String),
         sa.column("subcategoria", sa.String),
         sa.column("essencial", sa.Boolean),
     )
-    saida = t.c.valor < 0
+    # O sinal vem de ``direcao``: o valor é guardado como texto (comparar em SQL não é confiável).
+    saida = t.c.direcao == "SAIDA"
     op.execute(t.update().values(essencial=False))
     inteiras = [c for c, subs in ESSENCIAIS_V2.items() if subs is None]
     op.execute(t.update().where(saida, t.c.categoria.in_(inteiras)).values(essencial=True))

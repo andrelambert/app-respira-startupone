@@ -58,14 +58,25 @@ describe('filtros de "Todas as transações" na URL (N1)', () => {
   });
 
   it('um chip por filtro, e remover tira só aquele', () => {
-    const f = { ...FILTROS_VAZIOS, contas: [1, 2], soDivida: true, busca: 'pix' };
+    const f = { ...FILTROS_VAZIOS, contas: [1, 2], soDivida: true, busca: 'pix', fluxo: 'renda' as const };
     const nomes = {
       periodo: () => 'p', conta: (id: number) => `conta ${id}`, categoria: (c: string) => c,
-      direcao: (d: string) => d, valor: () => 'v', soDivida: 'só dívida', busca: (b: string) => `"${b}"`,
+      direcao: (d: string) => d, valor: () => 'v', soDivida: 'só dívida', fluxo: (x: string) => `só ${x}`,
+      busca: (b: string) => `"${b}"`,
     };
     const lista = chips(f, nomes);
-    expect(lista.map((c) => c.rotulo)).toEqual(['conta 1', 'conta 2', '"pix"', 'só dívida']);
+    expect(lista.map((c) => c.rotulo)).toEqual(['conta 1', 'conta 2', '"pix"', 'só dívida', 'só renda']);
     expect(lista[0]!.remover(f).contas).toEqual([2]);
     expect(lista[3]!.remover(f).soDivida).toBe(false);
+    expect(lista[4]!.remover(f).fluxo).toBeNull();
+  });
+
+  it('o fluxo (renda/gasto) vai e volta pela URL e chega à API', () => {
+    const f = { ...FILTROS_VAZIOS, fluxo: 'gasto' as const, direcao: 'SAIDA' as const };
+    const p = escreverFiltros(f);
+    expect(p.get('fluxo')).toBe('gasto');
+    expect(lerFiltros(p).fluxo).toBe('gasto');
+    expect(lerFiltros(new URLSearchParams('fluxo=x')).fluxo).toBeNull();
+    expect(paraApi(f, '2026-11-23').fluxo).toBe('gasto');
   });
 });

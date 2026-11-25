@@ -17,6 +17,7 @@ import {
 } from '@/components/ui';
 import { LogoBanco } from '@/components/respira';
 import { FluxoMensal } from '@/components/respira/FluxoMensal';
+import { EntradasSaidas } from '@/components/respira/EntradasSaidas';
 import { GastosCategoria } from '@/components/respira/GastosCategoria';
 import { chavesFinanceiras, useHoje, useVisaoGeral } from '@/hooks/queries';
 import { api, type Banco, type ContaBancaria } from '@/lib/api';
@@ -100,6 +101,9 @@ export default function Contas() {
       <LinkBotao to="/transacoes" variante="secundario">
         {copyTransacoes.verTodas}
       </LinkBotao>
+
+      {/* Entradas e saídas, mês a mês: tocar na barra abre as transações daquele mês. */}
+      <EntradasSaidas />
 
       {/* N2: para onde foi o dinheiro, ligado ao plano. */}
       <GastosCategoria />

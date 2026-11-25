@@ -565,6 +565,7 @@ class FluxoMesOut(BaseModel):
     outros_gastos: Dinheiro
     pagamentos_divida: Dinheiro
     sobra: Dinheiro
+    reserva: Dinheiro  # aplicações − resgates: > 0 guardou, < 0 usou da reserva
 
 
 class FluxoMensalOut(BaseModel):

@@ -218,6 +218,59 @@ def test_transacoes_convertem_sinal_e_classificam():
     assert not por_id["4"].conta_como_renda  # empréstimo recebido não é renda
 
 
+def _sicredi(id_, tipo, valor, descricao, *, operacao="OUTROS", categoria=None, contraparte=None, conta="CHECKING_ACCOUNT"):
+    """Transação no formato em que a Sicredi manda a aplicação automática (Fase 7)."""
+    return {
+        "id": id_, "type": tipo, "amount": valor, "value_date": "2026-08-29", "description": descricao,
+        "operation_type": operacao, "category": categoria, "counterparty": contraparte,
+        "account": {"id": "cc", "category": conta},
+    }
+
+
+def test_aplicacao_automatica_e_reserva_nem_renda_nem_gasto():
+    """Casos do estudo da conta Sicredi real (aplicação automática, §6 do documento da equipe)."""
+    ts = mapear_transacoes([
+        _sicredi("1", "INFLOW", "446.26", "RESG.APLIC.FIN.AVISO PREV", operacao="RESGATE_APLIC_FINANCEIRA",
+                 categoria="Investments & Savings"),
+        _sicredi("2", "OUTFLOW", "2691.83", "APLICACAO FINANCEIRA", categoria="Investments & Savings"),
+        _sicredi("3", "OUTFLOW", "100.00", "APLICACAO POUPANCA"),  # sem categoria: pela descrição
+        # Salário categorizado como viagem (o empregador é uma agência): continua renda.
+        _sicredi("4", "INFLOW", "3005.57", "RECEBIMENTO PIX 00000000000100 EMPRESA", categoria="Transport & Travel",
+                 contraparte={"name": "EMPRESA"}),
+        _sicredi("5", "INFLOW", "23.90", "DEVOLUCAO PIX 00000000000100 UBER"),
+        # Loja categorizada como aposta: gasto comum (a categoria só afeta o gráfico de gastos).
+        _sicredi("6", "OUTFLOW", "80.00", "COMPRA LOJA", categoria="Online Platforms & Leisure"),
+        # "APLICACAO" com contraparte é outra coisa (ex.: pagamento a terceiro com esse nome).
+        _sicredi("7", "OUTFLOW", "50.00", "APLICACAO DE PELICULA", contraparte={"name": "LOJA"}),
+        # No cartão não existe aplicação automática.
+        _sicredi("8", "OUTFLOW", "30.00", "APLIC. CURSO", conta="CREDIT_CARD"),
+    ])
+    t = {x.id_externo: x for x in ts}
+    assert t["1"].reserva and not t["1"].conta_como_renda
+    assert t["2"].reserva and not t["2"].essencial
+    assert t["3"].reserva
+    assert t["4"].conta_como_renda and not t["4"].reserva
+    assert not t["5"].conta_como_renda and not t["5"].reserva  # estorno não é renda
+    assert not t["6"].reserva and t["6"].valor == D("-80.00")
+    assert not t["7"].reserva
+    assert not t["8"].reserva
+
+
+def test_identidade_da_conta_com_aplicacao_automatica():
+    """Conta sweep: o que entra e não é reserva, menos o que sai e não é reserva,
+    é o que foi para a reserva (o saldo da conta corrente começa e termina em zero)."""
+    ts = mapear_transacoes([
+        _sicredi("a", "INFLOW", "3005.57", "RECEBIMENTO PIX EMPRESA", contraparte={"name": "EMPRESA"}),
+        _sicredi("b", "OUTFLOW", "312.74", "COMPRA DEBITO", categoria="Food & Groceries"),
+        _sicredi("c", "OUTFLOW", "2692.83", "APLICACAO FINANCEIRA", categoria="Investments & Savings"),
+        _sicredi("d", "OUTFLOW", "750.00", "PIX ALUGUEL", contraparte={"name": "PROPRIETARIO"}),
+        _sicredi("e", "INFLOW", "750.00", "RESG.APLIC.FIN.AVISO PREV", operacao="RESGATE_APLIC_FINANCEIRA"),
+    ])
+    fora = sum((x.valor for x in ts if not x.reserva), D(0))
+    reserva = -sum((x.valor for x in ts if x.reserva), D(0))
+    assert fora == reserva == D("1942.83")
+
+
 def test_capacidade_da_fixture_e_1755():
     # Os três bancos juntos: renda na conta do Itaú e do Nubank, gastos essenciais
     # espalhados pela conta e pelos dois cartões.

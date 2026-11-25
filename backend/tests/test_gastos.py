@@ -136,6 +136,43 @@ def test_api_historico_da_categoria(demo_limpa):
     assert api.get("/pfm/categorias/historico").status_code == 422
 
 
+def test_tocar_na_barra_de_entradas_ou_saidas_mostra_o_que_ela_soma(demo_limpa):
+    """Gráfico de entradas e saídas (Contas) → Todas as transações com fluxo=renda/gasto:
+    a soma da lista é exatamente o valor da barra."""
+    import calendar
+
+    api = demo_limpa
+    meses = api.get("/pfm/fluxo-mensal", params={"meses": 3}).json()["meses"]
+    assert len(meses) == 3
+    for m in meses:
+        ini = date.fromisoformat(m["mes"])
+        fim = ini.replace(day=calendar.monthrange(ini.year, ini.month)[1])
+        base = {"desde": ini.isoformat(), "ate": fim.isoformat(), "por_pagina": 5}
+        renda = api.get("/transacoes", params={**base, "fluxo": "renda"}).json()
+        gasto = api.get("/transacoes", params={**base, "fluxo": "gasto"}).json()
+        assert D(renda["total_entradas"]) == D(m["entradas"]) and D(renda["total_saidas"]) == 0
+        assert D(gasto["total_saidas"]) == D(m["essenciais"]) + D(m["outros_gastos"])
+        assert D(gasto["total_entradas"]) == 0
+    assert api.get("/transacoes", params={"fluxo": "outro"}).status_code == 422
+
+
+def test_fluxo_mensal_separa_a_reserva():
+    from app.domain.gastos import Movimento, fluxo_mensal
+
+    def mv(valor, **kw):
+        base = {"essencial": False, "pagamento_divida": False, "entrada_renda": False, "categoria": None}
+        return Movimento(date(2026, 10, 5), D(valor), **{**base, **kw})
+
+    movs = [
+        mv("3000", entrada_renda=True),
+        mv("-2500", categoria="Investments & Savings", reserva=True),  # aplicou
+        mv("700", categoria="Investments & Savings", reserva=True),  # resgatou
+        mv("-1200", essencial=True),
+    ]
+    [f] = fluxo_mensal(movs, [OUT])
+    assert (f.entradas, f.essenciais, f.outros_gastos, f.reserva) == (D("3000.00"), D("1200.00"), D("0.00"), D("1800.00"))
+
+
 def test_gastos_exigem_login(api):
     api.cookies.clear()
     assert api.get("/pfm/categorias").status_code == 401

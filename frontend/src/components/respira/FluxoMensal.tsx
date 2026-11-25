@@ -18,11 +18,12 @@ const mesCurto = (iso: string) => `${nomeMes(iso).slice(0, 3)}/${iso.slice(2, 4)
  * frase. Resumo em texto e tabela para quem não vê o gráfico.
  */
 export function FluxoMensal({ id }: { id?: string }) {
-  const q = useQuery({ queryKey: ['pfm', 'fluxo-mensal'], queryFn: api.fluxoMensal });
+  const q = useQuery({ queryKey: ['pfm', 'fluxo-mensal', 6], queryFn: () => api.fluxoMensal(6) });
   if (q.isLoading) return <Carregando />;
   if (q.isError || !q.data) return <EstadoErro onTentar={() => void q.refetch()} />;
   const f = q.data;
   const temDado = f.meses.some((m) => m.entradas > 0 || m.essenciais > 0);
+  const temReserva = f.meses.some((m) => m.reserva !== 0);
 
   return (
     <section id={id} aria-labelledby={`${id ?? 'fluxo'}-titulo`} className="flex scroll-mt-20 flex-col gap-3">
@@ -33,7 +34,14 @@ export function FluxoMensal({ id }: { id?: string }) {
         <p className="rounded-2xl border border-dashed border-line bg-white p-4 text-sm text-slate">{copy.semHistorico}</p>
       ) : (
         <>
-          <p className="text-ink">{copy.conta(brl(f.entradas_mediana), brl(f.essenciais_mediana), f.reserva_pct, brl(f.capacidade))}</p>
+          <p className="text-ink">
+            {(f.capacidade_origem === 'INCOMES' ? copy.contaRendaDetectada : copy.conta)(
+              brl(f.entradas_mediana),
+              brl(f.essenciais_mediana),
+              f.reserva_pct,
+              brl(f.capacidade),
+            )}
+          </p>
           <div className="rounded-2xl border border-line bg-white p-3">
             <ul className="mb-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-ink" aria-label="Legenda">
               {(['entradas', 'essenciais', 'outros', 'divida', 'sobra'] as const).map((k) => (
@@ -53,6 +61,7 @@ export function FluxoMensal({ id }: { id?: string }) {
           </div>
           <p className="text-xs text-slate">{copy.mediana}</p>
           <p className="text-xs text-slate">{copy.cartao}</p>
+          {temReserva && <p className="text-xs text-slate">{copy.aplicacoes}</p>}
           <details className="text-sm">
             <summary className="min-h-toque cursor-pointer font-semibold text-blue">{copy.tabela}</summary>
             <div className="overflow-x-auto">
@@ -65,6 +74,7 @@ export function FluxoMensal({ id }: { id?: string }) {
                     <th className="font-medium">{copy.series.outros}</th>
                     <th className="font-medium">{copy.series.divida}</th>
                     <th className="font-medium">Sobra</th>
+                    {temReserva && <th className="font-medium">{copy.reservaColuna}</th>}
                   </tr>
                 </thead>
                 <tbody className="text-ink">
@@ -78,6 +88,9 @@ export function FluxoMensal({ id }: { id?: string }) {
                       <td className="px-1">{brl(m.outros_gastos, sem)}</td>
                       <td className="px-1">{brl(m.pagamentos_divida, sem)}</td>
                       <td className="pl-1 font-semibold">{brl(m.sobra, sem)}</td>
+                      {temReserva && (
+                        <td className="pl-1">{m.reserva < 0 ? `(${brl(Math.abs(m.reserva) as typeof m.reserva, sem)})` : brl(m.reserva, sem)}</td>
+                      )}
                     </tr>
                   ))}
                 </tbody>

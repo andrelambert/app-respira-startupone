@@ -8,6 +8,7 @@ from typing import Any
 from sqlalchemy import func, or_
 from sqlmodel import Session, col, select
 
+from app.domain.gastos import CATEGORIAS_FORA
 from app.models import Consentimento, Conta, Direcao, Fatura, StatusConsentimento, Transacao
 
 
@@ -116,6 +117,10 @@ class FiltroTransacoes:
     valor_min: Decimal | None = None  # sobre o valor absoluto
     valor_max: Decimal | None = None
     so_divida: bool = False
+    # "renda": as entradas que contam como renda; "gasto": as saídas que são gasto
+    # (sem pagamento de dívida, transferência nem aplicação). As mesmas regras do
+    # gráfico de entradas e saídas — tocar na barra mostra exatamente o que ela soma.
+    fluxo: str | None = None
     ordem: str = "recentes"  # "recentes" | "maior_valor"
 
 
@@ -137,6 +142,13 @@ def _condicoes(usuario_id: int, f: FiltroTransacoes) -> list[Any]:
         cond.append(or_(*alternativas))
     if f.so_divida:
         cond.append(Transacao.pagamento_divida == True)
+    if f.fluxo == "renda":
+        cond.append(Transacao.entrada_renda == True)
+    elif f.fluxo == "gasto":
+        cond.append(Transacao.direcao == Direcao.SAIDA)
+        cond.append(Transacao.pagamento_divida == False)
+        cond.append(Transacao.reserva == False)
+        cond.append(or_(col(Transacao.categoria).is_(None), col(Transacao.categoria).not_in(sorted(CATEGORIAS_FORA))))
     if f.desde is not None:
         cond.append(col(Transacao.data_mov) >= f.desde)
     if f.ate is not None:

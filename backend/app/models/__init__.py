@@ -347,6 +347,8 @@ class Transacao(SQLModel, table=True):
     recorrente: bool = False
     pagamento_divida: bool = False
     entrada_renda: bool = False  # entrada que conta como renda (exclui crédito tomado)
+    # Aplicação/resgate da aplicação automática (sweep): reserva, nem renda nem gasto.
+    reserva: bool = False
     origem: Origem = Origem.OPEN_FINANCE
 
 

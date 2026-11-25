@@ -326,3 +326,17 @@ def medianas_mensais(
 
 def capacidade_de_pagamento(entradas: Decimal, essenciais: Decimal) -> Decimal:
     return max(arredondar((entradas - essenciais) * FATOR_RESERVA), Decimal("0.00"))
+
+
+# §7.8 prefere a renda do add-on INCOMES, mas ela pode vir sem sentido (teste com
+# conta real: R$ 23 por mês com R$ 4–6 mil entrando). Abaixo desta fração do que
+# as transações mostram, valem as transações.
+RENDA_INCOMES_MINIMA = Decimal("0.5")
+
+
+def renda_plausivel(incomes: Decimal, entradas_transacoes: Decimal, meses_com_dado: int) -> bool:
+    """A renda detectada pela Belvo só é usada se não ficar muito abaixo das
+    entradas observadas. Com menos de 3 meses de histórico, não há base para duvidar."""
+    if meses_com_dado < 3 or entradas_transacoes <= 0:
+        return True
+    return incomes >= entradas_transacoes * RENDA_INCOMES_MINIMA
