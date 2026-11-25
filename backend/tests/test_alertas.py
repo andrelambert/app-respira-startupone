@@ -162,3 +162,13 @@ def test_contextos_atualizados_so_mexe_no_cheque_especial():
     novos = contextos_atualizados(pendentes=[ce, rot], dividas=[cheque], usado_cheque_especial=D("459.46"))
     assert list(novos) == [1] and novos[1]["usado"] == "459.46" and novos[1]["juros_mes"] == "34.41"
     assert contextos_atualizados(pendentes=[ce], dividas=[cheque], usado_cheque_especial=D(0)) == {}
+
+
+def test_alerta_de_pico_no_formato_antigo_sai_e_agrupa_pela_categoria():
+    """Antes, a chave era a subcategoria ("Food & Groceries::Delivery"); com a
+    categoria principal, o mesmo gasto gerava um segundo aviso."""
+    antigo = EventoPendente(16, "PICO_CATEGORIA", None, {"categoria": "Food & Groceries::Delivery", "mes": "2026-10-01"})
+    assert _resolve(date(2026, 11, 20), antigo, [_divida()]) == [16]
+    assert grupo("PICO_CATEGORIA", None, {"categoria": "Food & Groceries::Delivery"}) == grupo(
+        "PICO_CATEGORIA", None, {"categoria": "Food & Groceries"}
+    )

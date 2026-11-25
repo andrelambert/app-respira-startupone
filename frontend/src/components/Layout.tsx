@@ -48,6 +48,13 @@ function MenuConta() {
   );
 }
 
+// Largura das telas (teste no computador: tudo ficava espremido no meio). No
+// celular, a tela inteira; daí em diante a coluna cresce com a janela, sempre
+// com margem nas laterais.
+const LARGURA_APP = 'mx-auto w-full max-w-lg px-4 md:max-w-3xl md:px-6 lg:max-w-5xl lg:px-8 xl:max-w-6xl';
+// Landing, cadastro e conexão: texto e formulário — largos demais cansam a leitura.
+const LARGURA_SIMPLES = 'mx-auto w-full max-w-lg px-4 md:max-w-2xl md:px-6';
+
 function Logo() {
   // Logado, o logo leva ao Início; antes de entrar, à página inicial.
   const { data: usuario } = useUsuario();
@@ -83,19 +90,19 @@ export function LayoutApp() {
     <div className="min-h-dvh bg-light pb-24">
       <AvisoOffline />
       <header className="sticky top-0 z-10 border-b border-line bg-white/95 backdrop-blur">
-        <div className="mx-auto flex max-w-lg items-center px-4">
+        <div className={cx(LARGURA_APP, "flex items-center")}>
           <Logo />
           <MenuConta />
         </div>
       </header>
-      <main className="mx-auto max-w-lg px-4 py-5">
+      <main className={cx(LARGURA_APP, "py-5 lg:py-8")}>
         <Suspense fallback={<Carregando />}>
           <Outlet />
         </Suspense>
       </main>
       <nav aria-label="Principal" className="fixed inset-x-0 bottom-0 z-10 border-t border-line bg-white">
         {/* Largura pelo conteúdo: "Configurações" não cabe numa coluna de 1/6 em 360 px. */}
-        <ul className="mx-auto flex max-w-lg justify-around px-1">
+        <ul className="mx-auto flex max-w-lg justify-around px-1 md:max-w-2xl">
           {itens.map((i) => (
             <li key={i.to}>
               <NavLink
@@ -123,11 +130,11 @@ export function LayoutSimples() {
   return (
     <div className="min-h-dvh bg-light">
       <AvisoOffline />
-      <header className="mx-auto flex max-w-lg items-center px-4 pt-2">
+      <header className={cx(LARGURA_SIMPLES, "flex items-center pt-2")}>
         <Logo />
         <MenuConta />
       </header>
-      <main className="mx-auto max-w-lg px-4 pb-10 pt-3">
+      <main className={cx(LARGURA_SIMPLES, "pb-10 pt-3")}>
         <Suspense fallback={<Carregando />}>
           <Outlet />
         </Suspense>

@@ -23,8 +23,9 @@ export function valorDoMes(m: FluxoMensal['meses'][number], tipo: TipoFluxo): Ce
 
 /**
  * Tocar numa barra → "Todas as transações" com os filtros daquela barra à vista:
- * tipo, o mês, todas as contas e cartões, e só renda (ou só gastos) — a lista
- * soma exatamente o valor da barra.
+ * tipo, o mês e todas as contas e cartões. Saídas vêm com "só gastos" (a lista
+ * soma o valor da barra); entradas, sem filtro extra — a pedido, depois do
+ * teste com conta real, a lista mostra todas as entradas do mês.
  */
 export function linkDaBarra(mes: string, tipo: TipoFluxo, contas: number[]): string {
   const f: Filtros = {
@@ -33,7 +34,7 @@ export function linkDaBarra(mes: string, tipo: TipoFluxo, contas: number[]): str
     desde: mes,
     ate: fimDoMes(mes),
     direcao: tipo === 'entradas' ? 'ENTRADA' : 'SAIDA',
-    fluxo: tipo === 'entradas' ? 'renda' : 'gasto',
+    fluxo: tipo === 'entradas' ? null : 'gasto',
     contas: contas.length <= 20 ? contas : [], // o backend aceita até 20; acima disso, "todas" é o mesmo
   };
   return `/transacoes?${escreverFiltros(f).toString()}`;
@@ -72,7 +73,7 @@ export function EntradasSaidas() {
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div role="group" aria-label={copy.tipo} className="flex gap-2">
           {(['entradas', 'saidas'] as const).map((t) => (
-            <Chip key={t} ativo={tipo === t} onClick={() => setTipo(t)}>
+            <Chip key={t} ativo={tipo === t} onClick={() => setTipo(t)} tom={t === 'entradas' ? 'entrada' : 'saida'}>
               {t === 'entradas' ? copy.entradas : copy.saidas}
             </Chip>
           ))}

@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router';
 
 import { LinhaTransacao } from '@/components/respira/LinhaTransacao';
-import { Button, Carregando, Chip, EstadoErro, cx } from '@/components/ui';
+import { Button, Carregando, Chip, Colunas, EstadoErro, cx } from '@/components/ui';
 import { useHoje, useVisaoGeral } from '@/hooks/queries';
 import { useDebounced } from '@/hooks/useDebounced';
 import { api } from '@/lib/api';
@@ -88,168 +88,193 @@ export default function Transacoes() {
         <h1 className="mt-2 text-2xl font-bold text-navy">{copy.titulo}</h1>
       </div>
 
-      <label className="flex flex-col gap-1">
-        <span className="sr-only">{copy.buscar}</span>
-        <input
-          type="search"
-          value={busca}
-          onChange={(e) => setBusca(e.target.value)}
-          maxLength={60}
-          placeholder={copy.buscar}
-          className="min-h-toque rounded-xl border border-line bg-white px-3 text-base outline-none focus:border-blue"
-        />
-      </label>
-
-      {/* Sempre à vista: tipo de conta (um por vez) e entradas/saídas (as duas ligadas = tudo). */}
-      <nav aria-label={copy.tipoConta} className="flex flex-wrap gap-2">
-        <Chip ativo={!filtros.tipoConta} onClick={() => aplicar({ ...filtros, tipoConta: null })}>
-          {copy.tiposConta.TUDO}
-        </Chip>
-        {TIPOS_CONTA.map((t) => (
-          <Chip key={t} ativo={filtros.tipoConta === t} onClick={() => aplicar({ ...filtros, tipoConta: t })}>
-            {copy.tiposConta[t]}
-          </Chip>
-        ))}
-      </nav>
-      <div role="group" aria-label={copy.direcoes} className="flex gap-2">
-        {(['ENTRADA', 'SAIDA'] as Direcao[]).map((d) => (
-          <Chip key={d} ativo={filtros.direcao === null || filtros.direcao === d} onClick={() => aplicar({ ...filtros, direcao: alternarDirecao(filtros.direcao, d) })}>
-            {copy.tipos[d]}
-          </Chip>
-        ))}
-      </div>
-
-      <div className="flex flex-wrap items-center gap-2">
-        <button
-          type="button"
-          aria-pressed={filtros.soDivida}
-          onClick={() => aplicar({ ...filtros, soDivida: !filtros.soDivida })}
-          className={cx(
-            'min-h-toque rounded-full border px-3 text-sm font-semibold',
-            filtros.soDivida ? 'border-purple bg-purple text-white' : 'border-line bg-white text-navy',
-          )}
-        >
-          {copy.soDivida}
-        </button>
-        <Button
-          variante="secundario"
-          className="min-h-toque px-3 py-1 text-sm"
-          aria-expanded={aberto}
-          aria-controls="painel-filtros"
-          onClick={() => setAberto((v) => !v)}
-        >
-          {copy.filtros}
-          {ativos.length > 0 ? ` (${ativos.length})` : ''}
-        </Button>
-      </div>
-
-      {aberto && (
-        <PainelFiltros
-          filtros={filtros}
-          aplicar={aplicar}
-          contas={contas}
-          categorias={categorias.data ?? []}
-        />
-      )}
-
-      {ativos.length > 0 && (
-        <ul aria-label="Filtros ativos" className="flex flex-wrap gap-2">
-          {ativos.map((c) => (
-            <li key={c.chave}>
-              <button
-                type="button"
-                onClick={() => {
-                  const novo = c.remover(filtros);
-                  if (c.chave === 'busca') setBusca('');
-                  aplicar(novo);
-                }}
-                className="flex min-h-9 items-center gap-1 rounded-full bg-navy px-3 text-sm font-semibold text-white"
-                aria-label={`Remover filtro: ${c.rotulo}`}
-              >
-                {c.rotulo} <span aria-hidden="true">×</span>
-              </button>
-            </li>
-          ))}
-          <li>
-            <button
-              type="button"
-              onClick={() => {
-                setBusca('');
-                aplicar(FILTROS_VAZIOS);
-              }}
-              className="min-h-9 px-2 text-sm font-semibold text-blue underline"
-            >
-              {copy.limpar}
-            </button>
-          </li>
-        </ul>
-      )}
-
-      {lista.isLoading ? (
-        <Carregando />
-      ) : lista.isError || !resumo ? (
-        <EstadoErro onTentar={() => void lista.refetch()} />
-      ) : (
-        <div
-          className={cx('flex flex-col gap-3 transition-opacity', lista.isPlaceholderData && 'opacity-50')}
-          aria-busy={lista.isFetching}
-        >
-          {/* Uma linha por valor: em 360 px, três valores lado a lado se encostam. */}
-          <dl className="flex flex-col gap-1 rounded-2xl border border-line bg-white p-4 text-sm" aria-live="polite">
-            <div className="flex justify-between gap-3">
-              <dt className="text-slate">{copy.entradas}</dt>
-              <dd className="tabular font-semibold text-green-ink">+{brl(resumo.total_entradas)}</dd>
-            </div>
-            <div className="flex justify-between gap-3">
-              <dt className="text-slate">{copy.saidas}</dt>
-              <dd className="tabular font-semibold text-ink">−{brl(resumo.total_saidas)}</dd>
-            </div>
-            <div className="flex justify-between gap-3 border-t border-line pt-1">
-              <dt className="font-semibold text-navy">{copy.resultado}</dt>
-              <dd className={cx('tabular font-semibold', resumo.resultado >= 0 ? 'text-green-ink' : 'text-ink')}>
-                {resumo.resultado >= 0 ? '+' : '−'}
-                {brl(Math.abs(resumo.resultado) as typeof resumo.resultado)}
-              </dd>
-            </div>
-          </dl>
-          <div className="flex items-center justify-between gap-2">
-            <p className="text-sm text-slate">{copy.quantidade(resumo.total)}</p>
-            <label className="flex items-center gap-1 text-sm text-slate">
-              <span className="sr-only">{copy.ordem}</span>
-              <select
-                value={filtros.ordem}
-                onChange={(e) => aplicar({ ...filtros, ordem: e.target.value as Ordem })}
-                className="min-h-toque rounded-lg border border-line bg-white px-2 text-sm text-navy"
-              >
-                {(['recentes', 'maior_valor'] as Ordem[]).map((o) => (
-                  <option key={o} value={o}>
-                    {copy.ordens[o]}
-                  </option>
-                ))}
-              </select>
+      {/* No computador: filtros à esquerda, a lista à direita. */}
+      <Colunas
+        proporcao="filtros"
+        principal={
+          <>
+            <label className="flex flex-col gap-1">
+              <span className="sr-only">{copy.buscar}</span>
+              <input
+                type="search"
+                value={busca}
+                onChange={(e) => setBusca(e.target.value)}
+                maxLength={60}
+                placeholder={copy.buscar}
+                className="min-h-toque rounded-xl border border-line bg-white px-3 text-base outline-none focus:border-blue"
+              />
             </label>
-          </div>
-          {itens.length === 0 ? (
-            <p className="rounded-2xl border border-dashed border-line bg-white p-4 text-sm text-slate">{copy.vazio}</p>
-          ) : (
-            <ul className="flex flex-col divide-y divide-line rounded-2xl border border-line bg-white">
-              {itens.map((t) => (
-                <LinhaTransacao
-                  key={t.id}
-                  t={t}
-                  cartao={Boolean(t.final_cartao)}
-                  banco={{ nome: t.banco, logo: t.banco_logo, conta: t.conta_nome }}
-                />
-              ))}
-            </ul>
-          )}
-          {lista.hasNextPage && (
-            <Button variante="secundario" onClick={() => void lista.fetchNextPage()} disabled={lista.isFetchingNextPage}>
-              {copy.carregarMais}
-            </Button>
-          )}
-        </div>
-      )}
+
+            {/* Filtros em seções (teste com conta real): conta, movimento e o resto. */}
+            <section aria-label={copy.filtros} className="flex flex-col gap-4 rounded-2xl border border-line bg-white p-4">
+              <div className="flex flex-col gap-2">
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate">{copy.tipoConta}</p>
+                <nav aria-label={copy.tipoConta} className="flex flex-wrap gap-2">
+                  <Chip ativo={!filtros.tipoConta} onClick={() => aplicar({ ...filtros, tipoConta: null })}>
+                    {copy.tiposConta.TUDO}
+                  </Chip>
+                  {TIPOS_CONTA.map((t) => (
+                    <Chip key={t} ativo={filtros.tipoConta === t} onClick={() => aplicar({ ...filtros, tipoConta: t })}>
+                      {copy.tiposConta[t]}
+                    </Chip>
+                  ))}
+                </nav>
+              </div>
+              <div className="flex flex-col gap-2 border-t border-line pt-4">
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate">{copy.direcoes}</p>
+                {/* As duas ligadas = tudo; nunca as duas desligadas. Verde e vermelho em todas as telas. */}
+                <div role="group" aria-label={copy.direcoes} className="flex gap-2">
+                  {(['ENTRADA', 'SAIDA'] as Direcao[]).map((d) => (
+                    <Chip
+                      key={d}
+                      tom={d === 'ENTRADA' ? 'entrada' : 'saida'}
+                      ativo={filtros.direcao === null || filtros.direcao === d}
+                      onClick={() => aplicar({ ...filtros, direcao: alternarDirecao(filtros.direcao, d) })}
+                    >
+                      {copy.tipos[d]}
+                    </Chip>
+                  ))}
+                </div>
+              </div>
+              <div className="flex flex-wrap items-center gap-2 border-t border-line pt-4">
+                <button
+                  type="button"
+                  aria-pressed={filtros.soDivida}
+                  onClick={() => aplicar({ ...filtros, soDivida: !filtros.soDivida })}
+                  className={cx(
+                    'min-h-toque rounded-full border px-4 text-sm font-semibold',
+                    filtros.soDivida ? 'border-purple bg-purple text-white' : 'border-line bg-white text-navy',
+                  )}
+                >
+                  {copy.soDivida}
+                </button>
+                <button
+                  type="button"
+                  aria-expanded={aberto}
+                  aria-controls="painel-filtros"
+                  onClick={() => setAberto((v) => !v)}
+                  className="inline-flex min-h-toque items-center gap-2 rounded-full bg-blue px-4 text-sm font-semibold text-white hover:bg-blue/90"
+                >
+                  <span aria-hidden="true">{aberto ? '−' : '+'}</span>
+                  {copy.maisFiltros}
+                  {ativos.length > 0 ? ` (${ativos.length})` : ''}
+                </button>
+              </div>
+            </section>
+
+            {aberto && (
+              <PainelFiltros
+                filtros={filtros}
+                aplicar={aplicar}
+                contas={contas}
+                categorias={categorias.data ?? []}
+              />
+            )}
+
+            {ativos.length > 0 && (
+              <ul aria-label="Filtros ativos" className="flex flex-wrap gap-2">
+                {ativos.map((c) => (
+                  <li key={c.chave}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const novo = c.remover(filtros);
+                        if (c.chave === 'busca') setBusca('');
+                        aplicar(novo);
+                      }}
+                      className="flex min-h-9 items-center gap-1 rounded-full bg-navy px-3 text-sm font-semibold text-white"
+                      aria-label={`Remover filtro: ${c.rotulo}`}
+                    >
+                      {c.rotulo} <span aria-hidden="true">×</span>
+                    </button>
+                  </li>
+                ))}
+                <li>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setBusca('');
+                      aplicar(FILTROS_VAZIOS);
+                    }}
+                    className="min-h-9 px-2 text-sm font-semibold text-blue underline"
+                  >
+                    {copy.limpar}
+                  </button>
+                </li>
+              </ul>
+            )}
+          </>
+        }
+        lateral={
+          <>
+            {lista.isLoading ? (
+              <Carregando />
+            ) : lista.isError || !resumo ? (
+              <EstadoErro onTentar={() => void lista.refetch()} />
+            ) : (
+              <div
+                className={cx('flex flex-col gap-3 transition-opacity', lista.isPlaceholderData && 'opacity-50')}
+                aria-busy={lista.isFetching}
+              >
+                {/* Uma linha por valor: em 360 px, três valores lado a lado se encostam. */}
+                <dl className="flex flex-col gap-1 rounded-2xl border border-line bg-white p-4 text-sm" aria-live="polite">
+                  <div className="flex justify-between gap-3">
+                    <dt className="text-slate">{copy.entradas}</dt>
+                    <dd className="tabular font-semibold text-green-ink">+{brl(resumo.total_entradas)}</dd>
+                  </div>
+                  <div className="flex justify-between gap-3">
+                    <dt className="text-slate">{copy.saidas}</dt>
+                    <dd className="tabular font-semibold text-ink">−{brl(resumo.total_saidas)}</dd>
+                  </div>
+                  <div className="flex justify-between gap-3 border-t border-line pt-1">
+                    <dt className="font-semibold text-navy">{copy.resultado}</dt>
+                    <dd className={cx('tabular font-semibold', resumo.resultado >= 0 ? 'text-green-ink' : 'text-ink')}>
+                      {resumo.resultado >= 0 ? '+' : '−'}
+                      {brl(Math.abs(resumo.resultado) as typeof resumo.resultado)}
+                    </dd>
+                  </div>
+                </dl>
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-sm text-slate">{copy.quantidade(resumo.total)}</p>
+                  <label className="flex items-center gap-1 text-sm text-slate">
+                    <span className="sr-only">{copy.ordem}</span>
+                    <select
+                      value={filtros.ordem}
+                      onChange={(e) => aplicar({ ...filtros, ordem: e.target.value as Ordem })}
+                      className="min-h-toque rounded-lg border border-line bg-white px-2 text-sm text-navy"
+                    >
+                      {(['recentes', 'maior_valor'] as Ordem[]).map((o) => (
+                        <option key={o} value={o}>
+                          {copy.ordens[o]}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+                {itens.length === 0 ? (
+                  <p className="rounded-2xl border border-dashed border-line bg-white p-4 text-sm text-slate">{copy.vazio}</p>
+                ) : (
+                  <ul className="flex flex-col divide-y divide-line rounded-2xl border border-line bg-white">
+                    {itens.map((t) => (
+                      <LinhaTransacao
+                        key={t.id}
+                        t={t}
+                        cartao={Boolean(t.final_cartao)}
+                        banco={{ nome: t.banco, logo: t.banco_logo, conta: t.conta_nome }}
+                      />
+                    ))}
+                  </ul>
+                )}
+                {lista.hasNextPage && (
+                  <Button variante="secundario" onClick={() => void lista.fetchNextPage()} disabled={lista.isFetchingNextPage}>
+                    {copy.carregarMais}
+                  </Button>
+                )}
+              </div>
+            )}
+          </>
+        }
+      />
     </div>
   );
 }

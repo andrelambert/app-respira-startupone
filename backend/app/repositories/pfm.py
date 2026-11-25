@@ -5,11 +5,11 @@ from datetime import date
 from decimal import Decimal
 from typing import Any
 
-from sqlalchemy import func, or_
+from sqlalchemy import func, not_, or_
 from sqlmodel import Session, col, select
 
 from app.domain.gastos import CATEGORIAS_FORA
-from app.providers.mapping import CATEGORIA_INVESTIMENTO
+from app.providers.mapping import CATEGORIA_INVESTIMENTO, CATEGORIA_PAGAMENTO_DIVIDA, OPERACAO_PAGAMENTO_FATURA
 from app.models import Consentimento, Conta, Direcao, Fatura, StatusConsentimento, TipoConta, Transacao
 
 
@@ -142,6 +142,17 @@ def _condicoes(usuario_id: int, f: FiltroTransacoes) -> list[Any]:
         cond.append(col(Transacao.conta_id).in_(f.contas))
     if f.direcao is not None:
         cond.append(Transacao.direcao == f.direcao)
+    if f.direcao == Direcao.ENTRADA:
+        # O pagamento da fatura aparece como entrada no cartão: é o mesmo dinheiro
+        # que saiu da conta, não dinheiro novo (teste com conta Nubank real).
+        cond.append(
+            not_(
+                or_(
+                    func.coalesce(Transacao.tipo_operacao, "") == OPERACAO_PAGAMENTO_FATURA,
+                    (Transacao.categoria == CATEGORIA_PAGAMENTO_DIVIDA) & (Transacao.subcategoria == "Credit Card"),
+                )
+            )
+        )
     if f.categorias:
         # Cada item é uma categoria ("Food & Groceries") ou uma subcategoria
         # ("Food & Groceries::Restaurants" — o toque numa barra de gastos, N2).

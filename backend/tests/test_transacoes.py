@@ -159,3 +159,14 @@ def test_filtro_por_tipo_de_conta_e_investimentos(demo_limpa):
     inv = api.get("/transacoes", params={"tipo_conta": "INVESTIMENTOS", "por_pagina": 100}).json()
     assert inv["total"] > 0 and all(t["categoria"] == "Investments & Savings" for t in inv["itens"])
     assert api.get("/transacoes", params={"tipo_conta": "CORRETORA"}).status_code == 422
+
+
+def test_entradas_sem_pagamento_de_fatura(demo_limpa):
+    """O pagamento da fatura entra no cartão, mas não é dinheiro novo (teste com conta Nubank real)."""
+    api = demo_limpa
+    todas = api.get("/transacoes", params={"por_pagina": 100, "busca": "pagamento recebido"}).json()
+    assert todas["total"] > 0 and all(t["tipo_operacao"] == "PAGAMENTO_FATURA" for t in todas["itens"])
+    entradas = api.get("/transacoes", params={"por_pagina": 100, "direcao": "ENTRADA"}).json()
+    assert entradas["total"] > 0
+    assert not any(t["tipo_operacao"] == "PAGAMENTO_FATURA" for t in entradas["itens"])
+    assert not any(t["subcategoria"] == "Credit Card" for t in entradas["itens"])

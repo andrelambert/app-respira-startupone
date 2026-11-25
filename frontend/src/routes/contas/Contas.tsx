@@ -8,6 +8,7 @@ import {
   Card,
   Carregando,
   Chip,
+  Colunas,
   EstadoErro,
   EstadoVazio,
   Icone,
@@ -80,33 +81,44 @@ export default function Contas() {
         </Link>
       </nav>
 
-      <div className="grid grid-cols-2 gap-3">
-        <Card as="div">
-          <p className="text-sm text-slate">{copy.emConta}</p>
-          <Money valor={emConta} className="text-xl font-bold text-navy" />
-        </Card>
-        <Card as="div">
-          <p className="text-sm text-slate">{copy.faturasAbertas}</p>
-          <Money valor={faturas} className="text-xl font-bold text-navy" />
-        </Card>
-      </div>
+      {/* No computador: contas e cartões à esquerda; entradas, saídas e gastos à direita. */}
+      <Colunas
+        proporcao="1-1"
+        principal={
+          <>
+            <div className="grid grid-cols-2 gap-3">
+              <Card as="div">
+                <p className="text-sm text-slate">{copy.emConta}</p>
+                <Money valor={emConta} className="text-xl font-bold text-navy" />
+              </Card>
+              <Card as="div">
+                <p className="text-sm text-slate">{copy.faturasAbertas}</p>
+                <Money valor={faturas} className="text-xl font-bold text-navy" />
+              </Card>
+            </div>
 
-      {/* Primeiro o que está conectado (teste com conta real): contas e cartões. */}
-      <p className="-mb-2 text-xs text-slate">{copy.toqueParaDetalhes}</p>
-      {bancos.map((b) => (
-        <SecaoBanco key={b.consentimento_id} banco={b} />
-      ))}
+            {/* Primeiro o que está conectado (teste com conta real): contas e cartões. */}
+            <p className="-mb-2 text-xs text-slate">{copy.toqueParaDetalhes}</p>
+            {bancos.map((b) => (
+              <SecaoBanco key={b.consentimento_id} banco={b} />
+            ))}
 
-      {/* N1: extrato unificado, com filtros. */}
-      <LinkBotao to="/transacoes" variante="secundario">
-        {copyTransacoes.verTodas}
-      </LinkBotao>
+            {/* N1: extrato unificado, com filtros. */}
+            <LinkBotao to="/transacoes" variante="secundario">
+              {copyTransacoes.verTodas}
+            </LinkBotao>
+          </>
+        }
+        lateral={
+          <>
+            {/* Entradas e saídas, mês a mês: tocar na barra abre as transações daquele mês. */}
+            <EntradasSaidas />
 
-      {/* Entradas e saídas, mês a mês: tocar na barra abre as transações daquele mês. */}
-      <EntradasSaidas />
-
-      {/* N2: para onde foi o dinheiro, ligado ao plano. */}
-      <GastosCategoria />
+            {/* N2: para onde foi o dinheiro, ligado ao plano. */}
+            <GastosCategoria />
+          </>
+        }
+      />
 
       {/* N5: de onde vem o valor do plano. */}
       <FluxoMensal id="fluxo-mensal" />

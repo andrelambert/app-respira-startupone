@@ -182,15 +182,18 @@ function Simulador({
 
       <fieldset className="flex flex-col gap-3">
         <legend className="sr-only">Escolha o caminho</legend>
-        {(['AVALANCHE', 'EQUILIBRADO', 'SNOWBALL'] as Metodo[]).map((m) => (
-          <StrategyCard
-            key={m}
-            e={por[m]!}
-            selecionado={metodo === m}
-            sugerido={base.pre_selecionado === m}
-            onSelecionar={() => setMetodo(m)}
-          />
-        ))}
+        {/* Lado a lado no computador (§9: as três estratégias lado a lado). */}
+        <div className="flex flex-col gap-3 lg:grid lg:grid-cols-3">
+          {(['AVALANCHE', 'EQUILIBRADO', 'SNOWBALL'] as Metodo[]).map((m) => (
+            <StrategyCard
+              key={m}
+              e={por[m]!}
+              selecionado={metodo === m}
+              sugerido={base.pre_selecionado === m}
+              onSelecionar={() => setMetodo(m)}
+            />
+          ))}
+        </div>
         <p className="text-sm text-slate">
           {copy.motivo[base.motivo_pre_selecao]} {copy.escolha}
         </p>

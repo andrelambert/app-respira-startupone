@@ -260,7 +260,8 @@ class EventoPendente:
 def grupo(tipo: str, divida_id: int | None, contexto: dict[str, Any]) -> str:
     """No máximo um alerta pendente por grupo: (tipo, dívida) ou (pico, categoria)."""
     if tipo == "PICO_CATEGORIA":
-        return f"{tipo}:{contexto.get('categoria')}"
+        # Categoria principal: alertas de antes da Fase 7 guardavam "Categoria::Subcategoria".
+        return f"{tipo}:{str(contexto.get('categoria') or '').split('::')[0]}"
     return f"{tipo}:{divida_id}"
 
 
@@ -295,8 +296,12 @@ def resolvidos(
             # O pico é de um mês fechado; quando outro mês fecha, ele perde o sentido.
             # Sem dívida, não há plano para onde o dinheiro ir.
             mes = p.contexto.get("mes")
-            sai = (mes is not None and date.fromisoformat(mes) < ultimo_mes_completo) or not any(
-                x.saldo > 0 for x in dividas
+            # Formato antigo ("Categoria::Subcategoria"): o alerta novo, pela categoria
+            # principal, já cobre o mesmo gasto — sem isso, o mesmo aviso aparecia duas vezes.
+            sai = (
+                (mes is not None and date.fromisoformat(mes) < ultimo_mes_completo)
+                or not any(x.saldo > 0 for x in dividas)
+                or "::" in str(p.contexto.get("categoria") or "")
             )
         else:
             sai = False  # DIVIDA_QUITADA é marco; DESVIO_PLANO sai por substituição
