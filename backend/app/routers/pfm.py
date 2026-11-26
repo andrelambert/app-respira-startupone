@@ -334,6 +334,8 @@ def fluxo_mensal(u: UsuarioDep, s: SessionDep, meses: Annotated[int, Query(ge=3,
         capacidade_origem=cap.origem.value,
         entradas_mediana=cap.entradas,
         essenciais_mediana=cap.essenciais,
+        gastos_mediana=cap.gastos,
+        capacidade_cortando=cap.cortando,
         reserva_pct=int((1 - FATOR_RESERVA) * 100),
     )
 

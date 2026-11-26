@@ -7,7 +7,8 @@ from decimal import Decimal as D
 import pytest
 from fastapi.testclient import TestClient
 
-from app.domain.gastos import Movimento, fluxo_mensal, sobra_real
+from app.domain.gastos import Movimento, fluxo_mensal, gastos_tipicos
+from app.domain.planner import capacidade_de_pagamento
 from app.domain.pfm import fatura_aberta_estimada
 from app.main import app
 
@@ -45,7 +46,9 @@ def test_resultado_do_mes_nao_conta_a_fatura_duas_vezes():
     assert f.pagamentos_divida == D("2000.00") and f.reserva == D("-600.00")
 
 
-def test_sobra_real_e_a_mediana_depois_de_todos_os_gastos():
+def test_capacidade_sai_de_todos_os_gastos_tipicos():
+    """Teste com usuária: "R$ 901 por mês" (entradas − só os essenciais) quando todos
+    os meses tinham fechado no negativo. A base agora são todos os gastos."""
     def mes(m, e, ess, o):
         return [
             Movimento(date(2026, m, 5), D(e), False, False, True, None),
@@ -55,8 +58,11 @@ def test_sobra_real_e_a_mediana_depois_de_todos_os_gastos():
 
     movs = mes(8, "2765", "1629", "2563") + mes(9, "577", "1451", "2029") + mes(10, "4397", "1577", "3343")
     fl = fluxo_mensal(movs, [date(2026, 8, 1), date(2026, 9, 1), OUT, date(2026, 11, 1)])
-    assert sobra_real(fl) == D("-1427.00")  # mês sem dado (novembro) não entra
-    assert sobra_real([]) is None
+    gastos = gastos_tipicos(fl)
+    assert gastos == D("4192.00")  # mediana de essenciais + outros; novembro (sem dado) não entra
+    assert gastos_tipicos([]) is None
+    assert capacidade_de_pagamento(D("2765.00"), gastos) == D("0.00")  # não sobra: nunca negativa
+    assert capacidade_de_pagamento(D("5300.00"), D("3800.00")) == D("1350.00")
 
 
 def test_api_mes_que_vem_fatura_aberta_e_sobra_real(demo_limpa):
@@ -66,7 +72,10 @@ def test_api_mes_que_vem_fatura_aberta_e_sobra_real(demo_limpa):
     assert D(pm["previsto"]) == previsto
     assert D(pm["sobra"]) == D(pm["entradas"]) - previsto
     cap = api.get("/plano/simulacoes").json()["capacidade_calculada"]
-    assert cap["sobra_real"] is not None and D(cap["sobra_real"]) < D(cap["valor"]) / D("0.9")
+    # Valor sugerido = (entradas − todos os gastos) × 0,9; o teto cortando o não essencial é maior.
+    assert D(cap["sobra_real"]) == D(cap["entradas"]) - D(cap["gastos"])
+    assert D(cap["valor"]) == max((D(cap["sobra_real"]) * D("0.9")).quantize(D("0.01")), D(0))
+    assert D(cap["cortando"]) > D(cap["valor"]) and D(cap["gastos"]) > D(cap["essenciais"])
     cartoes = [c for b in api.get("/pfm/visao-geral").json()["bancos"] for c in b["contas"] if c["tipo"] == "CARTAO_CREDITO"]
     assert cartoes and all(c["fatura_aberta"] is not None and D(c["fatura_aberta"]) >= 0 for c in cartoes)
     meses = api.get("/pfm/fluxo-mensal").json()["meses"]

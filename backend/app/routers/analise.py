@@ -54,6 +54,8 @@ def _cap(c: Capacidade) -> CapacidadeOut:
         essenciais=c.essenciais,
         meses_historico=c.meses_historico,
         sobra_real=c.sobra_real,
+        gastos=c.gastos,
+        cortando=c.cortando,
     )
 
 
@@ -93,6 +95,7 @@ def raiox(u: UsuarioDep, s: SessionDep) -> RaioXOut:
         capacidade=_cap(r.capacidade),
         capacidade_minima=r.capacidade_minima,
         projecao=projecao_out(r.projecao),
+        projecao_cortando=projecao_out(r.projecao_cortando) if r.projecao_cortando else None,
         dividas=[divida_out(s, d) for d in r.dividas],
     )
 

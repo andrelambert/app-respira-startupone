@@ -24,6 +24,14 @@
 >   `subtype: CHEQUE_ESPECIAL`, e `total_effective_cost` (CET) é taxa **anual em fração**, não
 >   valor em reais como diz a documentação — ver `mapping.normalizar_taxa`.
 >
+> - **Capacidade de pagamento (§5.1), desde a Fase 7:** `(mediana das entradas − mediana de TODOS
+>   os gastos do mês) × 0,90` — essenciais + outros, inclusive o cartão, sem dívida, transferência
+>   nem aplicação automática. Só os essenciais supunham cortar todo o resto (teste com usuária). O
+>   valor "cortando o não essencial" (a regra antiga) continua calculado, como teto; quando o que
+>   sobra hoje não paga nem os mínimos, o Raio-X mostra a data nesse cenário, como condição.
+>   Com isso, a Juliana passa de R$ 1.755 para R$ 1.278/mês (e não cobre os mínimos). Os números da
+>   §14.1 não mudam: o motor recebe a capacidade pronta (R$ 900 no teste).
+
 > A integração com a Belvo (Open Finance Brasil) está detalhada na
 > [seção 7](#7-integração-belvo-open-finance-brasil--ofda). **Confira sempre o schema atual na
 > documentação da Belvo antes de implementar — e não invente campo que não exista.**

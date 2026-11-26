@@ -5,9 +5,9 @@ import { centavos } from './money';
 
 // Teste com usuária (Fase 7): textos que respondem ao que ela não entendeu.
 describe('textos do teste com usuária', () => {
-  it('o plano diz o esforço que o valor pede', () => {
-    expect(plano.esforco(centavos(125000), centavos(175500))).toMatch(/seria preciso cortar R\$\s505 por mês/);
-    expect(plano.esforco(centavos(-101949), centavos(90100))).toMatch(/fecha R\$\s1\.019 no negativo/);
+  it('o plano parte de todos os gastos e mostra o teto cortando o não essencial', () => {
+    expect(plano.sliderAjuda(centavos(127818))).toContain('menos o que você costuma gastar (tudo, inclusive o cartão)');
+    expect(plano.cortando(centavos(175500))).toMatch(/daria para colocar até R\$\s1\.755 por mês/);
   });
 
   it('como os meses fecharam', () => {

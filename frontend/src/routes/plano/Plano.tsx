@@ -77,7 +77,7 @@ function Simulador({
   metodoAtivo: Metodo | null;
 }) {
   const calculada = reaisInteiros(base.capacidade_calculada.valor);
-  const sobra = base.capacidade_calculada.sobra_real;
+  const cortando = base.capacidade_calculada.cortando;
   const [reais, setReais] = useState(() =>
     capacidadeAtiva !== null ? reaisInteiros(capacidadeAtiva) : capacidadeInicial(base),
   );
@@ -141,13 +141,17 @@ function Simulador({
         <p className="text-sm text-slate">
           {calculada > 0 ? copy.sliderAjuda(base.capacidade_calculada.valor) : copy.sliderSemHistorico}
         </p>
-        {/* O esforço que o valor pede: o que sobra hoje depois de TODOS os gastos. */}
-        {calculada > 0 && sobra !== null && sobra < base.capacidade_calculada.valor && (
-          <div className="flex flex-col gap-1 rounded-xl bg-amber-soft p-3">
-            <p className="text-sm text-amber-ink">{copy.esforco(sobra, base.capacidade_calculada.valor)}</p>
-            {sobra > 0 && reaisInteiros(sobra) !== reais && (
-              <Button variante="fantasma" className="self-start px-0 text-sm" onClick={() => setReais(reaisInteiros(sobra))}>
-                {copy.usarSobra(sobra)}
+        {/* Fase 7 (teste com usuária): o valor calculado cabe no mês real; cortando o não
+            essencial, daria mais — a escolha é da pessoa. */}
+        {base.capacidade_calculada.meses_historico > 0 && calculada === 0 && (
+          <p className="rounded-xl bg-amber-soft p-3 text-sm text-amber-ink">{copy.semSobra}</p>
+        )}
+        {cortando !== null && cortando > base.capacidade_calculada.valor && (
+          <div className="flex flex-col gap-1 rounded-xl bg-purple-soft p-3">
+            <p className="text-sm text-ink">{copy.cortando(cortando)}</p>
+            {reaisInteiros(cortando) !== reais && (
+              <Button variante="fantasma" className="self-start px-0 text-sm" onClick={() => setReais(reaisInteiros(cortando))}>
+                {copy.verCortando(cortando)}
               </Button>
             )}
           </div>

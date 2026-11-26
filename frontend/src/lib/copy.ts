@@ -285,6 +285,8 @@ export const raiox = {
   saiEm: 'Seguindo o plano, você sai das dívidas em',
   projecao: 'Projeção com',
   porMes: (valor: Centavos) => `${r$(valor)} por mês`,
+  // Quando o que sobra hoje não paga nem os mínimos: a data, dita como condição.
+  saiCortando: (valor: Centavos) => `Cortando o que não é essencial (${r$(valor)} por mês), você sai das dívidas em`,
   naoConverge: (cap: Centavos, minimo: Centavos | null) =>
     minimo
       ? `Com ${r$(cap)} por mês a dívida não diminui. São necessários pelo menos ${r$(minimo)} por mês.`
@@ -409,14 +411,13 @@ export const plano = {
   titulo: 'Seu plano de saída',
   subtitulo: 'Três caminhos para a mesma saída. A diferença está em quanto custa e quando vem a primeira vitória.',
   slider: 'Quanto você pode colocar por mês',
+  // Fase 7 (teste com usuária): a capacidade sai de TODOS os gastos, não só dos essenciais.
   sliderAjuda: (calculada: Centavos) =>
-    `Calculamos ${r$(calculada)}: o que entra num mês típico menos os gastos essenciais, já guardando 10% para imprevistos.`,
+    `Calculamos ${r$(calculada)}: o que entra num mês típico menos o que você costuma gastar (tudo, inclusive o cartão), já guardando 10% para imprevistos.`,
+  semSobra: 'Hoje, o que entra num mês típico não cobre o que você costuma gastar: para o plano andar, é preciso cortar algum gasto.',
+  cortando: (valor: Centavos) => `Cortando o que não é essencial, daria para colocar até ${r$(valor)} por mês.`,
+  verCortando: (valor: Centavos) => `Ver o plano com ${r$(valor)}`,
   // Teste com usuária (Fase 7): "não posso colocar R$ 901, o dinheiro já vai para outros lugares".
-  esforco: (sobra: Centavos, valor: Centavos) =>
-    sobra > 0
-      ? `Esse valor supõe cortar o que não é essencial. Hoje, depois de todos os gastos (inclusive o cartão), sobram ${r$(sobra)} num mês típico — para colocar ${r$(valor)}, seria preciso cortar ${r$((valor - sobra) as Centavos)} por mês.`
-      : `Esse valor supõe cortar o que não é essencial. Hoje, depois de todos os gastos (inclusive o cartão), o mês típico fecha ${r$(Math.abs(sobra) as Centavos)} no negativo — este plano depende de cortar gastos.`,
-  usarSobra: (sobra: Centavos) => `Usar o que sobra hoje (${r$(sobra)})`,
   sliderSemHistorico: 'Escolha um valor que caiba no seu bolso. Você pode mudar quando quiser.',
   voltarCalculado: 'Voltar ao valor calculado',
   livreEm: 'Livre em',
@@ -1070,12 +1071,12 @@ export const fluxo = {
   titulo: 'Entradas, gastos e dívida, mês a mês',
   verDeOndeVeio: 'Ver de onde veio',
   esconder: 'Esconder',
-  conta: (entradas: string, essenciais: string, reserva: number, capacidade: string) =>
-    `Nos últimos 6 meses, num mês típico entraram ${entradas} e os gastos essenciais foram ${essenciais}. ` +
+  conta: (entradas: string, gastos: string, essenciais: string, reserva: number, capacidade: string) =>
+    `Nos últimos 6 meses, num mês típico entraram ${entradas} e os gastos foram ${gastos} (${essenciais} deles essenciais). ` +
     `A diferença, menos ${reserva}% de reserva para imprevistos, dá ${capacidade} por mês para as dívidas.`,
   // Renda vinda do add-on INCOMES da Belvo: não é a mesma conta das barras.
-  contaRendaDetectada: (entradas: string, essenciais: string, reserva: number, capacidade: string) =>
-    `Pela renda que o seu banco identificou, entram ${entradas} por mês; os gastos essenciais num mês típico foram ${essenciais}. ` +
+  contaRendaDetectada: (entradas: string, gastos: string, essenciais: string, reserva: number, capacidade: string) =>
+    `Pela renda que o seu banco identificou, entram ${entradas} por mês; num mês típico os gastos foram ${gastos} (${essenciais} deles essenciais). ` +
     `A diferença, menos ${reserva}% de reserva para imprevistos, dá ${capacidade} por mês para as dívidas.`,
   aplicacoes:
     'Aplicações e resgates automáticos ficam fora de entradas e gastos: é o seu dinheiro mudando de lugar, não renda nem gasto.',
@@ -1083,7 +1084,7 @@ export const fluxo = {
     'Usamos o mês típico (a mediana), não a média: um mês fora da curva — um bônus, uma despesa rara — não puxa o valor para cima nem para baixo.',
   cartao: 'Compras no cartão contam como gasto; o pagamento da fatura aparece em dívida.',
   semHistorico: 'Ainda não há meses completos suficientes para mostrar.',
-  series: { entradas: 'Entradas', essenciais: 'Gastos essenciais', outros: 'Outros gastos', divida: 'Pagamentos de dívida', sobra: 'Sobra (entradas − essenciais)' },
+  series: { entradas: 'Entradas', essenciais: 'Gastos essenciais', outros: 'Outros gastos', divida: 'Pagamentos de dívida', sobra: 'Sobra (entradas − gastos)' },
   reservaColuna: 'Guardou (usou)',
   // "Fechei positivo ou negativo?" (teste com usuária, Fase 7).
   resultadoColuna: 'Resultado',

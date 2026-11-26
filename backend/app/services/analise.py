@@ -71,9 +71,11 @@ class Capacidade:
     entradas: Decimal | None
     essenciais: Decimal | None
     meses_historico: int
-    # Num mês típico, depois de TODOS os gastos (não só os essenciais). Mostra o
-    # esforço que a capacidade pede (teste com conta real, Fase 7).
+    # Num mês típico, depois de TODOS os gastos: entradas − gastos típicos.
     sobra_real: Decimal | None = None
+    gastos: Decimal | None = None  # todos os gastos de um mês típico (essenciais + outros)
+    # Teto: o que daria cortando todo o não essencial (a regra até a Fase 7).
+    cortando: Decimal | None = None
 
 
 def _movimento(t: Transacao) -> gastos_dom.Movimento:
@@ -86,7 +88,13 @@ def _movimento(t: Transacao) -> gastos_dom.Movimento:
 
 
 def capacidade(s: Session, u: Usuario, hoje: date) -> Capacidade:
-    """§5.1 / §7.8: renda do add-on INCOMES se houver; senão, mediana das transações."""
+    """Quanto dá para pôr nas dívidas por mês: (entradas − gastos típicos) × 0,90.
+
+    Entradas: renda do add-on INCOMES se houver (§7.8); senão, mediana das
+    transações. Gastos: TODOS os de um mês típico — até a Fase 7 eram só os
+    essenciais (§5.1), o que supunha cortar todo o resto; o teste com usuária
+    mostrou um plano que não cabia no mês real. O valor "cortando o não
+    essencial" continua calculado, como teto."""
     assert u.id is not None
     desde = adicionar_meses(hoje.replace(day=1), -6)
     ts = repo_f.transacoes(s, u.id, desde)
@@ -108,8 +116,19 @@ def capacidade(s: Session, u: Usuario, hoje: date) -> Capacidade:
         return Capacidade(Decimal("0.00"), CapacidadeOrigem.TRANSACOES, None, None, 0)
     # Os mesmos meses completos da mediana (§5.1).
     janela = [adicionar_meses(hoje.replace(day=1), -i) for i in range(6, 0, -1)]
-    sobra = gastos_dom.sobra_real(gastos_dom.fluxo_mensal([_movimento(t) for t in ts], janela))
-    return Capacidade(capacidade_de_pagamento(entradas, essenciais), origem, entradas, essenciais, meses, sobra)
+    gastos = gastos_dom.gastos_tipicos(gastos_dom.fluxo_mensal([_movimento(t) for t in ts], janela))
+    if gastos is None:
+        gastos = essenciais
+    return Capacidade(
+        valor=capacidade_de_pagamento(entradas, gastos),
+        origem=origem,
+        entradas=entradas,
+        essenciais=essenciais,
+        meses_historico=meses,
+        sobra_real=arredondar(entradas - gastos),
+        gastos=gastos,
+        cortando=capacidade_de_pagamento(entradas, essenciais),
+    )
 
 
 def _entradas(dividas: Sequence[Divida]) -> list[DividaEntrada]:
@@ -147,6 +166,9 @@ class ResultadoRaioX:
     projecao: Simulacao
     capacidade_minima: Decimal | None
     hoje: date
+    # Quando o que sobra hoje não paga nem os mínimos: a data cortando o não
+    # essencial — a data continua na primeira tela (§9), dita como condição.
+    projecao_cortando: Simulacao | None = None
 
 
 def montar_raio_x(s: Session, u: Usuario) -> ResultadoRaioX:
@@ -163,14 +185,19 @@ def montar_raio_x(s: Session, u: Usuario) -> ResultadoRaioX:
     valor = plano.capacidade_mensal if plano else cap.valor
     if plano:
         metodo = Metodo(plano.metodo)
+    projecao = planner.simular(entradas, valor, metodo, hoje)
+    cortando = None
+    if not plano and not projecao.converge and cap.cortando and cap.cortando > valor:
+        cortando = planner.simular(entradas, cap.cortando, metodo, hoje)
     return ResultadoRaioX(
         dividas=sorted(dividas, key=lambda d: (-d.taxa_juros_mes, d.saldo_devedor, d.id or 0)),
         agregado=agregado,
         capacidade=cap,
         metodo=metodo,
-        projecao=planner.simular(entradas, valor, metodo, hoje),
+        projecao=projecao,
         capacidade_minima=planner.capacidade_minima(entradas, hoje),
         hoje=hoje,
+        projecao_cortando=cortando,
     )
 
 
@@ -605,7 +632,12 @@ def _impacto(s: Session, u: Usuario, cat: gastos_dom.CategoriaMes | None) -> Imp
     if ativo is not None:
         cap, metodo = ativo.capacidade_mensal, Metodo(ativo.metodo)
     else:
-        cap, metodo = capacidade(s, u, hoje).valor, planner.metodo_pre_selecionado(u.ja_desistiu_de_plano)
+        calculada = capacidade(s, u, hoje)
+        cap, metodo = calculada.valor, planner.metodo_pre_selecionado(u.ja_desistiu_de_plano)
+        # Se o que sobra hoje não fecha o plano, o impacto é medido sobre o
+        # cenário cortando o não essencial — o mesmo que o Raio-X mostra.
+        if calculada.cortando and not planner.simular(entradas, cap, metodo, hoje).converge:
+            cap = calculada.cortando
     # Valor mensal em reais inteiros: é uma estimativa, não um centavo exato.
     extra = arredondar(gastos_dom.excesso_nao_essencial(cat)).to_integral_value()
     if cap <= 0 or extra <= 0:

@@ -133,6 +133,8 @@ const capacidadeSchema = z.object({
   essenciais: dinheiro.nullable(),
   meses_historico: z.number().int(),
   sobra_real: dinheiro.nullable(), // num mês típico, depois de todos os gastos
+  gastos: dinheiro.nullable(), // todos os gastos de um mês típico — a base da capacidade
+  cortando: dinheiro.nullable(), // teto: cortando todo o não essencial
 });
 
 export const raioXSchema = z.object({
@@ -152,6 +154,7 @@ export const raioXSchema = z.object({
   capacidade: capacidadeSchema,
   capacidade_minima: dinheiro.nullable(),
   projecao: projecaoSchema,
+  projecao_cortando: projecaoSchema.nullable().optional(), // quando o que sobra hoje não fecha o plano
   dividas: z.array(dividaSchema),
 });
 export type RaioX = z.infer<typeof raioXSchema>;
@@ -430,6 +433,8 @@ const fluxoMensalSchema = z.object({
   capacidade_origem: z.string(),
   entradas_mediana: dinheiro.nullable(),
   essenciais_mediana: dinheiro.nullable(),
+  gastos_mediana: dinheiro.nullable(),
+  capacidade_cortando: dinheiro.nullable(),
   reserva_pct: z.number().int(),
 });
 export type FluxoMensal = z.infer<typeof fluxoMensalSchema>;
