@@ -15,6 +15,7 @@ describe('entradas e saídas (Contas)', () => {
       pagamentos_divida: centavos(175500),
       sobra: centavos(195000),
       reserva: centavos(0),
+      resultado: centavos(-125000),
     };
     expect(valorDoMes(m, 'entradas')).toBe(530000);
     expect(valorDoMes(m, 'saidas')).toBe(405000);

@@ -11,7 +11,6 @@ import {
 } from '@/components/respira';
 import {
   BarraIndeterminada,
-  Badge,
   Card,
   Carregando,
   EstadoErro,
@@ -21,11 +20,13 @@ import {
   Money,
   cx,
 } from '@/components/ui';
+import { MesQueVem } from '@/components/respira/MesQueVem';
 import { SemDividas } from '@/components/respira/SemDividas';
 import { EsperaColeta } from '@/components/respira/EsperaColeta';
 import { chaves, useConsentimentos, useUsuario } from '@/hooks/queries';
 import { api, type Consentimento, type Divida, type RaioX as TRaioX } from '@/lib/api';
 import {
+  alerta,
   alertaDividaCresce,
   alertaMinimo,
   alertaMinimoProximo,
@@ -39,7 +40,8 @@ import {
 import { percentual, sub } from '@/lib/money';
 
 // Quantas linhas cabem antes da data de quitação sem rolar num celular de 360 px (§9).
-const LINHAS_NA_DOBRA = 5;
+// Linhas com rótulo ficaram mais altas: 4 cabem com a data na mesma tela em 360 px.
+const LINHAS_NA_DOBRA = 4;
 
 /** Etapa 4 — Diagnóstico (§9). O momento de verdade. */
 export default function RaioX() {
@@ -73,7 +75,10 @@ export default function RaioX() {
   }
   if (r.qtd_dividas === 0) {
     return lista.some((c) => c.status === 'ATIVO') ? (
-      <SemDividas />
+      <div className="flex flex-col gap-5">
+        <SemDividas />
+        <MesQueVem />
+      </div>
     ) : (
       <EstadoVazio
         titulo={copy.semConexao.titulo}
@@ -165,7 +170,7 @@ function Diagnostico({ r, consentimentos }: { r: TRaioX; consentimentos: Consent
               <p className="text-sm text-ink">
                 {alertaMinimoProximo}{' '}
                 <Link to="/licoes/so-o-minimo" className="font-semibold text-blue underline">
-                  Entenda
+                  {alerta.saibaMais}
                 </Link>
               </p>
             </Card>
@@ -179,11 +184,14 @@ function Diagnostico({ r, consentimentos }: { r: TRaioX; consentimentos: Consent
           <p className="text-sm text-ink">
             {alertaMinimoProximo}{' '}
             <Link to="/licoes/so-o-minimo" className="font-semibold text-blue underline">
-              Entenda
+              {alerta.saibaMais}
             </Link>
           </p>
         </Card>
       )}
+
+      {/* Cabe no mês que vem? A dívida não vive sozinha: fatura e gastos fixos também saem. */}
+      <MesQueVem />
 
       {/* 6. CTA único */}
       <LinkBotao to="/plano" largo>
@@ -213,30 +221,41 @@ function Diagnostico({ r, consentimentos }: { r: TRaioX; consentimentos: Consent
 function LinhaDivida({ d, cor }: { d: Divida; cor: string }) {
   const cara = Number(d.taxa_anual.split('.')[0]) >= 100;
   return (
-    <li className="flex items-center gap-3 px-3 py-2">
-      <span aria-hidden="true" className="h-8 w-1.5 shrink-0 rounded-full" style={{ background: cor }} />
+    <li className="flex items-center gap-3 px-3 py-2.5">
+      <span aria-hidden="true" className="h-10 w-1.5 shrink-0 rounded-full" style={{ background: cor }} />
       <div className="min-w-0 flex-1">
+        {/* Hierarquia (teste com usuária): primeiro o nome e o valor; depois os
+            detalhes, menores e cada um com rótulo — juros, mínimo, vencimento. */}
         <div className="flex items-baseline justify-between gap-2">
-          <span className="truncate font-semibold text-navy">{d.descricao}</span>
-          <Money valor={d.saldo} semCentavos className="font-semibold text-navy" />
+          <span className="truncate text-base font-semibold text-navy">{d.descricao}</span>
+          <Money valor={d.saldo} semCentavos className="text-lg font-bold text-navy" />
         </div>
-        <div className="flex flex-wrap items-center gap-x-2 text-xs text-slate">
-          <span className={cx('font-semibold', cara ? 'text-rose-ink' : 'text-ink')}>
-            {percentual(d.taxa_anual, 0)} a.a.
-          </span>
-          {d.taxa_estimada && (
-            <Badge tom="estimada" title={copyDivida.estimadaAjuda}>
-              {copyDivida.estimada}
-            </Badge>
+        <dl className="mt-0.5 flex flex-wrap items-baseline gap-x-3 text-xs text-slate">
+          <div className="flex items-baseline gap-1">
+            <dt>{copy.rotulos.juros}</dt>
+            <dd className={cx('font-semibold', cara ? 'text-rose-ink' : 'text-ink')}>
+              {percentual(d.taxa_anual, 0)} {copy.rotulos.aoAno}
+              {d.taxa_estimada && (
+                <span className="ml-1 font-normal text-amber-ink" title={copyDivida.estimadaAjuda}>
+                  ({copy.rotulos.estimada})
+                </span>
+              )}
+            </dd>
+          </div>
+          <div className="flex items-baseline gap-1">
+            <dt>{copy.rotulos.minimo}</dt>
+            <dd className="text-ink">
+              <Money valor={d.parcela_minima} semCentavos />
+            </dd>
+          </div>
+          {d.dia_vencimento && (
+            <div className="flex items-baseline gap-1">
+              <dt>{copy.rotulos.vence}</dt>
+              <dd className="text-ink">{copy.rotulos.dia(d.dia_vencimento)}</dd>
+            </div>
           )}
-          <span>
-            mín. <Money valor={d.parcela_minima} semCentavos />
-          </span>
-          {d.dia_vencimento && <span>dia {d.dia_vencimento}</span>}
-          {d.em_atraso_dias > 0 && (
-            <span className="font-semibold text-rose-ink">{copyDivida.atraso(d.em_atraso_dias)}</span>
-          )}
-        </div>
+        </dl>
+        {d.em_atraso_dias > 0 && <p className="text-xs font-semibold text-rose-ink">{copyDivida.atraso(d.em_atraso_dias)}</p>}
       </div>
     </li>
   );

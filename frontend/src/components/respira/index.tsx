@@ -2,7 +2,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link } from 'react-router';
 
-import { Badge, Button, Card, Icone, Money, cx } from '@/components/ui';
+import { Badge, Button, Card, Icone, LinkBotao, Money, cx } from '@/components/ui';
 import { chaves } from '@/hooks/queries';
 import { api, type Consentimento, type Divida, type Evento } from '@/lib/api';
 import {
@@ -196,13 +196,11 @@ export function AlertBanner({ evento, temPlano }: { evento: Evento; temPlano: bo
         <Button variante="secundario" className="min-h-toque px-3 py-1 text-sm" onClick={() => visto.mutate()} disabled={visto.isPending}>
           {alerta.entendi}
         </Button>
+        {/* Dois botões do mesmo formato, cada um dizendo o que faz. */}
         {evento.licao && (
-          <Link
-            to={`/licoes/${evento.licao}`}
-            className="inline-flex min-h-toque items-center px-3 text-sm font-semibold text-blue underline"
-          >
-            {alerta.saibaMais}
-          </Link>
+          <LinkBotao to={`/licoes/${evento.licao}`} variante="fantasma" className="min-h-toque px-3 py-1 text-sm">
+            {alerta.saibaMais} →
+          </LinkBotao>
         )}
       </div>
     </Card>

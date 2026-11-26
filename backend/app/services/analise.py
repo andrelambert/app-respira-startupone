@@ -18,6 +18,7 @@ from app.domain import gastos as gastos_dom
 from app.domain import planner
 from app.domain import vencimentos as vencimentos_dom
 from app.domain.events import EventoDetectado, desvio_plano
+from app.domain.pfm import em_aberto, fatura_aberta_estimada
 from app.domain.planner import (
     DividaEntrada,
     Metodo,
@@ -33,6 +34,7 @@ from app.domain.xray import DividaXray, RaioX, raio_x, taxa_anual
 from app.models import (
     Acompanhamento,
     CapacidadeOrigem,
+    Conta,
     Direcao,
     Divida,
     Fatura,
@@ -44,7 +46,9 @@ from app.models import (
     Transacao,
     Usuario,
 )
+from app.providers.mapping import OPERACAO_PAGAMENTO_FATURA
 from app.repositories import eventos as repo_e
+from app.repositories import pfm as repo_pfm
 from app.repositories import financeiro as repo_f
 from app.repositories import pfm as repo_pfm
 from app.repositories import planos as repo_p
@@ -67,6 +71,18 @@ class Capacidade:
     entradas: Decimal | None
     essenciais: Decimal | None
     meses_historico: int
+    # Num mês típico, depois de TODOS os gastos (não só os essenciais). Mostra o
+    # esforço que a capacidade pede (teste com conta real, Fase 7).
+    sobra_real: Decimal | None = None
+
+
+def _movimento(t: Transacao) -> gastos_dom.Movimento:
+    # Fatura do cartão: pagamento de dívida na subcategoria "Credit Card" ou pela
+    # operação PAGAMENTO_FATURA — as compras do cartão já estão nos gastos.
+    fatura = t.pagamento_divida and (t.subcategoria == "Credit Card" or t.tipo_operacao == OPERACAO_PAGAMENTO_FATURA)
+    return gastos_dom.Movimento(
+        t.data_mov, t.valor, t.essencial, t.pagamento_divida, t.entrada_renda, t.categoria, t.reserva, fatura
+    )
 
 
 def capacidade(s: Session, u: Usuario, hoje: date) -> Capacidade:
@@ -90,7 +106,10 @@ def capacidade(s: Session, u: Usuario, hoje: date) -> Capacidade:
 
     if meses == 0 and not rendas:
         return Capacidade(Decimal("0.00"), CapacidadeOrigem.TRANSACOES, None, None, 0)
-    return Capacidade(capacidade_de_pagamento(entradas, essenciais), origem, entradas, essenciais, meses)
+    # Os mesmos meses completos da mediana (§5.1).
+    janela = [adicionar_meses(hoje.replace(day=1), -i) for i in range(6, 0, -1)]
+    sobra = gastos_dom.sobra_real(gastos_dom.fluxo_mensal([_movimento(t) for t in ts], janela))
+    return Capacidade(capacidade_de_pagamento(entradas, essenciais), origem, entradas, essenciais, meses, sobra)
 
 
 def _entradas(dividas: Sequence[Divida]) -> list[DividaEntrada]:
@@ -515,7 +534,7 @@ class ImpactoPlano:
 
 def gastos_por_categoria(
     s: Session, u: Usuario, mes: date | None
-) -> tuple[date, list[gastos_dom.CategoriaMes], ImpactoPlano | None, list[date]]:
+) -> tuple[date, list[gastos_dom.CategoriaMes], ImpactoPlano | None, list[date], Decimal]:
     """N2: gasto do mês por categoria × média dos 3 anteriores, e quanto a
     parte não essencial que mais passou da média anteciparia a data de saída.
 
@@ -535,7 +554,9 @@ def gastos_por_categoria(
         if t.valor < 0 and not t.pagamento_divida and not t.reserva and desde <= t.data_mov < ate
     ]
     categorias = gastos_dom.por_categoria(gastos, mes, set(meses_com_dado))
-    return mes, categorias, _impacto(s, u, gastos_dom.candidata_a_corte(categorias)), meses_com_dado
+    # O que entrou no mês, para ler os gastos contra ele (teste com conta real).
+    entradas = arredondar(sum((t.valor for t in todas if t.entrada_renda and mes <= t.data_mov < ate), Decimal(0)))
+    return mes, categorias, _impacto(s, u, gastos_dom.candidata_a_corte(categorias)), meses_com_dado, entradas
 
 
 def historico_categoria(
@@ -566,12 +587,7 @@ def fluxo_mensal(s: Session, u: Usuario, meses: int) -> tuple[list[gastos_dom.Fl
     hoje = hoje_do_usuario(u)
     inicio = adicionar_meses(hoje.replace(day=1), -meses)
     lista_meses = [adicionar_meses(inicio, i) for i in range(meses)]
-    movs = [
-        gastos_dom.Movimento(
-            t.data_mov, t.valor, t.essencial, t.pagamento_divida, t.entrada_renda, t.categoria, t.reserva
-        )
-        for t in repo_f.transacoes(s, u.id, inicio)
-    ]
+    movs = [_movimento(t) for t in repo_f.transacoes(s, u.id, inicio)]
     return gastos_dom.fluxo_mensal(movs, lista_meses), capacidade(s, u, hoje)
 
 
@@ -665,3 +681,57 @@ def _avancar_contas_demo(
 
 def taxa_anual_de(d: Divida) -> Decimal:
     return taxa_anual(d.taxa_juros_mes)
+
+
+# --- Cartão e o mês que vem (teste com conta real, Fase 7) ----------------------
+
+
+def cartao_em_aberto(s: Session, conta: Conta, hoje: date) -> tuple[Decimal, Decimal]:
+    """(fatura aberta estimada, parcelas futuras) de um cartão."""
+    assert conta.id is not None
+    futuras = repo_pfm.saidas_futuras(s, conta.id, hoje)
+    fs = repo_pfm.faturas(s, conta.id)
+    restante = em_aberto(fs[0].total, fs[0].pago) if fs else Decimal("0.00")
+    return fatura_aberta_estimada(conta.saldo, futuras, restante), futuras
+
+
+@dataclass
+class ProximoMes:
+    entradas: Decimal | None  # num mês típico (a mesma base da capacidade)
+    faturas_cartao: Decimal  # faturas abertas, que vencem no mês que vem
+    parcelas_dividas: Decimal  # parcelas e mínimos das dívidas
+    essenciais_conta: Decimal | None  # essenciais pagos pela conta (aluguel, contas)
+    previsto: Decimal
+    sobra: Decimal | None  # entradas − previsto; < 0: falta
+
+
+def proximo_mes(s: Session, u: Usuario) -> ProximoMes:
+    """Cabe no mês que vem? O que entra num mês típico contra o que já está
+    previsto sair: a fatura aberta do cartão, as parcelas das dívidas e os
+    gastos essenciais pagos pela conta. Os essenciais pagos no cartão já estão
+    na fatura — por isso só os da conta."""
+    assert u.id is not None
+    hoje = hoje_do_usuario(u)
+    cap = capacidade(s, u, hoje)
+    contas = repo_f.contas(s, u.id)
+    cartoes = [c for c in contas if c.tipo == TipoConta.CARTAO_CREDITO]
+    faturas = sum((cartao_em_aberto(s, c, hoje)[0] for c in cartoes), Decimal("0.00"))
+    parcelas = sum((d.parcela_minima for d in repo_f.dividas(s, u.id) if d.saldo_devedor > 0), Decimal("0.00"))
+    ids_cartao = {c.id for c in cartoes}
+    janela = [adicionar_meses(hoje.replace(day=1), -i) for i in range(6, 0, -1)]
+    por_mes: dict[date, Decimal] = {}
+    for t in repo_f.transacoes(s, u.id, janela[0]):
+        m = t.data_mov.replace(day=1)
+        if m not in janela:
+            continue
+        por_mes.setdefault(m, Decimal(0))
+        if t.valor < 0 and t.essencial and t.conta_id not in ids_cartao:
+            por_mes[m] += -t.valor
+    valores = sorted(por_mes.values())
+    essenciais = None
+    if valores:
+        meio = len(valores) // 2
+        essenciais = arredondar(valores[meio] if len(valores) % 2 else (valores[meio - 1] + valores[meio]) / 2)
+    previsto = arredondar(faturas + parcelas + (essenciais or Decimal(0)))
+    sobra = arredondar(cap.entradas - previsto) if cap.entradas is not None else None
+    return ProximoMes(cap.entradas, arredondar(faturas), arredondar(parcelas), essenciais, previsto, sobra)

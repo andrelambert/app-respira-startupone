@@ -24,7 +24,7 @@ import { chavesFinanceiras, useHoje, useVisaoGeral } from '@/hooks/queries';
 import { api, type Banco, type ContaBancaria } from '@/lib/api';
 import { coleta as copyColeta, pfm as copy, tipoBelvo, transacoes as copyTransacoes } from '@/lib/copy';
 import { carimbo, diaMes } from '@/lib/datas';
-import { soma, type Centavos } from '@/lib/money';
+import { brl, soma, type Centavos } from '@/lib/money';
 
 const DEPOSITO = new Set(['CORRENTE', 'POUPANCA', 'PAGAMENTO']);
 
@@ -50,8 +50,12 @@ export default function Contas() {
   const bancos = selecionado ? dados.bancos.filter((b) => b.consentimento_id === selecionado) : dados.bancos;
   const contas = bancos.flatMap((b) => b.contas);
   const emConta = soma(contas.filter((c) => DEPOSITO.has(c.tipo)).map((c) => c.saldo));
+  // O que falta das faturas fechadas + as abertas (estimativa) — a mesma conta do backend.
   const faturas = soma(
-    contas.map((c) => (c.fatura_atual && c.fatura_atual.situacao !== 'PAGA' ? c.fatura_atual.em_aberto : (0 as Centavos))),
+    contas.flatMap((c) => [
+      c.fatura_atual && c.fatura_atual.situacao !== 'PAGA' ? c.fatura_atual.em_aberto : (0 as Centavos),
+      c.fatura_aberta ?? (0 as Centavos),
+    ]),
   );
 
   return (
@@ -223,8 +227,21 @@ function ResumoValor({ c }: { c: ContaBancaria }) {
     );
   }
   if (c.tipo === 'CARTAO_CREDITO') {
+    // O número grande é a fatura que está aberta — a próxima a pagar. A última
+    // fechada (às vezes só o restinho dela) vem embaixo, com rótulo.
+    if (c.fatura_aberta == null) {
+      const f = c.fatura_atual;
+      return f ? <Money valor={f.situacao === 'PAGA' ? f.total : f.em_aberto} className="text-lg font-bold text-navy" /> : null;
+    }
+    // A pagar no cartão: o que falta da fechada + a aberta (a mesma soma do resumo).
     const f = c.fatura_atual;
-    return f ? <Money valor={f.situacao === 'PAGA' ? f.total : f.em_aberto} className="text-lg font-bold text-navy" /> : null;
+    const restante = f && f.situacao !== 'PAGA' ? f.em_aberto : (0 as Centavos);
+    return (
+      <div className="text-right" title={copy.faturaAbertaAjuda}>
+        <Money valor={soma([restante, c.fatura_aberta])} className="text-lg font-bold text-navy" />
+        <p className="text-xs text-slate">{copy.aPagarCartao}</p>
+      </div>
+    );
   }
   return (
     <div className="text-right">
@@ -241,12 +258,26 @@ function ResumoCartao({ c }: { c: ContaBancaria }) {
   return (
     <div className="flex flex-col gap-2">
       {f ? (
-        <p className="flex flex-wrap items-center gap-2 text-sm text-slate">
-          <SituacaoFatura situacao={f.situacao} />
-          {f.vencimento && copy.vencimento(f.vencimento, hoje, diaMes(f.vencimento), f.situacao === 'ATRASADA')}
-        </p>
+        <div className="flex flex-col gap-1">
+          {c.fatura_aberta != null && <p className="text-xs font-semibold uppercase tracking-wide text-slate">{copy.ultimaFechada}</p>}
+          <p className="flex flex-wrap items-center gap-2 text-sm text-slate">
+            <SituacaoFatura situacao={f.situacao} />
+            {f.vencimento && copy.vencimento(f.vencimento, hoje, diaMes(f.vencimento), f.situacao === 'ATRASADA')}
+            {c.fatura_aberta != null && f.situacao !== 'PAGA' && f.em_aberto > 0 && (
+              <span className="font-semibold text-ink">· {copy.faltaFechada(brl(f.em_aberto))}</span>
+            )}
+          </p>
+        </div>
       ) : (
         <p className="text-sm text-slate">{copy.semFatura}</p>
+      )}
+      {c.fatura_aberta != null && c.fatura_aberta > 0 && (
+        <p className="text-sm font-semibold text-ink" title={copy.faturaAbertaAjuda}>
+          {copy.abertaEstimada(brl(c.fatura_aberta))}
+        </p>
+      )}
+      {c.parcelas_futuras != null && c.parcelas_futuras > 0 && (
+        <p className="text-sm text-slate">{copy.parcelasFuturas(brl(c.parcelas_futuras))}</p>
       )}
       {pct !== null && c.limite_credito !== null && (
         <div className="flex flex-col gap-1">

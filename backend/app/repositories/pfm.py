@@ -218,6 +218,16 @@ def transacoes_filtradas(
     return todos[inicio : inicio + por_pagina], len(todos), entradas, saidas
 
 
+
+def saidas_futuras(session: Session, conta_id: int, hoje: date) -> Decimal:
+    """Parcelas que ainda vão cair (lançamento depois de hoje). Valor somado em
+    Python: no SQLite ele é texto."""
+    q = select(Transacao.valor).where(
+        Transacao.conta_id == conta_id, Transacao.direcao == Direcao.SAIDA, col(Transacao.data_mov) > hoje
+    )
+    return sum((-v for v in session.exec(q)), Decimal("0.00"))
+
+
 def categorias_usadas(session: Session, usuario_id: int) -> list[str]:
     q = (
         select(Transacao.categoria)

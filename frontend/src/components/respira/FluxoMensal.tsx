@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { lazy, Suspense } from 'react';
 
-import { Carregando, EstadoErro } from '@/components/ui';
+import { Carregando, EstadoErro, cx } from '@/components/ui';
 import { api } from '@/lib/api';
 import { COR_FLUXO } from '@/lib/cores';
 import { fluxo as copy } from '@/lib/copy';
@@ -23,7 +23,9 @@ export function FluxoMensal({ id }: { id?: string }) {
   if (q.isError || !q.data) return <EstadoErro onTentar={() => void q.refetch()} />;
   const f = q.data;
   const temDado = f.meses.some((m) => m.entradas > 0 || m.essenciais > 0);
-  const temReserva = f.meses.some((m) => m.reserva !== 0);
+  // Centavos de rendimento não justificam uma coluna: só a partir de R$ 1 de aplicação/resgate.
+  const temReserva = f.meses.some((m) => Math.abs(m.reserva) >= 100);
+  const comDado = f.meses.filter((m) => m.entradas > 0 || m.essenciais > 0 || m.outros_gastos > 0);
 
   return (
     <section id={id} aria-labelledby={`${id ?? 'fluxo'}-titulo`} className="flex scroll-mt-20 flex-col gap-3">
@@ -59,7 +61,13 @@ export function FluxoMensal({ id }: { id?: string }) {
               <FluxoChart meses={f.meses} />
             </Suspense>
           </div>
+          {comDado.length > 0 && (
+            <p className="text-sm text-ink">
+              {copy.fechamento(comDado.filter((m) => m.resultado >= 0).length, comDado.length)}
+            </p>
+          )}
           <p className="text-xs text-slate">{copy.mediana}</p>
+          <p className="text-xs text-slate">{copy.resultadoAjuda}</p>
           <p className="text-xs text-slate">{copy.cartao}</p>
           {temReserva && <p className="text-xs text-slate">{copy.aplicacoes}</p>}
           <details className="text-sm">
@@ -75,6 +83,7 @@ export function FluxoMensal({ id }: { id?: string }) {
                     <th className="font-medium">{copy.series.divida}</th>
                     <th className="font-medium">Sobra</th>
                     {temReserva && <th className="font-medium">{copy.reservaColuna}</th>}
+                    <th className="font-medium">{copy.resultadoColuna}</th>
                   </tr>
                 </thead>
                 <tbody className="text-ink">
@@ -91,6 +100,11 @@ export function FluxoMensal({ id }: { id?: string }) {
                       {temReserva && (
                         <td className="pl-1">{m.reserva < 0 ? `(${brl(Math.abs(m.reserva) as typeof m.reserva, sem)})` : brl(m.reserva, sem)}</td>
                       )}
+                      {/* Sinal + cor: negativo em âmbar, nunca vermelho de reprovação (§10). */}
+                      <td className={cx('pl-1 font-semibold', m.resultado < 0 ? 'text-amber-ink' : 'text-green-ink')}>
+                        {m.resultado < 0 ? '−' : '+'}
+                        {brl(Math.abs(m.resultado) as typeof m.resultado, sem)}
+                      </td>
                     </tr>
                   ))}
                 </tbody>

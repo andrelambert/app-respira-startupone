@@ -177,6 +177,7 @@ def test_gastos_exigem_login(api):
     api.cookies.clear()
     assert api.get("/pfm/categorias").status_code == 401
     assert api.get("/pfm/categorias/historico", params={"categoria": "Food & Groceries"}).status_code == 401
+    assert api.get("/pfm/proximo-mes").status_code == 401
 
 
 def test_fluxo_mensal_usa_a_base_da_capacidade():

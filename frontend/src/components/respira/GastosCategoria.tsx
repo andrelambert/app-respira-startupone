@@ -60,6 +60,8 @@ export function GastosCategoria() {
         </label>
       </div>
       <p className="text-sm text-slate">{copy.subtitulo(mesAno(d.mes))}</p>
+      {/* O que entrou, em cima dos gastos (teste com usuária, Fase 7). */}
+      {d.entradas > 0 && <p className="font-semibold text-green-ink">{copy.entrou(mesAno(d.mes), brl(d.entradas))}</p>}
       {d.categorias.length > 0 && <p className="text-xs text-slate">{copy.verDetalhes}</p>}
 
       {imp && (

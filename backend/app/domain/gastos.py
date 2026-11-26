@@ -111,6 +111,9 @@ class Movimento:
     entrada_renda: bool
     categoria: str | None
     reserva: bool = False  # aplicação/resgate (sweep): nem renda nem gasto
+    # Pagamento da fatura do cartão: as compras já estão nos gastos; contar o
+    # pagamento no resultado do mês seria o mesmo dinheiro duas vezes.
+    fatura_cartao: bool = False
 
 
 @dataclass(frozen=True)
@@ -127,6 +130,9 @@ class FluxoMes:
     sobra: Decimal
     # Aplicações − resgates no mês: > 0 guardou, < 0 usou da reserva.
     reserva: Decimal = Decimal("0.00")
+    # Como o mês fechou (teste com conta real: "fechei positivo ou negativo?"):
+    # entradas − gastos − parcelas de dívida que não são a fatura do cartão.
+    resultado: Decimal = Decimal("0.00")
 
 
 def fluxo_mensal(movimentos: Sequence[Movimento], meses: Sequence[date]) -> list[FluxoMes]:
@@ -144,6 +150,8 @@ def fluxo_mensal(movimentos: Sequence[Movimento], meses: Sequence[date]) -> list
                 soma[m]["entradas"] += mv.valor
         elif mv.pagamento_divida:
             soma[m]["divida"] += -mv.valor
+            if not mv.fatura_cartao:
+                soma[m]["divida_sem_fatura"] += -mv.valor
         elif mv.essencial:
             soma[m]["essenciais"] += -mv.valor
         elif (mv.categoria or "") not in CATEGORIAS_FORA:
@@ -152,7 +160,8 @@ def fluxo_mensal(movimentos: Sequence[Movimento], meses: Sequence[date]) -> list
     for m in meses:
         s = soma[m]
         e, ess, o, d = (arredondar(s[k]) for k in ("entradas", "essenciais", "outros", "divida"))
-        out.append(FluxoMes(m, e, ess, o, d, e - ess, arredondar(s["reserva"])))
+        resultado = e - ess - o - arredondar(s["divida_sem_fatura"])
+        out.append(FluxoMes(m, e, ess, o, d, e - ess, arredondar(s["reserva"]), resultado))
     return out
 
 
@@ -193,3 +202,20 @@ def historico_categoria(
     serie = [(m, arredondar(por_mes[m])) for m in meses]
     subs = sorted(((s, arredondar(v)) for s, v in por_sub.items()), key=lambda x: (-x[1], x[0]))
     return serie, subs
+
+
+def sobra_real(meses: Sequence[FluxoMes]) -> Decimal | None:
+    """Quanto sobrou num mês típico depois de TODOS os gastos (não só dos
+    essenciais) — mediana de entradas − essenciais − outros nos meses com dado.
+
+    A capacidade do plano (§5.1) desconta só o essencial: supõe cortar o resto.
+    Teste com conta real: "R$ 901 por mês" quando todos os meses fecharam no
+    negativo. Este número mostra o esforço que o plano pede."""
+    valores = sorted(
+        f.entradas - f.essenciais - f.outros_gastos for f in meses if f.entradas or f.essenciais or f.outros_gastos
+    )
+    if not valores:
+        return None
+    meio = len(valores) // 2
+    mediana = valores[meio] if len(valores) % 2 else (valores[meio - 1] + valores[meio]) / 2
+    return arredondar(mediana)
