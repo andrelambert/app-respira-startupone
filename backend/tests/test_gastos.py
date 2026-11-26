@@ -200,7 +200,7 @@ def test_fluxo_mensal_usa_a_base_da_capacidade():
     assert (f.entradas, f.essenciais, f.outros_gastos, f.pagamentos_divida) == (
         D("3100.00"), D("1200.00"), D("200.00"), D("208.00"),
     )
-    assert f.sobra == D("1900.00")  # entradas - essenciais, como a capacidade
+    assert f.sobra == D("1700.00")  # entradas − todos os gastos, como a capacidade (Fase 7)
 
 
 def test_api_fluxo_mensal_bate_com_a_capacidade(demo_limpa):
@@ -213,8 +213,11 @@ def test_api_fluxo_mensal_bate_com_a_capacidade(demo_limpa):
     assert len(v["meses"]) == 6 and v["reserva_pct"] == 10
     entradas = median(D(m["entradas"]) for m in v["meses"])
     essenciais = median(D(m["essenciais"]) for m in v["meses"])
-    assert (D(v["entradas_mediana"]), D(v["essenciais_mediana"])) == (entradas, essenciais)
-    assert D(v["capacidade"]) == ((entradas - essenciais) * D("0.90")).quantize(D("0.01"))
+    gastos = median(D(m["essenciais"]) + D(m["outros_gastos"]) for m in v["meses"])
+    assert (D(v["entradas_mediana"]), D(v["essenciais_mediana"]), D(v["gastos_mediana"])) == (entradas, essenciais, gastos)
+    # Fase 7: (entradas − todos os gastos) × 0,9; cortando o não essencial é o teto.
+    assert D(v["capacidade"]) == ((entradas - gastos) * D("0.90")).quantize(D("0.01"))
+    assert D(v["capacidade_cortando"]) == ((entradas - essenciais) * D("0.90")).quantize(D("0.01"))
     assert D(v["capacidade"]) == D(api.get("/plano/simulacoes").json()["capacidade_calculada"]["valor"])
     for invalido in ("2", "13", "x"):
         assert api.get("/pfm/fluxo-mensal", params={"meses": invalido}).status_code == 422

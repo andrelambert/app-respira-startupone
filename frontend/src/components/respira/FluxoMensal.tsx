@@ -39,6 +39,7 @@ export function FluxoMensal({ id }: { id?: string }) {
           <p className="text-ink">
             {(f.capacidade_origem === 'INCOMES' ? copy.contaRendaDetectada : copy.conta)(
               brl(f.entradas_mediana),
+              brl(f.gastos_mediana ?? f.essenciais_mediana),
               brl(f.essenciais_mediana),
               f.reserva_pct,
               brl(f.capacidade),

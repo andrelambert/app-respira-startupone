@@ -140,6 +140,18 @@ function Diagnostico({ r, consentimentos }: { r: TRaioX; consentimentos: Consent
           </>
         ) : r.capacidade.meses_historico === 0 && p.capacidade <= 0 ? (
           <p className="text-ink">{copy.semHistorico}</p>
+        ) : r.projecao_cortando?.converge && r.projecao_cortando.data_quitacao ? (
+          // O que sobra hoje não paga nem os mínimos: a data, como condição (§9 — ela
+          // continua na primeira tela).
+          <>
+            <p className="text-sm font-semibold text-amber-ink">{copy.naoConverge(p.capacidade, r.capacidade_minima)}</p>
+            <PayoffDate
+              data={r.projecao_cortando.data_quitacao}
+              mesesRestantes={r.projecao_cortando.meses}
+              rotulo={copy.saiCortando(r.projecao_cortando.capacidade)}
+              tamanho="medio"
+            />
+          </>
         ) : (
           <p className="font-semibold text-ink">{copy.naoConverge(p.capacidade, r.capacidade_minima)}</p>
         )}

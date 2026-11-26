@@ -260,6 +260,8 @@ class CapacidadeOut(BaseModel):
     essenciais: Dinheiro | None
     meses_historico: int
     sobra_real: Dinheiro | None  # num mês típico, depois de todos os gastos
+    gastos: Dinheiro | None  # todos os gastos de um mês típico (essenciais + outros)
+    cortando: Dinheiro | None  # teto: cortando todo o não essencial
 
 
 class RaioXOut(BaseModel):
@@ -279,6 +281,7 @@ class RaioXOut(BaseModel):
     capacidade: CapacidadeOut
     capacidade_minima: Dinheiro | None
     projecao: ProjecaoOut
+    projecao_cortando: ProjecaoOut | None = None  # quando o que sobra hoje não fecha o plano
     dividas: list[DividaOut]
 
 
@@ -592,6 +595,8 @@ class FluxoMensalOut(BaseModel):
     capacidade_origem: str  # TRANSACOES | INCOMES
     entradas_mediana: Dinheiro | None
     essenciais_mediana: Dinheiro | None
+    gastos_mediana: Dinheiro | None  # todos os gastos de um mês típico — a base da capacidade
+    capacidade_cortando: Dinheiro | None  # teto: cortando todo o não essencial
     reserva_pct: int  # 10: a reserva para imprevistos (§5.1)
 
 

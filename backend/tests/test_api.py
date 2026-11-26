@@ -108,12 +108,18 @@ def test_jornada_juliana(api):
     moto = next(d for d in rx["dividas"] if d["modalidade"] == "FIN_VEICULO")
     assert (moto["parcelas_pagas"], moto["parcelas_total"], moto["valor_contratado"]) == (18, 48, "9800.00")
     assert moto["conta_id"] and moto["instituicao"] == "Itaú"
-    assert rx["capacidade"]["valor"] == "1755.00"
-    assert (rx["projecao"]["metodo"], rx["projecao"]["meses"]) == ("AVALANCHE", 16)
+    # Fase 7 (teste com usuária): a capacidade sai de TODOS os gastos de um mês típico.
+    # Com o que sobra hoje (R$ 1.278,18), a Juliana não cobre nem os mínimos — o Raio-X
+    # mostra a data no cenário cortando o não essencial (R$ 1.755, a regra até a Fase 7).
+    assert (rx["capacidade"]["valor"], rx["capacidade"]["cortando"]) == ("1278.18", "1755.00")
+    assert not rx["projecao"]["converge"]
+    cortando = rx["projecao_cortando"]
+    assert (cortando["metodo"], cortando["meses"], cortando["converge"]) == ("AVALANCHE", 16, True)
 
     # --- F3: as três estratégias ------------------------------------------------------
     # (a tabela da §14.1, com as 5 dívidas da Fase 5, é validada em test_planner.py)
-    sim = api.get("/plano/simulacoes").json()
+    assert not any(e["converge"] for e in api.get("/plano/simulacoes").json()["estrategias"])
+    sim = api.get("/plano/simulacoes", params={"capacidade": "1755"}).json()  # cortando o não essencial
     por = {e["metodo"]: e for e in sim["estrategias"]}
     assert (por["AVALANCHE"]["meses"], por["AVALANCHE"]["juros_totais"], por["AVALANCHE"]["primeira_quitacao_mes"]) == (16, "7726.58", 8)
     assert (por["EQUILIBRADO"]["meses"], por["EQUILIBRADO"]["juros_totais"], por["EQUILIBRADO"]["primeira_quitacao_mes"]) == (17, "7940.64", 1)

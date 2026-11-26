@@ -324,8 +324,10 @@ def medianas_mensais(
     )
 
 
-def capacidade_de_pagamento(entradas: Decimal, essenciais: Decimal) -> Decimal:
-    return max(arredondar((entradas - essenciais) * FATOR_RESERVA), Decimal("0.00"))
+def capacidade_de_pagamento(entradas: Decimal, gastos: Decimal) -> Decimal:
+    """(entradas − gastos) × 0,90, nunca negativa (§5.1). Desde a Fase 7, ``gastos``
+    são todos os gastos típicos; só os essenciais dão o teto "cortando o resto"."""
+    return max(arredondar((entradas - gastos) * FATOR_RESERVA), Decimal("0.00"))
 
 
 # §7.8 prefere a renda do add-on INCOMES, mas ela pode vir sem sentido (teste com

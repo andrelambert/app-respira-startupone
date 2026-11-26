@@ -106,7 +106,7 @@ contra a **Belvo em produção** (dados bancários reais) e em um **modo demonst
 | **Melhorias do teste do MVP** | Todas as transações (N1), gastos por categoria com a frase "sua data chegaria N meses antes" (N2), próximos vencimentos (N3), filtros de dívidas (N4), fluxo mensal e "de onde veio" (N5). |
 | **Publicação** | Frontend na Vercel, backend em Docker no Render, demonstração por visitante, cabeçalhos de segurança, workflow que mantém o serviço ativo. |
 | **Segurança** | CPF criptografado em repouso, limites de tentativa no cadastro e na demo, dependências sem vulnerabilidade alta ou crítica. |
-| **Ajustes do teste com conta real** | Parcelas do cartão pelo `accounting_date` (data em que a parcela cai), com data da compra e número da parcela; taxonomia V2 da Belvo (16 categorias, ~80 subcategorias) com gasto essencial definido pela subcategoria; espera da coleta redesenhada e resistente a quedas de conexão; consulta à Belvo a cada 5 s. Na segunda rodada: categorias principais à vista (as subcategorias da Belvo erram demais), selo de essencial só quando toda a categoria é essencial, investimento nunca vira "gasto a cortar", alertas de gasto só para quem tem dívida, tela de "parabéns" para quem não tem dívidas, detalhe da categoria com evolução de 12 meses, contas antes dos gráficos, confirmação de senha no cadastro e cursor de clique no computador. Na terceira (conta Sicredi): **aplicação automática** (o banco aplica a sobra e resgata o que falta todo dia útil) tratada como reserva — fora de entradas e saídas, que antes ficavam quase o dobro do real —, estorno fora da renda, renda detectada pela Belvo descartada quando fica muito abaixo do que entra na conta, aviso "não movimenta o seu dinheiro" também no cadastro e gráfico de **entradas e saídas** em Contas. Na quarta (conta Nubank): parcelas que chegam com a mesma data vão cada uma para o seu mês (o número da parcela sai do `installment_identifier` ou do "3/12" da descrição), detalhe da parcela em destaque, pagamento de fatura fora das entradas, filtros de transações em seções (entradas em verde, saídas em vermelho) e telas mais largas no computador. Na quinta (Estela, conta Nubank): **fatura aberta do cartão** estimada (o banco só manda as fechadas — o app mostrava só o resto de R$ 61 da fatura anterior), **"Cabe no mês que vem?"** (o que entra contra fatura, parcelas e gastos essenciais), o **Plano mostra o esforço** que o valor sugerido pede (o que sobra hoje depois de todos os gastos), coluna **Resultado** no mês a mês, detalhes das dívidas com rótulo ("Juros", "Mínimo", "Vence") e botões dos alertas mais claros ("Ok, entendi" / "Ver explicação"). |
+| **Ajustes do teste com conta real** | Parcelas do cartão pelo `accounting_date` (data em que a parcela cai), com data da compra e número da parcela; taxonomia V2 da Belvo (16 categorias, ~80 subcategorias) com gasto essencial definido pela subcategoria; espera da coleta redesenhada e resistente a quedas de conexão; consulta à Belvo a cada 5 s. Na segunda rodada: categorias principais à vista (as subcategorias da Belvo erram demais), selo de essencial só quando toda a categoria é essencial, investimento nunca vira "gasto a cortar", alertas de gasto só para quem tem dívida, tela de "parabéns" para quem não tem dívidas, detalhe da categoria com evolução de 12 meses, contas antes dos gráficos, confirmação de senha no cadastro e cursor de clique no computador. Na terceira (conta Sicredi): **aplicação automática** (o banco aplica a sobra e resgata o que falta todo dia útil) tratada como reserva — fora de entradas e saídas, que antes ficavam quase o dobro do real —, estorno fora da renda, renda detectada pela Belvo descartada quando fica muito abaixo do que entra na conta, aviso "não movimenta o seu dinheiro" também no cadastro e gráfico de **entradas e saídas** em Contas. Na quarta (conta Nubank): parcelas que chegam com a mesma data vão cada uma para o seu mês (o número da parcela sai do `installment_identifier` ou do "3/12" da descrição), detalhe da parcela em destaque, pagamento de fatura fora das entradas, filtros de transações em seções (entradas em verde, saídas em vermelho) e telas mais largas no computador. Na quinta (Estela, conta Nubank): **fatura aberta do cartão** estimada (o banco só manda as fechadas — o app mostrava só o resto de R$ 61 da fatura anterior), **"Cabe no mês que vem?"** (o que entra contra fatura, parcelas e gastos essenciais), o **Plano mostra o esforço** que o valor sugerido pede (o que sobra hoje depois de todos os gastos), coluna **Resultado** no mês a mês, detalhes das dívidas com rótulo ("Juros", "Mínimo", "Vence") e botões dos alertas mais claros ("Ok, entendi" / "Ver explicação"). Por fim, decidido com a equipe: o **valor sugerido do plano sai de todos os gastos** de um mês típico, não só dos essenciais; "cortando o não essencial" vira o teto. |
 
 **Modo demonstração (Juliana).** Simula a jornada inteira com dados fictícios no **mesmo formato
 de resposta da Belvo** (o mapeamento Belvo → domínio é exercitado de verdade): três bancos
@@ -241,12 +241,15 @@ python3 ops/oracle/testes_oracle.py   # a suíte do backend no schema de teste d
 Em **https://app-respira-startupone.vercel.app**, toque em **"Entrar como Juliana
 (demonstração)"**. Os dados chegam em alguns segundos (a tela mostra o progresso).
 
-1. **Raio-X** — "Você deve **R$ 20.183** em **8 compromissos**", o rotativo com **436% a.a.**, a data
-   de quitação logo abaixo e o alerta de que o rotativo **cresce R$ 104 por mês** pagando só o mínimo.
-2. **Plano** — com a capacidade calculada do histórico (**R$ 1.755/mês**): Avalanche em **16 meses**
-   (R$ 7.727 de juros, 1ª dívida quitada no **5º mês**), Equilibrado em **17** (R$ 7.941), Bola de neve
-   em **17** (R$ 9.258). Toque em **"Ver de onde veio"** para ver a conta do R$ 1.755 e note o selo
-   **"✓ Conferido no Oracle"**. Arraste o *slider* e toque em **Começar este plano**.
+1. **Raio-X** — "Você deve **R$ 20.183** em **8 compromissos**", o rotativo com **436% ao ano** e o
+   alerta de que ele **cresce R$ 104 por mês** pagando só o mínimo. Logo abaixo, a armadilha da
+   Juliana: com o que sobra hoje (**R$ 1.278/mês**, depois de todos os gastos) a dívida não diminui —
+   são precisos pelo menos R$ 1.395; **cortando o não essencial (R$ 1.755/mês)**, ela sai em
+   **março de 2028**.
+2. **Plano** — começa em R$ 1.278 e explica a conta; toque em **"Ver o plano com R$ 1.755"**:
+   Avalanche em **16 meses** (R$ 7.727 de juros, 1ª dívida quitada no **5º mês**), Equilibrado em
+   **17** (R$ 7.941), Bola de neve em **17** (R$ 9.258). Note o selo **"✓ Conferido no Oracle"**.
+   Arraste o *slider* e toque em **Começar este plano**.
 3. **Início** — data de saída, o que pagar este mês e os próximos vencimentos. No painel **Modo
    demonstração**, simule um mês seguindo o plano e depois um mês difícil: a data é recalculada, sem
    linguagem de falha, e os alertas não se repetem.
@@ -404,9 +407,12 @@ frontend trabalha em centavos inteiros.
 O núcleo do produto (`backend/app/domain/planner.py`) é um **porte fiel** do pacote PL/SQL
 `PKG_PLANO` validado na Fase 5:
 
-1. **Capacidade de pagamento** — calculada do histórico: mediana das entradas menos mediana dos
-   gastos essenciais dos últimos 6 meses, **com 10% de reserva** para imprevistos. A tela
-   "Ver de onde veio" mostra essa conta mês a mês. "Essencial" é decidido pela subcategoria da
+1. **Capacidade de pagamento** — calculada do histórico: mediana das entradas menos a mediana de
+   **todos os gastos** de um mês (essenciais + outros, inclusive o cartão; sem dívida, transferência
+   nem aplicação) dos últimos 6 meses, **com 10% de reserva** para imprevistos. Até o teste com
+   usuários da Fase 7 eram só os gastos essenciais (§5.1), o que supunha cortar todo o resto — uma
+   usuária mostrou que o plano não cabia no mês real. O valor "cortando o não essencial" continua
+   calculado e aparece como teto. A tela "Ver de onde veio" mostra essa conta mês a mês. "Essencial" é decidido pela subcategoria da
    taxonomia V2 da Belvo (`mapping.ESSENCIAIS_V2`): mercado, contas da casa, farmácia, saúde,
    educação e transporte do dia a dia sim; restaurante, delivery, bebida e viagem não.
 2. **Ordenação por estratégia** — Avalanche (maior taxa primeiro), Bola de neve (menor saldo

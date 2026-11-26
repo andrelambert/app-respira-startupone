@@ -123,10 +123,9 @@ class FluxoMes:
     essenciais: Decimal
     outros_gastos: Decimal
     pagamentos_divida: Decimal
-    # entradas - essenciais: a mesma base da capacidade (§5.1). Outros gastos e
-    # dívida não entram na conta: a compra no cartão já está nos gastos e o
-    # pagamento da fatura está na dívida — somar os dois contaria o mesmo
-    # dinheiro duas vezes.
+    # entradas − todos os gastos: a mesma base da capacidade (Fase 7). A dívida
+    # não entra: a compra no cartão já está nos gastos e o pagamento da fatura
+    # está na dívida — somar os dois contaria o mesmo dinheiro duas vezes.
     sobra: Decimal
     # Aplicações − resgates no mês: > 0 guardou, < 0 usou da reserva.
     reserva: Decimal = Decimal("0.00")
@@ -161,7 +160,7 @@ def fluxo_mensal(movimentos: Sequence[Movimento], meses: Sequence[date]) -> list
         s = soma[m]
         e, ess, o, d = (arredondar(s[k]) for k in ("entradas", "essenciais", "outros", "divida"))
         resultado = e - ess - o - arredondar(s["divida_sem_fatura"])
-        out.append(FluxoMes(m, e, ess, o, d, e - ess, arredondar(s["reserva"]), resultado))
+        out.append(FluxoMes(m, e, ess, o, d, e - ess - o, arredondar(s["reserva"]), resultado))
     return out
 
 
@@ -204,15 +203,16 @@ def historico_categoria(
     return serie, subs
 
 
-def sobra_real(meses: Sequence[FluxoMes]) -> Decimal | None:
-    """Quanto sobrou num mês típico depois de TODOS os gastos (não só dos
-    essenciais) — mediana de entradas − essenciais − outros nos meses com dado.
+def gastos_tipicos(meses: Sequence[FluxoMes]) -> Decimal | None:
+    """Quanto se gasta num mês típico — TODOS os gastos (essenciais + outros,
+    inclusive as compras no cartão), sem pagamento de dívida, transferência nem
+    aplicação: mediana nos meses com dado.
 
-    A capacidade do plano (§5.1) desconta só o essencial: supõe cortar o resto.
-    Teste com conta real: "R$ 901 por mês" quando todos os meses fecharam no
-    negativo. Este número mostra o esforço que o plano pede."""
+    Base da capacidade do plano desde o teste com usuária (Fase 7): "R$ 901 por
+    mês" descontando só o essencial, quando todos os meses tinham fechado no
+    negativo — o plano supunha cortar todo o resto."""
     valores = sorted(
-        f.entradas - f.essenciais - f.outros_gastos for f in meses if f.entradas or f.essenciais or f.outros_gastos
+        f.essenciais + f.outros_gastos for f in meses if f.entradas or f.essenciais or f.outros_gastos
     )
     if not valores:
         return None
