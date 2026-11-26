@@ -32,6 +32,7 @@ import {
 } from '@/hooks/queries';
 import { api, type PlanoAtivo } from '@/lib/api';
 import { ListaVencimentos } from '@/components/respira/ListaVencimentos';
+import { MesQueVem } from '@/components/respira/MesQueVem';
 import { SemDividas } from '@/components/respira/SemDividas';
 import { fraseAcompanhamento, inicio as copy, pfm as copyPfm, raiox as copyRaioX, vencimentos as copyVencimentos } from '@/lib/copy';
 import { nomeMes } from '@/lib/datas';
@@ -88,6 +89,8 @@ export default function Inicio() {
                 </Card>
               </Link>
             )}
+
+            <MesQueVem />
 
             <ProximosVencimentos />
           </>
@@ -203,12 +206,16 @@ function ComPlano({ p }: { p: PlanoAtivo }) {
             <li key={i.divida_id} className="flex items-center justify-between gap-3 px-4 py-3">
               <div className="min-w-0">
                 <p className="truncate font-medium text-ink">{i.descricao}</p>
-                <p className="flex flex-wrap items-center gap-2 text-xs text-slate">
-                  {i.dia_vencimento && <span>dia {i.dia_vencimento}</span>}
-                  {i === primeiraExtra ? <Badge tom="plano">{copy.principal}</Badge> : i.e_minimo && <span>{copy.minimo}</span>}
+                {/* Cada informação com rótulo (teste com usuária: "dia 7 é o quê?"). */}
+                <p className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-slate">
+                  {i.dia_vencimento && <span>{copy.vence(i.dia_vencimento)}</span>}
+                  {i === primeiraExtra ? <Badge tom="plano">{copy.principal}</Badge> : i.e_minimo && <span>· {copy.minimo}</span>}
                 </p>
               </div>
-              <Money valor={i.valor} className="shrink-0 font-semibold text-navy" />
+              <div className="shrink-0 text-right">
+                <p className="text-[11px] uppercase tracking-wide text-slate">{copy.aPagar}</p>
+                <Money valor={i.valor} className="font-semibold text-navy" />
+              </div>
             </li>
           ))}
         </ol>

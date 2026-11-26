@@ -77,6 +77,7 @@ function Simulador({
   metodoAtivo: Metodo | null;
 }) {
   const calculada = reaisInteiros(base.capacidade_calculada.valor);
+  const sobra = base.capacidade_calculada.sobra_real;
   const [reais, setReais] = useState(() =>
     capacidadeAtiva !== null ? reaisInteiros(capacidadeAtiva) : capacidadeInicial(base),
   );
@@ -140,6 +141,17 @@ function Simulador({
         <p className="text-sm text-slate">
           {calculada > 0 ? copy.sliderAjuda(base.capacidade_calculada.valor) : copy.sliderSemHistorico}
         </p>
+        {/* O esforço que o valor pede: o que sobra hoje depois de TODOS os gastos. */}
+        {calculada > 0 && sobra !== null && sobra < base.capacidade_calculada.valor && (
+          <div className="flex flex-col gap-1 rounded-xl bg-amber-soft p-3">
+            <p className="text-sm text-amber-ink">{copy.esforco(sobra, base.capacidade_calculada.valor)}</p>
+            {sobra > 0 && reaisInteiros(sobra) !== reais && (
+              <Button variante="fantasma" className="self-start px-0 text-sm" onClick={() => setReais(reaisInteiros(sobra))}>
+                {copy.usarSobra(sobra)}
+              </Button>
+            )}
+          </div>
+        )}
         {/* N5 (F-7): de onde veio o valor calculado — o gráfico abre aqui mesmo. */}
         {calculada > 0 && (
           <Button

@@ -53,6 +53,7 @@ def _cap(c: Capacidade) -> CapacidadeOut:
         entradas=c.entradas,
         essenciais=c.essenciais,
         meses_historico=c.meses_historico,
+        sobra_real=c.sobra_real,
     )
 
 

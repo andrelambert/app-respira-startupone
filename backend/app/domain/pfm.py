@@ -41,3 +41,15 @@ def horario_brasil(utc: datetime) -> datetime:
     if utc.tzinfo is None:
         utc = utc.replace(tzinfo=timezone.utc)
     return utc.astimezone(FUSO_BRASIL)
+
+
+def fatura_aberta_estimada(usado: Decimal, parcelas_futuras: Decimal, restante_fechada: Decimal) -> Decimal:
+    """A fatura que ainda está aberta (o banco só manda as fechadas).
+
+    Teste com conta Nubank real: o app mostrava só o que sobrou da última fatura
+    fechada (R$ 61), e a pessoa sabia que a próxima já passava de R$ 1.000. O
+    limite usado (dado do banco) é a soma de três coisas: o que falta da fatura
+    fechada, a fatura aberta e as parcelas que ainda vão cair. Tirando as duas
+    que conhecemos, sobra a aberta. Estimativa: nunca abaixo de zero.
+    """
+    return max(usado - parcelas_futuras - restante_fechada, Decimal("0.00"))

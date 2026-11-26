@@ -132,6 +132,7 @@ const capacidadeSchema = z.object({
   entradas: dinheiro.nullable(),
   essenciais: dinheiro.nullable(),
   meses_historico: z.number().int(),
+  sobra_real: dinheiro.nullable(), // num mês típico, depois de todos os gastos
 });
 
 export const raioXSchema = z.object({
@@ -294,7 +295,9 @@ const contaSchema = z.object({
   limite_credito: dinheiro.nullable(),
   limite_cheque_especial: dinheiro,
   usado_cheque_especial: dinheiro,
-  fatura_atual: faturaSchema.nullable(),
+  fatura_atual: faturaSchema.nullable(), // a última fechada
+  fatura_aberta: dinheiro.nullable().optional(), // cartão: estimativa da que está aberta
+  parcelas_futuras: dinheiro.nullable().optional(),
   atualizado_em: dataHora,
 });
 export type ContaBancaria = z.infer<typeof contaSchema>;
@@ -376,6 +379,7 @@ export type TodasTransacoes = z.infer<typeof todasTransacoesSchema>;
 const gastosCategoriaSchema = z.object({
   mes: data,
   meses_disponiveis: z.array(data).max(24),
+  entradas: dinheiro, // o que entrou como renda no mês
   categorias: z.array(
     z.object({
       categoria: z.string().max(80),
@@ -418,6 +422,7 @@ const fluxoMensalSchema = z.object({
         pagamentos_divida: dinheiro,
         sobra: dinheiro,
         reserva: dinheiro, // aplicações − resgates (aplicação automática): > 0 guardou
+        resultado: dinheiro, // como o mês fechou
       }),
     )
     .max(12),
@@ -428,6 +433,17 @@ const fluxoMensalSchema = z.object({
   reserva_pct: z.number().int(),
 });
 export type FluxoMensal = z.infer<typeof fluxoMensalSchema>;
+
+// Cabe no mês que vem? (teste com usuária, Fase 7)
+const proximoMesSchema = z.object({
+  entradas: dinheiro.nullable(),
+  faturas_cartao: dinheiro,
+  parcelas_dividas: dinheiro,
+  essenciais_conta: dinheiro.nullable(),
+  previsto: dinheiro,
+  sobra: dinheiro.nullable(),
+});
+export type ProximoMes = z.infer<typeof proximoMesSchema>;
 
 // N3: próximos vencimentos (faturas e parcelas).
 const vencimentoSchema = z.object({
@@ -555,6 +571,7 @@ export const api = {
   gastosCategoria: (mes?: string) =>
     chamar(`/pfm/categorias${mes ? `?mes=${mes}` : ''}`, gastosCategoriaSchema),
   fluxoMensal: (meses = 6) => chamar(`/pfm/fluxo-mensal?meses=${meses}`, fluxoMensalSchema),
+  proximoMes: () => chamar('/pfm/proximo-mes', proximoMesSchema),
   historicoCategoria: (categoria: string, subcategoria?: string | null) =>
     chamar(
       `/pfm/categorias/historico?${new URLSearchParams({ categoria, ...(subcategoria ? { subcategoria } : {}) }).toString()}`,

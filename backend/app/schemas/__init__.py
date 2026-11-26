@@ -259,6 +259,7 @@ class CapacidadeOut(BaseModel):
     entradas: Dinheiro | None
     essenciais: Dinheiro | None
     meses_historico: int
+    sobra_real: Dinheiro | None  # num mês típico, depois de todos os gastos
 
 
 class RaioXOut(BaseModel):
@@ -443,7 +444,9 @@ class ContaOut(BaseModel):
     limite_credito: Dinheiro | None
     limite_cheque_especial: Dinheiro
     usado_cheque_especial: Dinheiro
-    fatura_atual: FaturaOut | None
+    fatura_atual: FaturaOut | None  # a última fechada (o banco só manda as fechadas)
+    fatura_aberta: Dinheiro | None = None  # cartão: estimativa da que ainda está aberta
+    parcelas_futuras: Dinheiro | None = None  # cartão: parcelas que ainda vão cair
     atualizado_em: datetime
 
 
@@ -463,7 +466,7 @@ class BancoOut(BaseModel):
 class VisaoGeralOut(BaseModel):
     bancos: list[BancoOut]
     saldo_em_contas: Dinheiro  # corrente + poupança + pagamento
-    faturas_em_aberto: Dinheiro  # o que falta pagar das faturas atuais
+    faturas_em_aberto: Dinheiro  # o que falta das fechadas + as abertas (estimativa)
     qtd_dividas: int
     hoje: date
 
@@ -532,8 +535,20 @@ class ImpactoPlanoOut(BaseModel):
     data_nova: date
 
 
+class ProximoMesOut(BaseModel):
+    """Cabe no mês que vem? (teste com conta real, Fase 7)"""
+
+    entradas: Dinheiro | None
+    faturas_cartao: Dinheiro
+    parcelas_dividas: Dinheiro
+    essenciais_conta: Dinheiro | None
+    previsto: Dinheiro
+    sobra: Dinheiro | None
+
+
 class GastosCategoriaOut(BaseModel):
     mes: date
+    entradas: Dinheiro  # o que entrou como renda no mês (em cima dos gastos)
     meses_disponiveis: list[date]  # para o seletor de mês
     categorias: list[CategoriaGastoOut]
     total: Dinheiro
@@ -566,6 +581,7 @@ class FluxoMesOut(BaseModel):
     pagamentos_divida: Dinheiro
     sobra: Dinheiro
     reserva: Dinheiro  # aplicações − resgates: > 0 guardou, < 0 usou da reserva
+    resultado: Dinheiro  # como o mês fechou: entradas − gastos − dívidas (sem a fatura do cartão)
 
 
 class FluxoMensalOut(BaseModel):

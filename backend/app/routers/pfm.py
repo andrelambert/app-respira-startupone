@@ -27,6 +27,7 @@ from app.schemas import (
     GastosCategoriaOut,
     GastoSubcategoriaOut,
     HistoricoCategoriaOut,
+    ProximoMesOut,
     ImpactoPlanoOut,
     PagamentoFaturaOut,
     TodasTransacoesOut,
@@ -66,9 +67,13 @@ def _conta_out(s: Session, c: Conta, hoje: date) -> ContaOut:
     assert c.id is not None
     inst = repo_c.obter_instituicao(s, c.instituicao_id)
     atual = None
+    aberta = futuras = None
     if c.tipo == TipoConta.CARTAO_CREDITO:
+        from app.services.analise import cartao_em_aberto
+
         fs = repo.faturas(s, c.id)
         atual = _fatura_out(fs[0], hoje) if fs else None
+        aberta, futuras = cartao_em_aberto(s, c, hoje)
     return ContaOut(
         id=c.id,
         consentimento_id=c.consentimento_id,
@@ -86,6 +91,8 @@ def _conta_out(s: Session, c: Conta, hoje: date) -> ContaOut:
         limite_cheque_especial=c.limite_cheque_especial,
         usado_cheque_especial=c.usado_cheque_especial,
         fatura_atual=atual,
+        fatura_aberta=aberta,
+        parcelas_futuras=futuras,
         atualizado_em=c.atualizado_em,
     )
 
@@ -110,6 +117,7 @@ def visao_geral(u: UsuarioDep, s: SessionDep) -> VisaoGeralOut:
                 saldo += conta.saldo
             if conta.fatura_atual and conta.fatura_atual.situacao != "PAGA":
                 faturas += conta.fatura_atual.em_aberto
+            faturas += conta.fatura_aberta or Decimal("0.00")
         info = consentimento_out(s, c)
         bancos.append(
             BancoOut(
@@ -269,9 +277,10 @@ def gastos_por_categoria(
     from app.services import analise
 
     alvo = date(int(mes[:4]), int(mes[5:]), 1) if mes else None
-    m, cats, impacto, meses = analise.gastos_por_categoria(s, u, alvo)
+    m, cats, impacto, meses, entradas = analise.gastos_por_categoria(s, u, alvo)
     return GastosCategoriaOut(
         mes=m,
+        entradas=entradas,
         meses_disponiveis=meses[-12:],
         categorias=[
             CategoriaGastoOut(
@@ -302,6 +311,14 @@ def historico_categoria(
         meses=[GastoMesOut(mes=m, total=v) for m, v in serie],
         subcategorias=[GastoSubcategoriaOut(subcategoria=n, total=v) for n, v in subs],
     )
+
+
+@router.get("/pfm/proximo-mes", response_model=ProximoMesOut)
+def proximo_mes(u: UsuarioDep, s: SessionDep) -> ProximoMesOut:
+    """Cabe no mês que vem? O que entra contra o que já está previsto sair."""
+    from app.services import analise
+
+    return ProximoMesOut(**analise.proximo_mes(s, u).__dict__)
 
 
 @router.get("/pfm/fluxo-mensal", response_model=FluxoMensalOut)

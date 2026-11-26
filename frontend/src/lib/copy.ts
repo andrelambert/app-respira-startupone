@@ -268,6 +268,15 @@ export const coleta = {
 
 export const raiox = {
   titulo: 'Seu Raio-X',
+  // Cada detalhe da dívida com rótulo (teste com usuária, Fase 7).
+  rotulos: {
+    juros: 'Juros',
+    aoAno: 'ao ano',
+    estimada: 'estimada',
+    minimo: 'Mínimo',
+    vence: 'Vence',
+    dia: (d: number) => `dia ${d}`,
+  },
   voceDeve: 'Você deve',
   emCompromissos: (n: number) => `em ${n} ${plural(n, 'compromisso', 'compromissos')}`,
   listaTitulo: 'Do mais caro para o mais barato',
@@ -401,7 +410,13 @@ export const plano = {
   subtitulo: 'Três caminhos para a mesma saída. A diferença está em quanto custa e quando vem a primeira vitória.',
   slider: 'Quanto você pode colocar por mês',
   sliderAjuda: (calculada: Centavos) =>
-    `Calculamos ${r$(calculada)} a partir do que entrou e saiu da sua conta nos últimos meses, já guardando 10% para imprevistos.`,
+    `Calculamos ${r$(calculada)}: o que entra num mês típico menos os gastos essenciais, já guardando 10% para imprevistos.`,
+  // Teste com usuária (Fase 7): "não posso colocar R$ 901, o dinheiro já vai para outros lugares".
+  esforco: (sobra: Centavos, valor: Centavos) =>
+    sobra > 0
+      ? `Esse valor supõe cortar o que não é essencial. Hoje, depois de todos os gastos (inclusive o cartão), sobram ${r$(sobra)} num mês típico — para colocar ${r$(valor)}, seria preciso cortar ${r$((valor - sobra) as Centavos)} por mês.`
+      : `Esse valor supõe cortar o que não é essencial. Hoje, depois de todos os gastos (inclusive o cartão), o mês típico fecha ${r$(Math.abs(sobra) as Centavos)} no negativo — este plano depende de cortar gastos.`,
+  usarSobra: (sobra: Centavos) => `Usar o que sobra hoje (${r$(sobra)})`,
   sliderSemHistorico: 'Escolha um valor que caiba no seu bolso. Você pode mudar quando quiser.',
   voltarCalculado: 'Voltar ao valor calculado',
   livreEm: 'Livre em',
@@ -471,8 +486,10 @@ export const inicio = {
   esteMes: 'O que fazer este mês',
   // A7: a soma do mês costuma passar do saldo em conta; o pagamento acompanha o salário.
   esteMesAjuda: 'Valores para pagar ao longo do mês, conforme o salário entrar. Nesta ordem; se sobrar, vai para a primeira da lista.',
-  minimo: 'só o mínimo',
-  principal: 'prioridade',
+  minimo: 'pague só o mínimo',
+  principal: 'prioridade: o que sobrar vai aqui',
+  vence: (dia: number) => `Vence dia ${dia}`,
+  aPagar: 'a pagar',
   alertas: 'Precisa da sua atenção',
   marcos: 'Dívidas quitadas',
   semMarcos: 'Cada dívida quitada aparece aqui, com a data.',
@@ -837,8 +854,9 @@ export function mensagemEvento(e: Evento, { temPlano }: { temPlano: boolean }): 
 }
 
 export const alerta = {
-  entendi: 'Entendi',
-  saibaMais: 'Entenda',
+  // "Entendi" e "Entenda" lado a lado confundiam (teste com usuária, Fase 7).
+  entendi: 'Ok, entendi',
+  saibaMais: 'Ver explicação',
 };
 
 // --- privacidade -----------------------------------------------------------------------------------
@@ -948,7 +966,7 @@ export const estados = {
 };
 
 export const licao = {
-  titulo: 'Entenda',
+  titulo: 'Explicação',
   voltar: 'Voltar',
 };
 
@@ -1025,6 +1043,7 @@ export const gastos = {
   impacto: (cat: string, valor: string, meses: number, nova: string, atual: string) =>
     `Se o que não é essencial em ${cat} voltasse à sua média, sobrariam ${valor} por mês — sua data de saída chegaria ${meses} ${meses === 1 ? 'mês' : 'meses'} antes: ${nova} em vez de ${atual}.`,
   verDetalhes: 'Toque numa categoria para ver a evolução e as transações.',
+  entrou: (mes: string, valor: string) => `Em ${mes}, entraram ${valor}.`,
   impactoAviso: 'Projeção com o valor que você coloca por mês nas dívidas. O app organiza e projeta; a escolha é sua.',
 };
 
@@ -1066,6 +1085,15 @@ export const fluxo = {
   semHistorico: 'Ainda não há meses completos suficientes para mostrar.',
   series: { entradas: 'Entradas', essenciais: 'Gastos essenciais', outros: 'Outros gastos', divida: 'Pagamentos de dívida', sobra: 'Sobra (entradas − essenciais)' },
   reservaColuna: 'Guardou (usou)',
+  // "Fechei positivo ou negativo?" (teste com usuária, Fase 7).
+  resultadoColuna: 'Resultado',
+  resultadoAjuda: 'Resultado: entradas menos todos os gastos e as parcelas de dívida (a fatura do cartão não conta duas vezes: as compras já estão nos gastos).',
+  fechamento: (positivos: number, total: number) =>
+    positivos === total
+      ? `Você fechou os ${total} meses no positivo.`
+      : positivos === 0
+        ? `Você fechou os ${total} meses no negativo — a diferença saiu da reserva ou do saldo.`
+        : `Você fechou ${positivos} de ${total} meses no positivo.`,
   tabela: 'Ver em tabela',
 };
 
@@ -1085,6 +1113,21 @@ export const entradasSaidas = {
     saidas: 'Saídas: os gastos — sem pagamento de dívida, transferência entre as suas contas nem aplicação.',
   },
   semDados: 'Ainda não há meses completos para mostrar.',
+};
+
+// Cabe no mês que vem? (teste com usuária, Fase 7: "o que entra contra o que já
+// está previsto sair").
+export const mesQueVem = {
+  titulo: 'Cabe no mês que vem?',
+  entra: 'Entra num mês típico',
+  previsto: 'Já previsto sair',
+  fatura: 'Fatura aberta do cartão',
+  parcelas: 'Parcelas e mínimos das dívidas',
+  essenciais: 'Gastos essenciais pagos pela conta',
+  sobra: (v: string) => `Sobram ${v} para o resto do mês.`,
+  falta: (v: string) =>
+    `Faltam ${v}: o que entra não cobre o que já está previsto. Dá para rever as compras no cartão antes de a fatura fechar.`,
+  nota: 'Estimativa com os seus últimos 6 meses. O que você paga no cartão já está na fatura.',
 };
 
 // N3 (Fase 7): próximos vencimentos — organiza o que existe, sem alerta novo.
@@ -1109,7 +1152,7 @@ export const pfm = {
   todos: 'Todos',
   conectarOutro: '+ Conectar banco',
   emConta: 'Em conta',
-  faturasAbertas: 'Faturas em aberto',
+  faturasAbertas: 'A pagar nos cartões',
   semBancos: {
     titulo: 'Nenhum banco conectado',
     texto: 'Conecte seu banco para ver saldos, cartões, faturas e extrato num lugar só.',
@@ -1136,6 +1179,14 @@ export const pfm = {
   usado: 'Usado',
   faturaAtual: 'Fatura atual',
   semFatura: 'Nenhuma fatura recebida ainda.',
+  // O banco só manda faturas fechadas; a aberta é estimada (teste com usuária, Fase 7).
+  faturaAberta: 'fatura aberta',
+  aPagarCartao: 'a pagar no cartão',
+  abertaEstimada: (valor: string) => `Fatura aberta (estimativa): ${valor}`,
+  faturaAbertaAjuda: 'Estimativa: o limite usado menos as parcelas que ainda vão cair e o que falta da fatura anterior.',
+  ultimaFechada: 'Última fatura fechada',
+  faltaFechada: (valor: string) => `faltam ${valor}`,
+  parcelasFuturas: (valor: string) => `Parcelas que ainda vão cair: ${valor}`,
   vence: (data: string) => `vence em ${data}`,
   venceu: (data: string) => `venceu em ${data}`,
   /** A14: "venceu em" quando a data já passou (ou a fatura está atrasada). Datas ISO comparam como texto. */
